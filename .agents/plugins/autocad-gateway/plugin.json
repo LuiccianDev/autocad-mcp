@@ -1,0 +1,12 @@
+{
+  "name": "autocad-gateway",
+  "displayName": "AutoCAD & Civil 3D MCP AI Gateway",
+  "version": "1.0.0",
+  "description": "Integración en tiempo real con AutoCAD 2027 y Civil 3D vía HTTP Gateway (puerto 5055) y servidor MCP (.NET 10 / C#). Incluye subagente CAD/Civil 3D, soporte para comandos nativos, AutoLISP y YQArch.",
+  "logo": "assets/logo.svg",
+  "suggestedPrompts": [
+    "Verifica la conexión con AutoCAD Gateway y configura el entorno métrico",
+    "Inspecciona las capas, entidades y extensión del dibujo activo en AutoCAD",
+    "Ejecuta trazos paramétricos o comandos en AutoCAD vía MCP"
+  ]
+}
