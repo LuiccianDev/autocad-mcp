@@ -1,25 +1,25 @@
 ---
-name: Solicitud de Funcionalidad
-about: Sugerir una nueva herramienta MCP, endpoint de Gateway o mejora de integración
-title: "[FEAT] <descripción breve de la funcionalidad>"
+name: Feature Request
+about: Suggest a new MCP tool, Gateway endpoint, or integration enhancement
+title: "[FEAT] <short description of the feature>"
 labels: ["enhancement"]
 assignees: ""
 ---
 
-## ¿Tu solicitud está relacionada con un problema o necesidad específica?
-Una descripción clara de la necesidad o desafío de diseño (ej. "Actualmente no es posible consultar el volumen de corte y relleno en superficies de Civil 3D").
+## Problem Statement
+A clear and concise description of the problem or need (e.g. "Currently unable to query cut and fill volume from Civil 3D surfaces").
 
-## Solución Propuesta
-Describe la funcionalidad que te gustaría ver implementada:
-- **Nombre sugerido de la herramienta MCP:** (ej. `calcular_volumen_superficies`)
-- **Parámetros requeridos / opcionales:** (ej. `superficie_base`, `superficie_comparacion`)
-- **Tipo de operación en AutoCAD:** (Lectura de base de datos vía API .NET, inyección de comando no modal o rutina AutoLISP)
+## Proposed Solution
+Describe the solution or new feature you would like to see:
+- **Suggested MCP Tool Name:** (e.g. `compute_surface_volume`)
+- **Required / Optional Parameters:** (e.g. `base_surface_name`, `comparison_surface_name`)
+- **AutoCAD Interaction Type:** (.NET Database API, non-modal command injection, or AutoLISP routine)
 
-## Casos de Uso y Beneficios
-Explica cómo beneficia esta mejora a los flujos de diseño asistido por IA o automatización de proyectos CAD/Civil 3D.
+## Use Cases & Benefits
+Explain how this helps AI agent workflows or CAD/Civil 3D automation.
 
-## Alternativas Consideradas
-Cualquier solución alternativa o workaround que hayas evaluado.
+## Alternatives Considered
+Any alternative solutions or workarounds you have evaluated.
 
-## Contexto o Referencias Adicionales
-Enlaces a documentación oficial de ObjectARX / AutoCAD .NET API o ejemplos relevantes.
+## Additional Context or References
+Links to official ObjectARX / AutoCAD .NET API documentation or relevant examples.

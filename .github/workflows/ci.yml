@@ -1,10 +1,27 @@
-name: CI Build & Test (.NET 10 & Python)
+name: CI - Build & Test (.NET 10 & Python)
 
 on:
   push:
     branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'CODE_OF_CONDUCT.md'
+      - 'SECURITY.md'
+      - 'SUPPORT.md'
+      - '.gitignore'
   pull_request:
     branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - 'CODE_OF_CONDUCT.md'
+      - 'SECURITY.md'
+      - 'SUPPORT.md'
+      - '.gitignore'
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -15,7 +32,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout Code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Setup .NET 10 SDK
@@ -23,14 +40,14 @@ jobs:
       with:
         dotnet-version: '10.0.x'
 
-    - name: Install uv (Python Tooling)
+    - name: Setup uv (Python Package Tooling)
       uses: astral-sh/setup-uv@v5
 
-    - name: Restore NuGet Dependencies
+    - name: Restore NuGet dependencies
       run: dotnet restore AutoCAD_Integration.slnx
 
-    - name: Build Solution (Release Configuration)
+    - name: Build solution (Release configuration)
       run: dotnet build AutoCAD_Integration.slnx -c Release --no-restore
 
-    - name: Run Python MCP Server Tests
+    - name: Run Python test suite (pytest)
       run: uv run --directory AutoCAD.McpPython --all-extras pytest

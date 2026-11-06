@@ -1,0 +1,55 @@
+name: Release - Build & Publish Artifacts
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish-release:
+    name: Build & Publish Release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET 10 SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Setup uv (Python Tooling)
+      uses: astral-sh/setup-uv@v5
+
+    - name: Restore and Build .NET Solution
+      run: |
+        dotnet restore AutoCAD_Integration.slnx
+        dotnet build AutoCAD_Integration.slnx -c Release --no-restore
+
+    - name: Package AutoCAD Gateway (.zip)
+      run: |
+        Compress-Archive -Path "AutoCAD.Gateway\bin\Release\net10.0-windows\*" -DestinationPath "AutoCAD.Gateway-Release.zip"
+
+    - name: Package AutoCAD McpServer (.zip)
+      run: |
+        Compress-Archive -Path "AutoCAD.McpServer\bin\Release\net10.0\*" -DestinationPath "AutoCAD.McpServer-Release.zip"
+
+    - name: Build Python Package (Wheel & Sdist)
+      run: |
+        uv build --directory AutoCAD.McpPython
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          AutoCAD.Gateway-Release.zip
+          AutoCAD.McpServer-Release.zip
+          AutoCAD.McpPython/dist/*
+        generate_release_notes: true
