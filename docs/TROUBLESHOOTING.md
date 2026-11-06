@@ -1,83 +1,88 @@
-# Guía de Solución de Problemas (Troubleshooting)
+# Troubleshooting Guide — AutoCAD MCP (`autocad-mcp`)
 
-Este documento recopila las soluciones directas a las incidencias más frecuentes al compilar, cargar o utilizar **AutoCAD MCP Server & Gateway** (`autocad-mcp`).
+This document provides direct solutions to the most frequent issues encountered when building, loading, or interacting with **AutoCAD MCP Server & Gateway** (`autocad-mcp`).
 
 ---
 
-## 1. Incidencias con `NETLOAD` en AutoCAD
+## 1. Issues with `NETLOAD` in AutoCAD
 
-### Problema: "No se puede cargar el ensamblado" o error de seguridad de Windows
-**Causa:** Windows marca automáticamente los archivos `.dll` compilados o descargados de repositorios como potencialmente peligrosos (*Zone.Identifier: 3*).
-**Solución:**
-Abre una terminal PowerShell como Administrador y desbloquea el archivo:
+### Problem: "Cannot load assembly" or Windows Security Block
+**Cause:** Windows automatically flags compiled or downloaded `.dll` binaries as potentially untrusted (*Zone.Identifier: 3*).
+**Solution:**
+Open PowerShell as Administrator and unblock the assembly:
 ```powershell
 Unblock-File -Path ".\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll"
 ```
-Luego, en AutoCAD, vuelve a ejecutar `NETLOAD`.
+Then, inside AutoCAD, run `NETLOAD` again.
 
 ---
 
-### Problema: "Archivo bloqueado por otro proceso" al recompilar (`CS2012`)
-**Causa:** Una vez que AutoCAD carga una DLL con `NETLOAD`, el archivo queda bloqueado en memoria por el proceso `acad.exe` hasta que AutoCAD se cierra por completo.
-**Solución:**
-1. Cierra la instancia de AutoCAD 2027 antes de recompilar con `build.ps1`.
-2. O bien, compila en una ruta temporal de desarrollo y copia el binario con un nuevo nombre de revisión.
+### Problem: "File locked by another process" during rebuild (`CS2012`)
+**Cause:** Once AutoCAD loads a .NET DLL with `NETLOAD`, the assembly is held locked in memory by `acad.exe` until AutoCAD exits completely.
+**Solution:**
+1. Close all active AutoCAD 2027 instances before rebuilding via `.\scripts\build.ps1`.
+2. Alternatively, compile to a temporary folder or terminate hung `acad.exe` processes from Task Manager.
 
 ---
 
-## 2. Comunicación de Red y Puerto 5055
+## 2. Network Communication & Port 5055
 
-### Problema: "No se pudo iniciar el servidor HTTP: El puerto 5055 ya está en uso"
-**Causa:** Hay otra instancia previa de AutoCAD en ejecución o un servicio local ocupando el puerto TCP 5055.
-**Diagnóstico:**
-Ejecuta en PowerShell:
+### Problem: "Failed to start HTTP server: Port 5055 already in use"
+**Cause:** Another AutoCAD session or background service is occupying TCP port 5055.
+**Diagnostics:**
+Run in PowerShell:
 ```powershell
 Get-NetTCPConnection -LocalPort 5055 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess
 ```
-**Solución:**
-Si el proceso es un `acad.exe` huérfano, ciérralo desde el Administrador de Tareas o finalízalo con:
+**Solution:**
+If the process is an orphaned `acad.exe`, terminate it via:
 ```powershell
 Stop-Process -Id <OwningProcessId> -Force
 ```
 
 ---
 
-### Problema: Error `401 Unauthorized` al invocar el Gateway
-**Causa:** El encabezado HTTP `X-Gateway-Token` enviado por el cliente MCP no coincide con el configurado en AutoCAD.
-**Solución:**
-1. El token por defecto es `autocad-gateway-token-2027`.
-2. Si has configurado la variable de entorno `AUTOCAD_GATEWAY_TOKEN`, asegúrate de que esté definida con el mismo valor tanto en la sesión de AutoCAD como en el entorno del cliente de IA (`claude_desktop_config.json` o `mcp_config.json`).
-3. Prueba la conexión ejecutando:
+### Problem: HTTP `401 Unauthorized` when calling the Gateway
+**Cause:** The `X-Gateway-Token` header sent by the MCP client does not match the token configured in the AutoCAD Gateway.
+**Solution:**
+1. Default security token is `luiccian-autocad-token-2027` (or `autocad-gateway-token-2027` fallback).
+2. If `AUTOCAD_GATEWAY_TOKEN` is defined, verify the exact same value is configured in both AutoCAD and your AI client config (`claude_desktop_config.json` or `mcp_config.json`).
+3. You can verify and update the token live in AutoCAD by running:
+   ```text
+   AI_SHOW_CONFIG
+   AI_SET_TOKEN
+   ```
+4. Or synchronize your environment using:
    ```powershell
-   .\examples\scripts\test_gateway.ps1
+   .\scripts\set-gateway-token.ps1 -GenerateNew
    ```
 
 ---
 
-## 3. Comandos Colgados o Bloqueos en AutoCAD
+## 3. Hanging Commands or UI Lockout in AutoCAD
 
-### Problema: AutoCAD no responde a comandos inyectados o se queda "esperando"
-**Causa habitual:** Un comando anterior abrió una ventana emergente modal de Windows (por ejemplo, `LAYER` o `INSERT` en lugar de sus equivalentes de línea de comandos `_.-LAYER` o `_.-INSERT`), deteniendo la recepción de texto.
-**Solución:**
-1. Presiona `ESC` dos veces en la ventana de AutoCAD para cancelar cualquier comando pendiente.
-2. Asegúrate de que las llamadas a `ejecutar_comando_autocad` utilicen siempre el prefijo no modal `_.-` y terminen cada instrucción con un salto de línea `\n`.
-3. El Gateway ya antepone la secuencia `\x03\x03` (`ESC`/`Ctrl+C`), pero no puede cerrar ventanas modales del sistema operativo una vez desplegadas.
-
----
-
-## 4. Servidor MCP y Corrupción del Protocolo STDIO
-
-### Problema: El cliente de IA (Claude/Antigravity) se desconecta o reporta "JSON-RPC parse error"
-**Causa:** Algún componente o dependencia imprimió texto en `Console.Out` (`stdout`). En el protocolo MCP sobre transporte STDIO, la salida estándar está reservada de forma exclusiva y estricta para mensajes JSON-RPC válidos.
-**Solución:**
-- Nunca uses `Console.WriteLine` dentro de `AutoCAD.McpServer`.
-- Si necesitas depurar o emitir mensajes de log, utiliza `Console.Error.WriteLine` (`stderr`) o el sistema de inyección `ILogger`. `stderr` es ignorado por el deserializador JSON-RPC y preserva la estabilidad del cliente.
+### Problem: AutoCAD does not respond to injected commands or hangs in "waiting" prompt
+**Cause:** A prior command triggered a Windows modal popup dialog (e.g. `LAYER` or `INSERT` instead of text-mode equivalents `_.-LAYER` or `_.-INSERT`), blocking text input.
+**Solution:**
+1. Press `ESC` twice in AutoCAD to cancel any hanging input states.
+2. Ensure custom calls to `ejecutar_comando_autocad` strictly use non-modal prefix `_.-` and end each parameter with newline `\n`.
+3. The Gateway automatically prepends `\x03\x03` (`ESC`/`Ctrl+C`), but cannot close Windows modal dialogs programmatically once opened.
 
 ---
 
-## 5. Detección de Autodesk Civil 3D
+## 4. MCP Server & STDIO Transport Integrity
 
-### Problema: `verificar_estado_civil3d` retorna `isCivil3DAvailable: false` a pesar de tener Civil 3D instalado
-**Causa:** Has iniciado el icono de *"Civil 3D 2027 as AutoCAD"* (perfil de AutoCAD básico sin las extensiones civiles cargadas) en lugar del acceso directo principal de Civil 3D (perfil métrico o imperial).
-**Solución:**
-Inicia Civil 3D desde el acceso directo oficial: **Civil 3D 2027 Metric**. Abre un dibujo con plantilla civil (`_AutoCAD Civil 3D (Metric) NCS.dwt`) y vuelve a ejecutar `NETLOAD`.
+### Problem: AI client (Claude / Antigravity) disconnects or reports "JSON-RPC parse error"
+**Cause:** A component printed raw diagnostic text to `Console.Out` (`stdout`). Under the STDIO transport, standard output is strictly reserved for valid JSON-RPC framing.
+**Solution:**
+- Never call `Console.WriteLine` inside `AutoCAD.McpServer`.
+- For logging and diagnostics, strictly use `Console.Error.WriteLine` (`stderr`) or `ILogger`. `stderr` is ignored by the MCP client parser and preserves communication integrity.
+
+---
+
+## 5. Autodesk Civil 3D Detection
+
+### Problem: `verificar_estado_civil3d` returns `isCivil3DAvailable: false` despite Civil 3D being installed
+**Cause:** You launched AutoCAD using the *"Civil 3D 2027 as AutoCAD"* shortcut (vanilla AutoCAD profile without Civil 3D managed assemblies loaded) instead of the primary metric Civil 3D profile.
+**Solution:**
+Launch Civil 3D from the official shortcut: **Civil 3D 2027 Metric**. Open a drawing using a metric civil template (`_AutoCAD Civil 3D (Metric) NCS.dwt`) and run `NETLOAD` again.

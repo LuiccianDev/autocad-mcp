@@ -1,202 +1,185 @@
-# AutoCAD AI Gateway — Documentación Técnica y Guía de Uso
+# AutoCAD AI Gateway — Technical Reference & Usage Guide
 
-**Versión:** 1.0.0  
+**Version:** 1.0.0  
 **Target Framework:** .NET 10 (`net10.0-windows`)  
-**Plataforma Host:** Autodesk AutoCAD 2027 (x64)  
-**Tecnología:** C# / AutoCAD Managed .NET API (`acmgd`, `acdbmgd`, `accoremgd`)  
-**Puerto de Escucha:** `http://localhost:5055/`
+**Host Platform:** Autodesk AutoCAD 2027 & Civil 3D 2027 (x64)  
+**Technology:** C# / AutoCAD Managed .NET API (`acmgd`, `acdbmgd`, `accoremgd`)  
+**Listening Port:** `http://localhost:5055/`
 
 ---
 
-## 1. Propósito y Contexto del Proyecto
+## 1. Project Purpose & Architecture Context
 
-El **AutoCAD AI Gateway** es un plugin nativo para Autodesk AutoCAD 2027 que actúa como un puente de comunicación bidireccional entre Modelos de Inteligencia Artificial (agentes de desarrollo, servidores MCP, scripts externos) y la sesión activa de AutoCAD.
+The **AutoCAD AI Gateway** is an in-process native plugin for Autodesk AutoCAD 2027 and Civil 3D 2027. It provides a bidirectional communication bridge between Artificial Intelligence models (autonomous agents, MCP servers, external scripts) and the active AutoCAD session.
 
-### ¿Por qué surgió esta solución?
-1. **Limitaciones de AutoLISP puro:** Las rutinas tradicionales de AutoLISP (`.lsp`) no pueden interactuar de forma transparente con comandos definidos por plugins externos compilados o herramientas de terceros como **YQArch** (generando errores de *"Unknown command"* al invocarse desde `(command)`).
-2. **Automatización en Tiempo Real:** Permite a un agente de IA interactuar en vivo con AutoCAD: consultar qué capas existen, cuántos objetos hay en pantalla, cuáles son las dimensiones del dibujo y ejecutar comandos o trazos paramétricos al instante.
+### Why This Solution Was Built
+1. **AutoLISP Limitations:** Native AutoLISP (`.lsp`) routines cannot seamlessly drive commands defined by compiled third-party extensions or specialized CAD macros like **YQArch** (triggering *"Unknown command"* when invoked through `(command)`).
+2. **Real-Time Agentic Automation:** Allows AI agents to query live AutoCAD state: inspect layers, count objects by type, determine drawing extents, and safely inject parametric drawing geometry into the primary UI loop.
 
-### Naturaleza del Binario (.dll vs .exe)
-Este proyecto es una **librería de clases administrada** (`Class Library`) que compila exclusivamente a **`AutoCAD.Gateway.dll`**. **No genera un archivo ejecutable `.exe` independiente**, ya que está diseñado para ejecutarse dentro del espacio de memoria del proceso `acad.exe` de AutoCAD 2027 tras ser cargado mediante el comando `NETLOAD`.
+### Binary Nature (.dll vs .exe)
+This project is an in-process **managed Class Library** compiling exclusively to **`AutoCAD.Gateway.dll`**. **It does not generate a standalone `.exe` executable**, as it is engineered to execute inside the memory space of `acad.exe` once loaded via `NETLOAD`.
 
 ---
 
-## 2. Arquitectura Modular del Gateway
+## 2. Gateway Modular Architecture
 
-El plugin implementa una arquitectura desacoplada basada en servicios, un enrutador de peticiones y sincronización defensiva con el hilo de interfaz de usuario de AutoCAD:
+The plugin implements a decoupled service-based architecture with an HTTP listener and defensive synchronization against the AutoCAD UI thread:
 
 ```
-[ Agente IA / Servidor MCP ]
+[ AI Agent / MCP Server ]
               │
-              │  HTTP REST (Puerto 5055)
+              │  HTTP REST (Port 5055)
               ▼
-    [ HttpGatewayServer ]  ───> Hilo en Segundo Plano (HttpListener + CORS)
+    [ HttpGatewayServer ]  ───> Background Thread (HttpListener + CORS)
               │
               ▼
        [ RequestRouter ]
         ├── POST /execute ──────────> [ AutoCADCommandDispatcher ]
-        │                                      │ (Cola Concurrente)
+        │                                      │ (ConcurrentQueue)
         │                                      ▼ (Application.Idle)
         │                              [ doc.SendStringToExecute ] (\x03\x03)
         │
         └── GET /context/* ─────────> [ AutoCADContextReader ]
                                                │ (RunOnIdleAsync / TCS)
                                                ▼ (Database Transaction)
-                                       [ Lectura DWG en Hilo UI ]
+                                       [ DWG Reads on UI Thread ]
 ```
 
-### Componentes Principales (`src/`):
-* **`Main.cs`**: Implementa `IExtensionApplication`. Inicializa el plugin, emite mensajes de bienvenida en la consola de AutoCAD y garantiza el apagado ordenado del servidor HTTP al cerrar AutoCAD.
-* **`Commands/GatewayCommands.cs`**: Registra los comandos de consola de AutoCAD `AI_START_SERVER` y `AI_STOP_SERVER`.
+### Core Components:
+* **`Main.cs`**: Implements `IExtensionApplication`. Initializes the plugin, registers command listeners, and ensures graceful server teardown on AutoCAD exit.
+* **`Commands/GatewayCommands.cs`**: Registers native AutoCAD commands: `AI_START_SERVER`, `AI_STOP_SERVER`, `AI_SHOW_CONFIG`, `AI_SET_TOKEN`, and `AI_GENERATE_TOKEN`.
 * **`Core/AutoCADCommandDispatcher.cs`**:
-  * Administra la cola concurrente (`ConcurrentQueue<string>`).
-  * Se suscribe al evento `Application.Idle` de AutoCAD para despachar comandos exclusivamente en el hilo principal (UI thread).
-  * Se desvincula de inmediato (`-= _idleHandler`) para prevenir bucles de eventos.
-  * Inyecta la secuencia defensiva `\x03\x03` (`Ctrl+C` / `ESC`) antes de cada comando para liberar comandos bloqueados previos.
-* **`Core/Models/`**: Contiene los DTOs fuertemente tipados (`CommandRequest`, `DrawingInfo`, `LayerInfo`, `TextEntityInfo`, `DrawingExtentsInfo`).
+  * Manages the thread-safe instruction queue (`ConcurrentQueue<string>`).
+  * Attaches to `Application.Idle` to dispatch commands strictly within the primary UI thread.
+  * Detaches immediately (`-= _idleHandler`) to prevent message-loop overhead.
+  * Injects defensive `\x03\x03` (`ESC`/`Ctrl+C`) sequences to clear hanging prompts.
+* **`Core/Models/`**: Strongly-typed DTOs (`CommandRequest`, `DrawingInfo`, `LayerInfo`, `TextEntityInfo`, `DrawingExtentsInfo`).
 * **`Services/AutoCADContextReader.cs`**:
-  * Realiza transacciones seguras de solo lectura contra la base de datos de AutoCAD (`BlockTable`, `LayerTable`, etc.).
-  * Ejecuta las lecturas en el hilo principal a través del helper `RunOnIdleAsync(Func<Document, string>)` desacoplado mediante `TaskCompletionSource<string>`.
-* **`Server/HttpGatewayServer.cs` y `RequestRouter.cs`**:
-  * Servidor HTTP basado en `System.Net.HttpListener` escuchando en `http://localhost:5055/`.
-  * Soporte nativo de CORS (`Access-Control-Allow-Origin: *`, métodos `GET, POST, OPTIONS`).
+  * Executes read-only transactions against AutoCAD DWG database tables (`BlockTable`, `LayerTable`, etc.).
+  * Synchronizes reads with the UI thread via `RunOnIdleAsync(Func<Document, string>)` and `TaskCompletionSource<string>`.
+* **`Server/HttpGatewayServer.cs` & `RequestRouter.cs`**:
+  * Lightweight HTTP listener listening on `http://localhost:5055/`.
+  * Built-in CORS support (`Access-Control-Allow-Origin: *`, headers `X-Gateway-Token`, methods `GET, POST, OPTIONS`).
 
 ---
 
-## 3. Especificación de Endpoints REST y Seguridad
+## 3. REST Endpoints Specification & Security
 
-La API del Gateway expone 16 endpoints en `http://localhost:5055/` (8 de AutoCAD base y 8 de Civil 3D).
+The Gateway exposes 16 REST endpoints at `http://localhost:5055/` (8 base AutoCAD and 8 Civil 3D endpoints).
 
-### Seguridad y Autenticación Obligatoria
-* **Cabecera HTTP requerida:** `X-Gateway-Token: luiccian-autocad-token-2027` (configurable mediante la variable de entorno `AUTOCAD_GATEWAY_TOKEN`).
-* **Respuesta (401 Unauthorized):** Si la cabecera no se envía o el token no coincide, el servidor rechaza la solicitud de inmediato:
+### Security & Mandatory Authentication
+* **Required HTTP Header:** `X-Gateway-Token: luiccian-autocad-token-2027` (configurable via `AUTOCAD_GATEWAY_TOKEN`).
+* **Response (401 Unauthorized):** If the header is missing or invalid, the request is immediately rejected:
   ```json
-  { "status": "error", "message": "No autorizado: X-Gateway-Token invalido o ausente." }
+  { "status": "error", "message": "Unauthorized: Invalid or missing X-Gateway-Token." }
   ```
 
-### A. Ejecución de Comandos
+### A. Command Execution
 * **`POST /execute`**  
-  Inyecta comandos de consola, macros AutoLISP o comandos YQArch en AutoCAD.
+  Injects console commands, AutoLISP expressions, or plugin macros into AutoCAD.
   * **Payload:**
     ```json
     {
       "command": "_.RECTANG\n0,0\n25,15\n_.ZOOM\nE\n"
     }
     ```
-  * **Respuesta (200 OK):**
+  * **Response (200 OK):**
     ```json
     {
       "status": "success",
-      "message": "Comando encolado correctamente"
+      "message": "Command enqueued successfully"
     }
     ```
 
-### B. Inspección y Lectura de Contexto DWG
-* **`GET /context/info`**: Metadatos del dibujo activo (nombre del archivo DWG, estado de solo lectura y código `INSUNITS`).
-* **`GET /context/entities`**: Conteo resumen de entidades en el espacio modelo agrupadas por tipo (`Line`, `Polyline`, `Circle`, `BlockReference`, etc.).
-* **`GET /context/layers`**: Lista de todas las capas del dibujo con sus propiedades:
-  ```json
-  {
-    "status": "success",
-    "data": [
-      { "nombre": "PA14-EJE", "bloqueada": false, "congelada": false, "apagada": false, "color": 1 }
-    ]
-  }
-  ```
-* **`GET /context/texts`**: Lista de todos los textos (`DBText` y `MText`) en el dibujo con coordenadas espaciales `(x, y)` y capa asociada.
-* **`GET /context/extents`**: Coordenadas de extensión mínima y máxima del dibujo (`minX`, `minY`, `minZ`, `maxX`, `maxY`, `maxZ`).
-* **`GET /context/selection`**: Cantidad de objetos seleccionados actualmente por el usuario con el ratón.
-* **`GET /context/blocks`**: Lista de definiciones de bloques disponibles (excluyendo anónimos y espacio papel).
+### B. DWG Context Queries
+* **`GET /context/info`**: Active drawing metadata (DWG filename, path, read-only status, and `INSUNITS`).
+* **`GET /context/entities`**: Summary object count grouped by type (`Line`, `Polyline`, `Circle`, `BlockReference`, etc.).
+* **`GET /context/layers`**: List of all drawing layers with visibility, freeze, lock, and color properties.
+* **`GET /context/texts`**: All text entities (`DBText` and `MText`) with coordinates (X, Y) and layers.
+* **`GET /context/extents`**: Drawing bounding box extents (`minX`, `minY`, `minZ`, `maxX`, `maxY`, `maxZ`).
+* **`GET /context/selection`**: Count and types of objects currently selected by the user.
+* **`GET /context/blocks`**: Available block definitions (excluding anonymous blocks and paper space).
+* **`GET /context/screenshot`**: Active viewport PNG capture for AI vision models.
 
-### C. Integración Civil 3D 2027 (`/civil/*`)
+### C. Autodesk Civil 3D 2027 Endpoints (`/civil/*`)
 
-El mismo `AutoCAD.Gateway.dll` funciona en **AutoCAD 2027** y en **Civil 3D 2027** (referencias `AeccDbMgd` y `AecBaseMgd` con `Private=False`). `Civil3DServiceFactory` solo instancia `Civil3DService` si `AeccDbMgd` ya está cargado en el proceso; en AutoCAD estándar usa `NullCivil3DService`. En ese caso, todos los endpoints `/civil/*` (salvo `/civil/status`) responden **409** con `civil_available: false`, sin excepciones.
+The same `AutoCAD.Gateway.dll` runs seamlessly in both vanilla **AutoCAD 2027** and **Civil 3D 2027**. `Civil3DServiceFactory` checks runtime memory for `AeccDbMgd.dll`: if absent, it activates `NullCivil3DService` which responds with HTTP **409** (`civil_available: false`) without throwing exceptions.
 
-**Lectura (GET):**
-* **`GET /civil/status`**: Disponibilidad de Civil 3D, documento activo y conteo de superficies/alineamientos.
-* **`GET /civil/surfaces`**: Superficies con cota mínima, cota máxima y número de triángulos.
-* **`GET /civil/surface/elevation?x=..&y=..&surface=..`**: Cota Z del terreno en (x, y). `surface` es opcional (por defecto, la primera). Error si el punto está fuera de la superficie.
-* **`GET /civil/alignments`**: Alineamientos con progresivas inicial/final, estacas (`1+250.50`) y longitud.
-* **`GET /civil/alignment/station-offset?x=..&y=..&alignment=..`**: Progresiva y desfase de un punto respecto al eje.
-* **`GET /civil/alignment/point-at-station?station=..&offset=..&alignment=..`**: Coordenada (x, y) de una progresiva y desfase (valida el rango del alineamiento).
+**Read Endpoints (GET):**
+* **`GET /civil/status`**: Civil 3D availability, active civil document, and surface/alignment count.
+* **`GET /civil/surfaces`**: TIN surfaces with min/max elevation and triangle counts.
+* **`GET /civil/surface/elevation?x=..&y=..&surface=..`**: Surface ground elevation Z at (X, Y).
+* **`GET /civil/alignments`**: Horizontal alignments with start/end stations and lengths.
+* **`GET /civil/alignment/station-offset?x=..&y=..&alignment=..`**: Station and lateral offset of point relative to alignment.
+* **`GET /civil/alignment/point-at-station?station=..&offset=..&alignment=..`**: Metric coordinates (X, Y) of station and offset.
 
-**Escritura (POST, JSON):**
-* **`POST /civil/alignment/create`**: Crea un alineamiento desde PIs con curvas circulares tangentes de radio fijo.
-  ```json
-  { "nombre": "EJE-TUNEL", "puntos": [{"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 150, "y": 50}], "radio": 40, "capa": "PA14-EJE" }
-  ```
-  Validaciones: nombre obligatorio y único, mínimo 2 PIs, sin segmentos de longitud cero, valores finitos y radio ≥ 0. Si el radio no cabe (tangentes mayores que el segmento), se rechaza con un mensaje explícito. `radio` 0 o ausente genera un eje sin curvas. La capa se crea si no existe.
-* **`POST /civil/surface/create`**: Crea una superficie TIN desde puntos topográficos.
-  ```json
-  { "nombre": "TERRENO", "puntos": [{"x": 0, "y": 0, "z": 3000}, {"x": 50, "y": 0, "z": 3005}, {"x": 0, "y": 50, "z": 3008}] }
-  ```
-  Validaciones: nombre obligatorio y único, mínimo 3 puntos, valores finitos.
-
-Todas las escrituras se ejecutan en el hilo UI (`Application.Idle`) bajo `LockDocument` y transacción.
+**Write Endpoints (POST, JSON):**
+* **`POST /civil/alignment/create`**: Creates horizontal alignment from PIs with tangent circular curves.
+* **`POST /civil/surface/create`**: Builds TIN surface from topographic points.
 
 ---
 
-## 4. Estándares de Dibujo y Entorno
+## 4. Drawing & Modeling Standards
 
-Al interactuar con AutoCAD a través del Gateway, rigen las siguientes directivas obligatorias:
+When sending commands to AutoCAD via the Gateway:
 
-1. **Unidades Estrictamente en Metros:**
-   * `INSUNITS = 4` (Metros)
-   * `MEASUREMENT = 1` (Métrico)
-   * `LUNITS = 2` (Decimales), `LUPREC = 3`
-2. **Calibración de Anotaciones (Cotas y Textos Proporcionales):**
-   * Altura de texto: `DIMTXT = 0.22` m
-   * Tamaño de flecha: `DIMASZ = 0.18` m
-   * Extensión de línea de cota: `DIMEXE = 0.11` m, desfase de origen: `DIMEXO = 0.06` m
-3. **Criterio de Modo:**
-   * **Modo Nativo (Predeterminado para Túneles e Infraestructura):** Geometría de sección, excavación, emboquille, pernos y servicios mediante comandos nativos (`_.-PLINE`, `_.-ARC`, etc.) y capas `PA14-*`.
-   * **Modo YQArch (Exclusivo para Campamento y Edificaciones):** Uso de comandos rápidos de arquitectura (`ZXW` ejes, `WW` muros, `AD`/`WD` aberturas) cuando se solicite expresamente.
+1. **Strict Metric Units:**
+   * `INSUNITS = 4` (Meters)
+   * `MEASUREMENT = 1` (Metric)
+   * `LUNITS = 2` (Decimal), `LUPREC = 3`
+2. **Text & Dimension Calibration:**
+   * Text height: `DIMTXT = 0.22` m
+   * Arrowhead size: `DIMASZ = 0.18` m
+   * Dimension line extension: `DIMEXE = 0.11` m, origin offset: `DIMEXO = 0.06` m
+3. **Execution Modes:**
+   * **Native Mode (Default):** Infrastructure geometry, excavation, and lining via native commands (`_.-PLINE`, `_.-ARC`) on standard layers.
+   * **YQArch Mode (Architecture / Camp facilities):** High-speed architectural drafting (`ZXW` grid, `WW` walls, `AD`/`WD` openings) when requested.
 
 ---
 
-## 5. Compilación y Puesta en Marcha
+## 5. Build & Setup
 
-### Paso 1: Compilación (.NET 10)
+### Step 1: Build Solution (.NET 10)
 ```powershell
-dotnet build -c Release plugins/AutoCAD.Gateway/AutoCAD.Gateway.csproj
-# O compilar la solución completa:
-.\scripts\build_plugins.ps1
+dotnet build AutoCAD.Gateway/AutoCAD.Gateway.csproj -c Release
 ```
-El binario resultante se ubica en:  
-`plugins/AutoCAD.Gateway/bin/Release/net10.0-windows/AutoCAD.Gateway.dll`
+Output assembly:  
+`AutoCAD.Gateway/bin/Release/net10.0-windows/AutoCAD.Gateway.dll`
 
-### Paso 2: Carga en AutoCAD 2027
-1. En AutoCAD, abre un dibujo DWG en blanco.
-2. Ejecuta el comando `NETLOAD`.
-3. Selecciona la DLL compilada (`AutoCAD.Gateway.dll`).
+### Step 2: Load into AutoCAD 2027
+1. In AutoCAD, open or create a metric drawing.
+2. Type `NETLOAD` in the command prompt.
+3. Select `AutoCAD.Gateway.dll`.
 
-### Paso 3: Iniciar el Servidor
-1. En la consola de AutoCAD, ejecuta:
+### Step 3: Verify Gateway Server
+1. In the AutoCAD console, type:
    ```text
-   AI_START_SERVER
+   AI_SHOW_CONFIG
    ```
-2. Verás en pantalla:
+2. You will see:
    ```text
-   >>> [ON] AI Gateway Server escuchando exitosamente en http://localhost:5055/
+   >>> [CONFIG] AI Gateway Server is RUNNING on port 5055. Active token: luiccian-autocad-token-2027
    ```
-3. Para apagar el servidor: `AI_STOP_SERVER`.
 
 ---
 
-## 6. Ejemplos de Conexión
+## 6. Connection Testing
 
-### Desde PowerShell:
+### PowerShell:
 ```powershell
+$headers = @{ "X-Gateway-Token" = "luiccian-autocad-token-2027" }
 $payload = @{ command = "_.RECTANG`n0,0`n30,20`n_.ZOOM`nE`n" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:5055/execute" -Method Post -ContentType "application/json" -Body $payload
+Invoke-RestMethod -Uri "http://localhost:5055/execute" -Method Post -Headers $headers -ContentType "application/json" -Body $payload
 ```
 
-### Desde Python:
+### Python:
 ```python
 import requests
 
+headers = {"X-Gateway-Token": "luiccian-autocad-token-2027"}
 res = requests.post(
     "http://localhost:5055/execute",
+    headers=headers,
     json={"command": "_.LINE\n0,0\n50,0\n50,20\n\n_.ZOOM\nE\n"},
 )
 print(res.json())

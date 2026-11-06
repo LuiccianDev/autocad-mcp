@@ -1,86 +1,84 @@
-# Guía de Contribución a AutoCAD MCP (`autocad-mcp`)
+# Contributing to AutoCAD MCP (`autocad-mcp`)
 
-¡Gracias por tu interés en contribuir a **AutoCAD MCP Server & Gateway** (`autocad-mcp`)! Este proyecto busca establecer un estándar de código abierto robusto, confiable y de alto rendimiento para la integración entre Modelos de Inteligencia Artificial (mediante Model Context Protocol v2.2) y Autodesk AutoCAD 2027 / Civil 3D.
+Thank you for your interest in contributing to **AutoCAD MCP Server & Gateway** (`autocad-mcp`)! This project aims to establish a robust, reliable, and high-performance open-source standard connecting Artificial Intelligence Models (via Model Context Protocol v2.2) with Autodesk AutoCAD 2027 and Civil 3D.
 
-Al participar en este proyecto, te comprometes a respetar y mantener nuestro [Código de Conducta](CODE_OF_CONDUCT.md).
-
----
-
-## 📋 Requisitos de Entorno
-
-1. **.NET 10 SDK** instalado (`dotnet --version` >= 10.0.100).
-2. **Autodesk AutoCAD 2027** o **Civil 3D 2027** instalado en `C:\Program Files\Autodesk\AutoCAD 2027\`.
-3. Editor recomendado: Visual Studio 2022/2026, Visual Studio Code (con C# Dev Kit), Cursor o Antigravity.
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
-## 🏗️ Estructura del Repositorio
+## 📋 Environment Prerequisites
 
-- `AutoCAD.Gateway/`: Plugin nativo C# (`Class Library` que compila a `net10.0-windows`). Se carga en AutoCAD con el comando `NETLOAD` y expone un servidor HTTP en el puerto `5055`.
-- `AutoCAD.McpServer/`: Servidor Model Context Protocol en C# (.NET 10, transporte STDIO). Consume el Gateway vía HTTP y expone 27 herramientas estándar de MCP para clientes IA (Antigravity, Claude, Cursor, VS Code).
-- `docs/`: Suite de documentación técnica (`ARCHITECTURE.md`, `GETTING_STARTED.md`, `TOOLS_REFERENCE.md`, `TROUBLESHOOTING.md`).
-- `examples/`: Configuraciones de clientes IA, scripts de diagnóstico y rutinas AutoLISP de prueba.
-- `.github/`: Plantillas de incidencias (issues), Pull Requests y workflows de integración continua (CI).
-- `.agents/plugins/autocad-gateway/`: Especificación del plugin para agentes IA (skills, metadatos, configuraciones JSON y reglas).
-- `scripts/`: Scripts de utilidad en PowerShell para compilación y verificación.
+1. **.NET 10 SDK** installed (`dotnet --version` >= 10.0.100).
+2. **Autodesk AutoCAD 2027** or **Civil 3D 2027** installed at `C:\Program Files\Autodesk\AutoCAD 2027\`.
+3. **Python 3.10+** and [`uv`](https://astral.sh/uv) (for the Python MCP server).
+4. Recommended Editors: Visual Studio, Visual Studio Code (with C# Dev Kit), Cursor, or Antigravity.
 
 ---
 
-## 🌿 Flujo de Trabajo con Git y Ramas
+## 🏗️ Repository Architecture
 
-1. **Crear un Fork o Rama de Trabajo:**
-   Utiliza prefijos semánticos para nombrar tus ramas:
-   - `feature/<nombre-de-la-caracteristica>`: Nuevas herramientas MCP o capacidades del Gateway.
-   - `fix/<descripcion-del-bug>`: Correcciones de fallos o incidencias.
-   - `docs/<mejora-documental>`: Ampliación de guías, diagramas o referencias.
-   - `refactor/<area>`: Mejoras de código interno sin alterar el comportamiento observable.
-
-2. **Convención de Commits (Conventional Commits):**
-   Usa mensajes claros en tiempo presente siguiendo la especificación:
-   - `feat: agregar herramienta MCP para consultar volúmenes de superficies`
-   - `fix: corregir manejo de saltos de línea en inyección de comandos no modales`
-   - `docs: actualizar diagrama C4 en ARCHITECTURE.md`
-   - `refactor: optimizar encolado concurrente en AutoCADCommandDispatcher`
+- `AutoCAD.Gateway/`: In-process C# plugin compiling to `net10.0-windows`. Loaded in AutoCAD via `NETLOAD`, exposing an HTTP REST server on port `5055`.
+- `AutoCAD.McpServer/`: Standalone .NET 10 MCP server implementing the Model Context Protocol over STDIO transport with 43 strongly-typed tools.
+- `AutoCAD.McpPython/`: Standalone Python FastMCP server packaging all 43 tools with instant `uvx` execution and pytest test suite.
+- `docs/`: Technical documentation suite (`ARCHITECTURE.md`, `GETTING_STARTED.md`, `TOOLS_REFERENCE.md`, `TOOLS_CHEAT_SHEET.md`, `TROUBLESHOOTING.md`).
+- `examples/`: Client configurations, test scripts, and sample AutoLISP routines.
+- `.github/`: Issue templates, Pull Request template, and GitHub Actions CI/CD workflows (`ci.yml`, `codeql.yml`, `release.yml`).
+- `scripts/`: PowerShell automation scripts (`build.ps1`, `start-mcp.ps1`, `set-gateway-token.ps1`).
 
 ---
 
-## 🛠️ Compilación y Verificación Local
+## 🌿 Git Workflow & Branches
 
-Antes de enviar cualquier cambio, valida la compilación limpia de la solución completa en modo Release:
+1. **Branch Naming:**
+   Use semantic prefixes:
+   - `feature/<feature-name>`: New MCP tools or Gateway capabilities.
+   - `fix/<bug-description>`: Bug fixes or stability improvements.
+   - `docs/<doc-improvement>`: Documentation, diagrams, or guide updates.
+   - `refactor/<area>`: Internal refactoring preserving observable behavior.
+
+2. **Commit Convention (Conventional Commits):**
+   Write clear, present-tense commit messages in English:
+   - `feat(mcp): add tool for surface cut and fill volumes`
+   - `fix(gateway): resolve newline handling in command injection`
+   - `docs(tools): update reference tables in TOOLS_REFERENCE.md`
+   - `refactor(dispatcher): optimize concurrent queue draining on Idle`
+
+---
+
+## 🛠️ Local Build & Verification
+
+Before submitting changes, verify that both the .NET solution and Python package build cleanly:
 
 ```powershell
+# Build .NET solution
 .\scripts\build.ps1
-# O manualmente:
-dotnet build AutoCAD_Integration.slnx -c Release
-```
 
-El build debe concluir con:
-```text
-Compilación correcta: 0 Errores, 0 Advertencias
+# Run Python test suite
+uv run --directory AutoCAD.McpPython --all-extras pytest
 ```
 
 ---
 
-## 📐 Estándares de Código y Arquitectura
+## 📐 Coding & Architectural Standards
 
-1. **Responsabilidad Única (SRP):**
-   - El punto de entrada (`Main.cs`) solo gestiona el ciclo de vida de la extensión.
-   - Los servicios de dibujo o lectura de bases de datos deben residir en `src/Services/`.
-2. **Concurrencia y Seguridad de Hilos:**
-   - **Prohibido** interactuar con la base de datos o consola de AutoCAD desde hilos secundarios. Toda orden debe despacharse mediante `ConcurrentQueue` y `Application.Idle`.
-3. **Silenciamiento Estricto de `stdout`:**
-   - En `AutoCAD.McpServer`, la salida estándar está reservada de forma exclusiva e inviolable para las tramas JSON-RPC. Nunca agregues `Console.WriteLine` o logs sin redirigir a `Console.Error` (`stderr`).
-4. **Comandos en Modo Texto No Modal:**
-   - Usa siempre el prefijo `_.-` (ej. `_.-LAYER`) y terminadores `\n` para evitar cuadros de diálogo bloqueantes de Windows.
-5. **Contexto de Nulabilidad y Documentación:**
-   - Todo el código debe compilar con `#nullable enable` activo sin advertencias.
-   - Añade comentarios XML (`/// <summary>`) a todos los métodos y tipos públicos.
+1. **Single Responsibility Principle (SRP):**
+   - The entry point (`Main.cs`) only manages the extension lifecycle.
+   - Drawing and database services belong in dedicated classes under `Services/`.
+2. **Thread Safety:**
+   - **Never** manipulate the AutoCAD database or UI document from background threads. All drawing operations must be enqueued and dispatched via `Application.Idle`.
+3. **Strict `stdout` Silence:**
+   - In `AutoCAD.McpServer`, standard output is strictly reserved for JSON-RPC messages. Never invoke `Console.WriteLine` or unredirected logging; use `Console.Error.WriteLine` (`stderr`) or `ILogger`.
+4. **Non-Modal Text Mode Commands:**
+   - Always prepend interactive commands with `_.-` (e.g. `_.-LAYER`) and end every input with `\n` to prevent blocking modal Windows dialogs.
+5. **Nullable Reference Types & XML Docs:**
+   - All C# code must compile cleanly with `#nullable enable` without warnings.
+   - Public types and methods must be documented with XML doc comments (`/// <summary>`).
 
 ---
 
-## 🚀 Envío de Pull Requests
+## 🚀 Submitting Pull Requests
 
-1. Sube tu rama a GitHub y abre un Pull Request contra la rama principal (`main`).
-2. Completa la plantilla de Pull Request (`.github/PULL_REQUEST_TEMPLATE.md`), marcando los puntos de la lista de verificación.
-3. Asegúrate de que el workflow de GitHub Actions (`CI Build (.NET 10)`) pase en verde.
-4. Un mantenedor del proyecto revisará tu contribución y te brindará retroalimentación constructiva.
+1. Push your branch to GitHub and open a Pull Request targeting `master` (or `main`).
+2. Fill out the PR template (`.github/PULL_REQUEST_TEMPLATE.md`), checking off items in the checklist.
+3. Ensure all GitHub Actions checks (CI Build, CodeQL) pass cleanly.
+4. Maintainers will review your contribution and provide constructive feedback.

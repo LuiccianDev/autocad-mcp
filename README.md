@@ -5,155 +5,156 @@
 [![uv](https://img.shields.io/badge/managed%20by-uv-261230?style=flat&logo=uv&logoColor=white)](https://astral.sh/uv)
 [![AutoCAD 2027](https://img.shields.io/badge/AutoCAD-2027-E51937?style=flat&logo=autodesk&logoColor=white)](https://www.autodesk.com/autocad)
 [![MCP Protocol](https://img.shields.io/badge/MCP-v2.2-0052CC?style=flat)](https://modelcontextprotocol.io/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![CI Build](https://img.shields.io/badge/CI-GitHub_Actions-2ea44f?style=flat&logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Changelog](https://img.shields.io/badge/Changelog-Keep_a_Changelog-orange?style=flat)](CHANGELOG.md)
 
-Integración bidireccional de alto rendimiento entre **Modelos de Inteligencia Artificial** (Claude, Antigravity, Cursor, ChatGPT, etc.) y **Autodesk AutoCAD 2027 / Civil 3D**. Cuenta con arquitectura dual de cliente MCP (**Python con soporte instantáneo `uvx`** o **C# sobre .NET 10**) y la especificación estándar del **Model Context Protocol (MCP v2.2)** con 43 herramientas tipadas.
+High-performance, bidirectional bridge connecting **Artificial Intelligence Models** (Claude, Antigravity, Cursor, ChatGPT, etc.) with **Autodesk AutoCAD 2027 & Civil 3D**. Features dual MCP client architectures (**Python with instant `uvx` support** or **native C# on .NET 10**) adhering to the **Model Context Protocol (MCP v2.2)** specification with 43 strongly-typed tools.
 
 ---
 
-## 📚 Documentación y Recursos Técnicos
+## 📚 Technical Documentation & Guides
 
-Para facilitar la adopción, comprensión y soporte de este proyecto como estándar de código abierto, consulta las guías dedicadas:
+To foster adoption, technical transparency, and open-source collaboration, explore our dedicated guides:
 
-| Documento | Descripción |
+| Document | Description |
 |---|---|
-| 🚀 **[Guía de Inicio Rápido (Getting Started)](docs/GETTING_STARTED.md)** | Instalación, compilación y conexión con clientes IA en 5 minutos. |
-| 🐍 **[Servidor MCP en Python (`AutoCAD.McpPython/`)](AutoCAD.McpPython/README.md)** | Ejecución instantánea con `uvx autocad-mcp` sin compilación manual. |
-| 🏗️ **[Arquitectura del Sistema](docs/ARCHITECTURE.md)** | Concurrencia, inyección en hilo UI, cola segura y diagramas C4/Mermaid. |
-| 🛠️ **[Manual de Referencia de Herramientas MCP](docs/TOOLS_REFERENCE.md)** | Especificación técnica exhaustiva de las 43 tools (parámetros, tipos, JSON-RPC y retorno). |
-| ⚡ **[Guía Rápida y Cheat Sheet de Tools](docs/TOOLS_CHEAT_SHEET.md)** | Matriz de decisión ("Qué quiero hacer -> Qué tool usar") y flujos encadenados para la IA. |
-| 🔧 **[Solución de Problemas (Troubleshooting)](docs/TROUBLESHOOTING.md)** | Resolución de incidencias con NETLOAD, puertos, tokens y bloqueos. |
-| 🛣️ **[Hoja de Ruta (Roadmap)](ROADMAP.md)** | Visión estratégica e hitos planificados (Civil 3D, streaming y utilidades). |
-| 📁 **[Ejemplos Prácticos (`examples/`)](examples/)** | Configuraciones JSON, scripts de prueba PowerShell/Bash y rutinas AutoLISP. |
+| 🚀 **[Getting Started Guide](docs/GETTING_STARTED.md)** | Step-by-step setup, compilation, and AI client configuration in under 5 minutes. |
+| 🐍 **[Python MCP Server (`AutoCAD.McpPython/`)](AutoCAD.McpPython/README.md)** | Instant runtime with `uvx autocad-mcp` without manual compilation. |
+| 🏗️ **[System Architecture](docs/ARCHITECTURE.md)** | Concurrency model, UI thread dispatcher, secure queue, and C4/Mermaid diagrams. |
+| 🛠️ **[MCP Tools Reference Manual](docs/TOOLS_REFERENCE.md)** | Comprehensive technical spec for all 43 tools (parameters, schemas, JSON-RPC, and returns). |
+| ⚡ **[Tools Quick Reference & Cheat Sheet](docs/TOOLS_CHEAT_SHEET.md)** | Decision matrix ("Goal -> Tool to call") and chained prompting recipes for LLMs. |
+| 🔧 **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** | Resolving issues with NETLOAD, ports, auth tokens, modal dialog freezes, and Civil 3D. |
+| 🛣️ **[Project Roadmap](ROADMAP.md)** | Strategic vision and release milestones (Civil 3D surfaces, streaming, YQArch). |
+| 📁 **[Practical Examples (`examples/`)](examples/)** | JSON configs, PowerShell/Bash test scripts, and AutoLISP routines. |
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## 🏗️ System Architecture
 
-El ecosistema opera mediante una arquitectura desacoplada de dos capas que garantiza seguridad de hilos, concurrencia y tolerancia a fallos:
+The ecosystem uses a decoupled, two-layer architecture ensuring thread safety, high concurrency, and fault tolerance:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│          Cliente IA (Antigravity / Claude / Cursor)         │
+│             AI Client (Antigravity / Claude / Cursor)       │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                │  STDIO (JSON-RPC Protocol)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│             Servidores MCP (43 Tools Disponibles)           │
-│  Opción A: Python FastMCP (`uvx autocad-mcp`)               │
-│  Opción B: AutoCAD.McpServer (.NET 10 Nativo)              │
+│              MCP Servers (43 Available Tools)               │
+│  Option A: Python FastMCP (`uvx autocad-mcp`)               │
+│  Option B: AutoCAD.McpServer (.NET 10 Native)               │
 │  - DI Container & Tool Registry                             │
-│  - Typed HttpClient con Timeout & Token Authentication      │
+│  - Typed HttpClient with Timeout & Token Authentication     │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                │  HTTP REST (http://localhost:5055/)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                AutoCAD.Gateway (.NET 10)                 │
-│  (Librería C# cargada en acad.exe vía NETLOAD)              │
-│  - HttpGatewayServer (Hilo segundo plano)                   │
+│                 AutoCAD.Gateway (.NET 10)                   │
+│  (C# Extension loaded inside acad.exe via NETLOAD)          │
+│  - HttpGatewayServer (Background Listener Thread)           │
 │  - RequestRouter (/execute, /context/*, /civil3d/*)         │
 │  - AutoCADCommandDispatcher (ConcurrentQueue + Idle Event)  │
 │  - AutoCADContextReader (Read-only Database Transactions)   │
 └──────────────────────────────┬──────────────────────────────┘
                                │
-                               │  Inyección en Hilo UI Principal
+                               │  Main UI Thread Injection
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│         Sesión Activa de AutoCAD 2027 / Civil 3D            │
+│          Active AutoCAD 2027 / Civil 3D Session             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 💡 ¿Por qué es fundamental usar Gateway y MCP en Conjunto?
+## 💡 Why Must Gateway and MCP Be Used Together?
 
-Para que un modelo de Inteligencia Artificial (o cualquier asistente) opere de forma robusta con AutoCAD, **ambos componentes deben desplegarse y configurarse juntos**:
+For an AI model (or autonomous assistant) to operate safely with AutoCAD, **both components must be deployed and configured together**:
 
-| Componente | Rol en el Ecosistema | Si se usa solo... |
+| Component | Ecosystem Role | If used in isolation... |
 |---|---|---|
-| **AutoCAD.Gateway** (.NET DLL en `acad.exe`) | **El ejecutor y sensor:** Accede a la base de datos de AutoCAD, inspecciona capas/entidades e inyecta comandos en el hilo principal (`Application.Idle`) de forma segura. | Funciona como API REST local. Puedes enviarle comandos por PowerShell/cURL, pero la IA tendría que programar scripts de terminal a ciegas y parsear respuestas JSON crudas (RAW), consumiendo más contexto y con riesgo de errores de sintaxis. |
-| **Servidores MCP** (`uvx autocad-mcp` o `.NET 10`) | **El traductor de la IA:** Implementa el estándar Model Context Protocol (MCP v2.2), exponiendo 43 herramientas tipadas (`dibujar_linea`, `crear_capa`, `medir_distancia`, `consultar_perfil_longitudinal`, etc.) con esquemas y validación. | **No puede funcionar solo.** Depende obligatoriamente del Gateway para interactuar con la sesión abierta de AutoCAD. |
+| **AutoCAD.Gateway** (.NET DLL in `acad.exe`) | **The Executor & Sensor:** Directly accesses the AutoCAD DWG database, queries entities/layers, and injects commands safely into the UI thread via `Application.Idle`. | Acts as a local REST API. While you can send raw commands via PowerShell or curl, the AI agent would have to write terminal scripts blindly and parse raw JSON responses, wasting context window and risking syntax errors. |
+| **MCP Servers** (`uvx autocad-mcp` or `.NET 10`) | **The AI Translator:** Implements the Model Context Protocol (MCP v2.2), exposing 43 typed tools (`dibujar_linea`, `crear_capa`, `medir_distancia`, `consultar_perfil_longitudinal`, etc.) with strict JSON schemas and validation. | **Cannot function alone.** Requires an active Gateway connection to interact with a live AutoCAD session. |
 
 > [!IMPORTANT]
-> **Directiva de Integración:** La experiencia completa de copiloto IA requiere compilar ambas soluciones, cargar la DLL del Gateway en AutoCAD (`NETLOAD`) y registrar el MCP Server en el cliente de IA (`mcp_config.json` o `claude_desktop_config.json`). Esto permite que la IA consulte el contexto y dibuje de manera bidireccional, limpia y tipada, sin depender de scripts manuales de PowerShell.
+> **Integration Policy:** The complete AI copilot experience requires building the solution, loading `AutoCAD.Gateway.dll` into AutoCAD via `NETLOAD`, and registering the MCP Server in your AI client configuration (`mcp_config.json` or `claude_desktop_config.json`). This enables the AI to inspect context and draw cleanly, parametrically, and bidirectionally without manual PowerShell scripts.
 
 ---
 
-## 🚀 Características Principales
+## 🚀 Key Features
 
-1. **Despacho Seguro en el Hilo UI:** Nunca bloquea ni corrompe el documento de AutoCAD; las operaciones se sincronizan con el evento `Application.Idle` de AutoCAD.
-2. **Defensa contra Bloqueos de Comandos:** Inyección automática de secuencias `\x03\x03` (`ESC`/`Ctrl+C`) antes de cada instrucción para liberar comandos previos en estado de espera.
-3. **43 Herramientas MCP Especializadas:**
-   - **Inspección y Visión:** Capas, bloques, entidades, textos, límites y captura de pantalla PNG para la IA.
-   - **Geometría Paramétrica Tipada:** Líneas, polilíneas, rectángulos, círculos, arcos, textos y bloques con `entmake`.
-   - **Gestión de Capas:** Creación con color/tipo de línea, activación y control de estados (on/off, freeze/thaw, lock/unlock).
-   - **Medición y Mantenimiento:** Distancias 2D/3D, áreas y perímetros por fórmula de Gauss, purga con auditoría y regeneración.
-   - **Ejecución y Control:** Inyección de comandos nativos, evaluación LISP en memoria y scripts `.lsp` externos.
-   - **Presentaciones y PDF:** Layouts, configuración de hoja (A0-A4), viewports calibrados en XP, cajetines y trazado PDF.
-   - **Civil 3D Nativo:** Superficies TIN, cotas Z, alineamientos horizontales, perfiles longitudinales y creación paramétrica.
-4. **Seguridad y Token Zero-Secrets:** Cabecera HTTP `X-Gateway-Token` configurable mediante variables de entorno.
-5. **Silenciamiento Estricto de `stdout`:** Garantiza la total integridad de las tramas JSON-RPC requeridas por el estándar MCP.
+1. **Thread-Safe UI Dispatcher:** Never blocks or corrupts the active AutoCAD document; all drawing operations synchronize with the `Application.Idle` event.
+2. **Command Lockout Immunity:** Automatically prepends double cancellation sequences `\x03\x03` (`ESC`/`Ctrl+C`) before commands to clear hung prompts.
+3. **43 Specialized MCP Tools:**
+   - **Inspection & Vision:** Query layers, blocks, entities, text strings, drawing extents, and capture PNG screenshots for multimodal AI analysis.
+   - **Parametric Geometry:** Draw lines, polylines, rectangles, circles, arcs, texts, and insert blocks via `entmake`.
+   - **Layer Management:** Create and update layers with ACI colors and linetypes; toggle visibility, freeze/thaw, and lock/unlock states without modal dialogs.
+   - **Measurement & Audit:** Compute 2D/3D distances, $\Delta X$, $\Delta Y$, $\Delta Z$, azimuth, slope %, polygon area and perimeter (Gauss algorithm), audit DWG database, and purge unreferenced definitions.
+   - **Execution & AutoLISP:** Inject native CAD commands, evaluate in-memory AutoLISP expressions, and load external `.lsp` files.
+   - **Layouts & PDF Export:** Create sheet layouts, configure sheet sizes (A0–A4), calibrate viewports to metric scale (`1000/Scale XP`), insert parametric title blocks, and plot to physical PDF files via `DWG To PDF.pc3`.
+   - **Autodesk Civil 3D Native:** Query TIN surfaces, extract ground elevations (Z), list horizontal alignments, compute station and offset, sample longitudinal profiles, and create alignments or surfaces from point clouds.
+4. **Zero-Secret Token Security:** Protected by the `X-Gateway-Token` HTTP header, configurable through environment variables.
+5. **Strict `stdout` Silence:** Ensures complete JSON-RPC framing integrity for STDIO-based MCP clients.
 
 ---
 
-## 📋 Requisitos Previos
+## 📋 Prerequisites
 
-- **Sistema Operativo:** Windows 10/11 (x64).
-- **SDK:** [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) instalado (`dotnet --version` >= 10.0.100).
-- **CAD:** Autodesk AutoCAD 2027 o Autodesk Civil 3D 2027 instalado en la ruta predeterminada:
+- **Operating System:** Windows 10/11 (x64).
+- **SDK:** [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`dotnet --version` >= 10.0.100).
+- **CAD Software:** Autodesk AutoCAD 2027 or Autodesk Civil 3D 2027 installed at:
   `C:\Program Files\Autodesk\AutoCAD 2027\`.
+- **Python (Optional for Python MCP Server):** Python 3.10+ or [`uv`](https://astral.sh/uv).
 
 ---
 
-## ⚙️ Compilación e Instalación
+## ⚙️ Build & Installation
 
-### 1. Clonar el repositorio
+### 1. Clone the Repository
 ```powershell
 git clone https://github.com/LuiccianDev/autocad-mcp.git
 cd autocad-mcp
 ```
 
-### 2. Compilar la solución en Release
-Puedes utilizar el script incluido o el comando oficial de .NET:
+### 2. Build Solution in Release Mode
+You can use the included PowerShell script or the standard .NET CLI:
 ```powershell
 .\scripts\build.ps1
-# O manualmente:
+# Or manually:
 dotnet build AutoCAD_Integration.slnx -c Release
 ```
 
-Esto generará:
-- `AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll` (Plugin nativo de AutoCAD).
-- `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.dll` (Servidor MCP portable).
-- `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.exe` (Ejecutable de Windows).
+Build outputs:
+- `AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll` (Native AutoCAD Extension).
+- `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.dll` (Portable .NET MCP Server).
+- `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.exe` (Windows Executable).
 
 ---
 
-## 🔌 Puesta en Marcha
+## 🔌 Getting Started
 
-### Paso 1: Cargar el Gateway en AutoCAD 2027
-1. Abre AutoCAD 2027 o Civil 3D 2027.
-2. En la línea de comandos, escribe:
+### Step 1: Load the Gateway into AutoCAD 2027
+1. Launch AutoCAD 2027 or Civil 3D 2027.
+2. In the AutoCAD command line, type:
    ```text
    NETLOAD
    ```
-3. Navega y selecciona el archivo compilado:
+3. Browse and select the built assembly:
    `...\autocad-mcp\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll`
-4. En la consola verás la confirmación:
+4. The AutoCAD command window will confirm:
    ```text
-   >>> AutoCAD AI Gateway Plugin cargado exitosamente.
-   >>> Comandos disponibles: AI_START_SERVER, AI_STOP_SERVER, AI_SHOW_CONFIG, AI_SET_TOKEN, AI_GENERATE_TOKEN
+   >>> AutoCAD AI Gateway Plugin loaded successfully.
+   >>> Available commands: AI_START_SERVER, AI_STOP_SERVER, AI_SHOW_CONFIG, AI_SET_TOKEN, AI_GENERATE_TOKEN
    ```
 
-### Paso 2: Conectar el Servidor MCP a tu Cliente de IA
+### Step 2: Connect the MCP Server to Your AI Client
 
-Puedes utilizar indistintamente cualquiera de los dos servidores MCP con idéntica paridad de 43 herramientas:
+You can use either MCP server implementation with identical 43-tool parity:
 
-#### Opción A: Despliegue Instantáneo con Python (`uvx`) — Recomendado
-Si utilizas [`uv`](https://astral.sh/uv), no necesitas compilar nada en tu máquina:
+#### Option A: Instant Python Deployment with `uvx` (Recommended)
+If using [`uv`](https://astral.sh/uv), no manual compilation is required:
 
 **Claude Desktop (`claude_desktop_config.json`):**
 ```json
@@ -192,8 +193,8 @@ Si utilizas [`uv`](https://astral.sh/uv), no necesitas compilar nada en tu máqu
 }
 ```
 
-#### Opción B: Servidor Nativo en C# (.NET 10)
-Para entornos donde se prefiera la ejecución binaria nativa compilada:
+#### Option B: Native C# Server (.NET 10)
+For environments where native compiled binary performance is preferred:
 
 **Claude Desktop (`claude_desktop_config.json`):**
 ```json
@@ -202,7 +203,7 @@ Para entornos donde se prefiera la ejecución binaria nativa compilada:
     "autocad-mcp": {
       "command": "dotnet",
       "args": [
-        "C:\\Ruta\\A\\autocad-mcp\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
+        "C:\\Path\\To\\autocad-mcp\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
       ],
       "env": {
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
@@ -231,111 +232,111 @@ Para entornos donde se prefiera la ejecución binaria nativa compilada:
 
 ---
 
-## 🛠️ Catálogo de Herramientas MCP (43 Tools)
+## 🛠️ MCP Tools Catalog (43 Tools)
 
-### 1. Herramientas de Inspección, Contexto y Visión (8)
-| Herramienta | Descripción |
+### 1. Inspection, Context & Vision Tools (8)
+| Tool | Description |
 |---|---|
-| `obtener_info_dibujo` | Consulta nombre del archivo, ruta DWG, modo solo lectura y unidades configuradas. |
-| `leer_capas_autocad` | Devuelve el catálogo completo de capas con color, visibilidad y estado de bloqueo. |
-| `leer_objetos_autocad` | Lista el resumen y recuento de entidades existentes agrupadas por tipo. |
-| `obtener_limites_dibujo` | Retorna las coordenadas de la caja delimitadora (`ExtMin`, `ExtMax`) y delta métrico. |
-| `leer_textos_autocad` | Búsqueda y listado de cadenas de texto en objetos `DBText` y `MText` con sus coordenadas (X, Y). |
-| `listar_bloques_disponibles` | Lista los nombres de definiciones de bloques disponibles en el dibujo. |
-| `leer_seleccion_autocad` | Retorna la cantidad de objetos seleccionados actualmente con el cursor por el usuario. |
-| `capturar_pantalla_autocad` | **Ojos para la IA:** Captura una imagen PNG de la ventana gráfica activa de AutoCAD para validación visual. |
+| `obtener_info_dibujo` | Retrieves drawing name, DWG path, read-only status, and configured drawing units. |
+| `leer_capas_autocad` | Returns complete layer catalog with ACI color, visibility, freeze, and lock status. |
+| `leer_objetos_autocad` | Summarizes existing entities grouped by object type and count. |
+| `obtener_limites_dibujo` | Queries drawing bounding box coordinates (`ExtMin`, `ExtMax`) and metric delta. |
+| `leer_textos_autocad` | Searches and lists text content from `DBText` and `MText` entities with (X, Y) coordinates. |
+| `listar_bloques_disponibles` | Lists block definition names available in the drawing. |
+| `leer_seleccion_autocad` | Returns count and summary of currently selected objects in AutoCAD. |
+| `capturar_pantalla_autocad` | **Eyes for AI:** Captures a PNG screenshot of the active AutoCAD viewport for visual reasoning. |
 
-### 2. Geometría y Dibujo Paramétrico Tipado (7)
-| Herramienta | Descripción |
+### 2. Parametric Geometry & Drawing Tools (7)
+| Tool | Description |
 |---|---|
-| `dibujar_linea` | Dibuja un segmento de línea recta 3D entre dos puntos en metros (sin alterar capa actual ni depender de OSNAP). |
-| `dibujar_polilinea` | Dibuja una polilínea 2D (`LWPOLYLINE`) abierta o cerrada a partir de vértices métricos. |
-| `dibujar_rectangulo` | Dibuja un rectángulo como polilínea cerrada dado por dos esquinas opuestas. |
-| `dibujar_circulo` | Dibuja un círculo paramétrico dado su centro (X, Y) y radio en metros. |
-| `dibujar_arco` | Dibuja un arco circular antihorario dado su centro, radio y ángulos inicial/final en grados. |
-| `insertar_texto` | Inserta un texto de una línea (`DBText`) en el espacio modelo con altura métrica y rotación. |
-| `insertar_bloque` | Inserta una referencia de bloque existente con escala uniforme y ángulo de rotación. |
+| `dibujar_linea` | Draws a 3D straight line segment between two metric points (preserves active layer, independent of OSNAP). |
+| `dibujar_polilinea` | Draws a 2D polyline (`LWPOLYLINE`), open or closed, from an array of metric vertices. |
+| `dibujar_rectangulo` | Draws a closed polyline rectangle defined by two diagonal corner points. |
+| `dibujar_circulo` | Draws a parametric circle given center point (X, Y) and radius in meters. |
+| `dibujar_arco` | Draws a counterclockwise circular arc given center point, radius, and start/end angles in degrees. |
+| `insertar_texto` | Inserts single-line text (`DBText`) in model space with metric height and rotation. |
+| `insertar_bloque` | Inserts an existing block reference with uniform scale and rotation angle. |
 
-### 3. Gestión Avanzada de Capas (3)
-| Herramienta | Descripción |
+### 3. Advanced Layer Management (3)
+| Tool | Description |
 |---|---|
-| `crear_capa` | Crea o actualiza una capa con color ACI (1-255), tipo de línea y descripción (sin diálogos modales). |
-| `establecer_capa_actual` | Establece la capa de trabajo activa (`CLAYER`). |
-| `establecer_estado_capa` | Controla visibilidad (`activar`/`desactivar`), congelación (`congelar`/`descongelar`) o bloqueo (`bloquear`/`desbloquear`). |
+| `crear_capa` | Creates or updates a layer with ACI color (1–255), linetype, and description (no modal dialogs). |
+| `establecer_capa_actual` | Sets the active working layer (`CLAYER`). |
+| `establecer_estado_capa` | Controls layer visibility (`activar`/`desactivar`), freeze (`congelar`/`descongelar`), or lock (`bloquear`/`desbloquear`). |
 
-### 4. Medición, Geometría Computacional y Mantenimiento (4)
-| Herramienta | Descripción |
+### 4. Measurement, Computational Geometry & Audit (4)
+| Tool | Description |
 |---|---|
-| `medir_distancia` | Calcula distancias 2D/3D, incrementos $\Delta X$, $\Delta Y$, $\Delta Z$, acimut y pendiente en % (cálculo analítico local). |
-| `calcular_area_poligono` | Calcula área en $m^2$, hectáreas, perímetro, centroide y sentido de giro de polígonos cerrados (fórmula de Gauss). |
-| `limpiar_y_purgar_dibujo` | Purga definiciones no utilizadas en dos pasadas (`_.-PURGE`) y audita/repara la base de datos DWG (`_.AUDIT`). |
-| `regenerar_todo` | Fuerza una regeneración total de todas las ventanas gráficas (`_.REGENALL`). |
+| `medir_distancia` | Computes 2D/3D distances, coordinate deltas $\Delta X, \Delta Y, \Delta Z$, azimuth, and slope % (local analytical calculation). |
+| `calcular_area_poligono` | Computes area in $m^2$, hectares, perimeter, centroid, and winding order for closed polygons (Gauss algorithm). |
+| `limpiar_y_purgar_dibujo` | Purges unreferenced definitions in two passes (`_.-PURGE`) and audits/repairs DWG database (`_.AUDIT`). |
+| `regenerar_todo` | Forces complete regeneration across all viewports (`_.REGENALL`). |
 
-### 5. Herramientas de Ejecución, Control y AutoLISP (7)
-| Herramienta | Descripción |
+### 5. Execution, Control & AutoLISP (7)
+| Tool | Description |
 |---|---|
-| `ping_autocad_gateway` | Diagnóstico de conectividad HTTP en el puerto 5055. |
-| `ejecutar_comando_autocad` | Inyecta comandos en modo texto no modal (`_.-`) asegurando terminadores `\n`. |
-| `ejecutar_lisp` | Evalúa expresiones y rutinas AutoLISP dinámicas en memoria (ej. `entmake`, variables, funciones). |
-| `cargar_archivo_lisp` | Carga y ejecuta un archivo `.lsp` externo desde el sistema de archivos mediante `(load ...)`. |
-| `configurar_entorno_dibujo` | Ajusta el estándar métrico obligatorio: `INSUNITS = 4` (metros), `MEASUREMENT = 1`. |
-| `zoom_extension` | Ejecuta un encuadre total (`_.ZOOM E`) en la ventana gráfica activa. |
-| `guardar_dibujo` | Guarda el archivo DWG activo mediante `_.QSAVE`. |
+| `ping_autocad_gateway` | Performs an HTTP connectivity check against port 5055. |
+| `ejecutar_comando_autocad` | Injects non-modal text commands (`_.-`) with guaranteed `\n` terminators. |
+| `ejecutar_lisp` | Evaluates dynamic in-memory AutoLISP expressions (e.g. `entmake`, variables, custom functions). |
+| `cargar_archivo_lisp` | Loads and executes an external `.lsp` file from disk via `(load ...)`. |
+| `configurar_entorno_dibujo` | Configures mandatory metric standard: `INSUNITS = 4` (meters), `MEASUREMENT = 1`. |
+| `zoom_extension` | Triggers a full extents zoom (`_.ZOOM E`) in the active viewport. |
+| `guardar_dibujo` | Saves the active DWG drawing file via `_.QSAVE`. |
 
-### 6. Presentaciones, Cajetines y Ploteo PDF (5)
-| Herramienta | Descripción |
+### 6. Sheet Layouts, Title Blocks & PDF Plotting (5)
+| Tool | Description |
 |---|---|
-| `crear_layout` | Crea una nueva pestaña de presentación (espacio papel) y activa su vista. |
-| `configurar_hoja_layout` | Configura el tamaño de papel (A0 a A4), trazador `DWG To PDF.pc3` y plumillas `monochrome.ctb`. |
-| `crear_viewport` | Crea una ventana gráfica (Viewport) en la lámina con escala métrica exacta (`1000/Escala XP`) y centra el modelo en (X, Y). |
-| `insertar_cajetin_parametrico` | Inserta y dibuja un cajetín técnico en espacio papel con campos paramétricos (Título, Plano, Lámina, Escala, Diseñador, Fecha). |
-| `exportar_pdf` | Traza y genera un archivo PDF físico a partir de un Layout utilizando el motor virtual `DWG To PDF.pc3`. |
+| `crear_layout` | Creates a new paper space layout tab and sets it active. |
+| `configurar_hoja_layout` | Configures layout paper size (A0 to A4), virtual plotter `DWG To PDF.pc3`, and plot style `monochrome.ctb`. |
+| `crear_viewport` | Creates a paper space viewport calibrated to exact metric scale (`1000/Scale XP`) centered on (X, Y). |
+| `insertar_cajetin_parametrico` | Draws a technical title block in paper space with parametric fields (Title, Drawing Number, Sheet, Scale, Designer, Date). |
+| `exportar_pdf` | Plots and generates a physical PDF file from a layout using `DWG To PDF.pc3`. |
 
-### 7. Herramientas de Autodesk Civil 3D (9)
-| Herramienta | Descripción |
+### 7. Autodesk Civil 3D Native Tools (9)
+| Tool | Description |
 |---|---|
-| `verificar_estado_civil3d` | Detecta si Civil 3D está cargado y expone la API administrada (`AeccDbMgd`). |
-| `listar_superficies_civil3d` | Retorna las superficies TIN presentes con cota mínima, cota máxima y triángulos. |
-| `consultar_elevacion_terreno` | Devuelve la cota Z exacta del terreno en cualquier coordenada (X, Y). |
-| `listar_alineamientos_civil3d` | Devuelve los alineamientos horizontales (`Alignment`), longitud y estacas. |
-| `consultar_estacion_alineamiento` | Calcula progresiva (estaca) y desfase lateral (+ derecha / - izquierda) de un punto (X, Y). |
-| `obtener_coordenada_en_estacion` | Dada una progresiva y desfase lateral, devuelve las coordenadas (X, Y) correspondientes. |
-| `consultar_perfil_longitudinal` | Muestrea progresivas, coordenadas y cotas Z a intervalos regulares a lo largo de un eje civil. |
-| `crear_alineamiento_civil3d` | Crea un alineamiento horizontal paramétrico a partir de PIs con curvas tangentes de radio fijo. |
-| `crear_superficie_civil3d` | Crea una superficie TIN topográfica a partir de una nube de puntos (X, Y, Z). |
+| `verificar_estado_civil3d` | Verifies whether Civil 3D runtime is active and managed API (`AeccDbMgd`) is accessible. |
+| `listar_superficies_civil3d` | Returns existing TIN surfaces with min/max elevation and triangle count. |
+| `consultar_elevacion_terreno` | Returns exact ground surface elevation (Z) at any metric (X, Y) coordinate. |
+| `listar_alineamientos_civil3d` | Returns horizontal alignments (`Alignment`), length, and station ranges. |
+| `consultar_estacion_alineamiento` | Computes station (chainage) and lateral offset (+ right / - left) for a point (X, Y). |
+| `obtener_coordenada_en_estacion` | Computes metric (X, Y) coordinates given a station and lateral offset. |
+| `consultar_perfil_longitudinal` | Samples stations, coordinates, and ground elevations at regular intervals along an alignment. |
+| `crear_alineamiento_civil3d` | Parametrically creates a horizontal alignment from PIs with fixed-radius tangent curves. |
+| `crear_superficie_civil3d` | Parametrically builds a topographic TIN surface from a point cloud array (X, Y, Z). |
 
 ---
 
-## 🔒 Reglas para Comandos Seguros
+## 🔒 Safe Command Guidelines
 
-1. **Evitar cuadros de diálogo modales:** Usa siempre el prefijo `_.-` (ejemplo: `_.-LAYER` en lugar de `LAYER`, `_.-INSERT` en lugar de `INSERT`). Si AutoCAD despliega una ventana modal de Windows, el Gateway quedará en espera hasta la intervención humana.
-2. **Internacionalización:** Usa el prefijo `_.` para garantizar compatibilidad con versiones de AutoCAD en español o inglés (ejemplo: `_.LINE`, `_.RECTANG`).
-3. **Unidades:** Trabajar siempre en **metros**.
-
----
-
-## 🤝 Comunidad, Gobernanza y Soporte Open Source
-
-Este proyecto está diseñado para ser un estándar de código abierto mantenido por y para la comunidad de desarrolladores CAD, ingenieros civiles y especialistas en IA.
-
-- 📖 **[Código de Conducta](CODE_OF_CONDUCT.md):** Promovemos un espacio respetuoso, inclusivo y libre de acoso (Contributor Covenant v2.1).
-- 💡 **[Guía de Contribución](CONTRIBUTING.md):** Estándares de desarrollo, directivas de Git y Conventional Commits.
-- 🛡️ **[Política de Seguridad](SECURITY.md):** Divulgación responsable de vulnerabilidades y buenas prácticas del Gateway.
-- 💬 **[Canales de Soporte y Ayuda](SUPPORT.md):** Dónde plantear preguntas, proponer ideas y reportar incidencias.
-- 📝 **[Registro de Versiones (Changelog)](CHANGELOG.md):** Historial cronológico de cambios y versiones publicadas.
+1. **Avoid Modal Dialogs:** Always prepend interactive commands with `_.-` (e.g. `_.-LAYER` instead of `LAYER`, `_.-INSERT` instead of `INSERT`). If AutoCAD opens a Windows modal dialog, the Gateway connection will block until manually closed.
+2. **Internationalization:** Use the `_.` command prefix to ensure compatibility across localized AutoCAD versions (Spanish, English, etc.), e.g. `_.LINE`, `_.RECTANG`.
+3. **Units:** Always design and input coordinates in **meters**.
 
 ---
 
-## 👨‍💻 Autor y Desarrollador
+## 🤝 Community, Governance & Support
 
-Este proyecto ha sido concebido, diseñado y desarrollado por:
+This project is built to serve as an open standard maintained by and for the CAD developer, civil engineering, and AI community.
+
+- 📖 **[Code of Conduct](CODE_OF_CONDUCT.md):** Fostering an inclusive, welcoming community (Contributor Covenant v2.1).
+- 💡 **[Contributing Guide](CONTRIBUTING.md):** Development guidelines, Git workflow, and Conventional Commits.
+- 🛡️ **[Security Policy](SECURITY.md):** Responsible vulnerability disclosure and Gateway best practices.
+- 💬 **[Support Channels](SUPPORT.md):** Where to ask questions, suggest features, and report bugs.
+- 📝 **[Changelog](CHANGELOG.md):** Chronological history of releases and improvements.
+
+---
+
+## 👨‍💻 Author & Maintainer
+
+Conceived, architected, and developed by:
 
 - **Luiccian** ([@LuiccianDev](https://github.com/LuiccianDev))
-  - Creador y Arquitecto Principal de **AutoCAD MCP Server & Gateway** (`autocad-mcp`) y **Vulcan MCP Server** (`vulcan-mcp`).
-  - Especialista en integración de Inteligencia Artificial para ingeniería, minería, topografía y automatización CAD.
+  - Creator and Lead Architect of **AutoCAD MCP Server & Gateway** (`autocad-mcp`) and **Vulcan MCP Server** (`vulcan-mcp`).
+  - Specialist in Artificial Intelligence integrations for engineering, mining, surveying, and AEC automation.
 
 ---
 
-## 📄 Licencia
+## 📄 License
 
-Este proyecto se distribuye bajo la licencia **MIT** (Copyright (c) 2026 Luiccian). Consulta el archivo [LICENSE](LICENSE) para más detalles.
+This project is licensed under the **Apache License, Version 2.0** (Copyright 2026 LuiccianDev). See the [LICENSE](LICENSE) file for full details.

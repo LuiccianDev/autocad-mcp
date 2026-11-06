@@ -1,4 +1,4 @@
-# autocad-mcp (Python Server)
+# autocad-mcp (Python MCP Server)
 
 Model Context Protocol (MCP) server connecting **Autodesk AutoCAD 2027** and **Autodesk Civil 3D 2027** with AI agents (Claude Desktop, Antigravity, Cursor, VS Code) via the **AutoCAD AI Gateway**.
 
@@ -6,9 +6,9 @@ Exposes **43 strongly-typed tools** covering parametric drawing, layer control, 
 
 ---
 
-## ⚡ Inicio Rápido con `uvx` (Zero-Config)
+## ⚡ Quickstart with `uvx` (Zero-Config)
 
-Para usar este servidor en **Claude Desktop** o **Cursor**, añade el bloque en tu configuración de MCP:
+To run this server in **Claude Desktop** or **Cursor**, add this block to your MCP settings:
 
 ### Claude Desktop (`claude_desktop_config.json`)
 ```json
@@ -26,14 +26,14 @@ Para usar este servidor en **Claude Desktop** o **Cursor**, añade el bloque en 
 }
 ```
 
-### Ejecución Local con `uv`
-Durante desarrollo local, puedes ejecutar directamente sin publicar en PyPI:
+### Local Development with `uv`
+During local development, you can execute directly without publishing to PyPI:
 ```powershell
 cd AutoCAD.McpPython
 uv run autocad-mcp
 ```
 
-O en tu cliente de IA referenciando la carpeta local:
+Or configure your AI client to point directly to the local directory:
 ```json
 {
   "mcpServers": {
@@ -41,7 +41,7 @@ O en tu cliente de IA referenciando la carpeta local:
       "command": "uv",
       "args": [
         "--directory",
-        "C:\\Ruta\\A\\mcp-autocad\\AutoCAD.McpPython",
+        "${workspaceFolder}/AutoCAD.McpPython",
         "run",
         "autocad-mcp"
       ],
@@ -54,8 +54,13 @@ O en tu cliente de IA referenciando la carpeta local:
 }
 ```
 
+### Run Tests
+```powershell
+uv run --directory AutoCAD.McpPython --all-extras pytest
+```
+
 ---
 
-## 📋 Requisitos
-- **Python 3.10+** (o el gestor ultra-rápido [uv](https://astral.sh/uv)).
-- **AutoCAD 2027** o **Civil 3D 2027** con el plugin `AutoCAD.Gateway` activo en el puerto `5055`.
+## 📋 Requirements
+- **Python 3.10+** (or the modern package manager [uv](https://astral.sh/uv)).
+- **AutoCAD 2027** or **Civil 3D 2027** with `AutoCAD.Gateway.dll` loaded and listening on port `5055`.

@@ -4,7 +4,7 @@ version = "2.3.0"
 description = "Model Context Protocol (MCP) server connecting Autodesk AutoCAD 2027 and Civil 3D with AI agents (Claude, Antigravity, Cursor) via AutoCAD AI Gateway."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [
     { name = "Luiccian", email = "luicciandev@gmail.com" }
 ]
@@ -16,7 +16,7 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

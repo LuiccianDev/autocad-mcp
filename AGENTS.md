@@ -1,6 +1,13 @@
-# AGENTS.md — Reglas para Asistentes de IA
+# AGENTS.md — Rules for AI Assistants
 
-Proyecto: **autocad-mcp** (AutoCAD 2027 & Civil 3D AI Gateway + MCP Server). Idioma preferente: **español**.
+Project: **autocad-mcp** (AutoCAD 2027 & Civil 3D AI Gateway + MCP Server).
+
+---
+
+## 0. Language & Documentation Policy
+
+- **Repository Language:** All official repository documentation, code comments, pull requests, issue templates, workflows, and git commits **MUST** be written in **Technical English**.
+- **User Interaction:** When interacting with the user, the assistant should reply in **Spanish** (or the user's preferred language) while preserving technical names in English and maintaining the formal engineering tone.
 
 ---
 

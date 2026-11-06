@@ -1,38 +1,38 @@
-# Arquitectura del Sistema — AutoCAD MCP (`autocad-mcp`)
+# System Architecture — AutoCAD MCP (`autocad-mcp`)
 
-Este documento detalla los principios de diseño, la topología de red, el modelo de concurrencia y la sincronización con el hilo de interfaz de usuario de Autodesk AutoCAD 2027 y Civil 3D.
+This document details the architectural principles, network topology, concurrency model, and UI thread synchronization mechanisms powering the integration with Autodesk AutoCAD 2027 and Civil 3D.
 
 ---
 
-## 1. Visión General de la Topología
+## 1. Topology Overview
 
-El ecosistema **AutoCAD MCP** opera mediante una arquitectura desacoplada de dos capas conectadas por protocolos estándar de la industria:
+The **AutoCAD MCP** ecosystem operates using a decoupled, two-tier architecture connected via industry-standard protocols:
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Capa de Cliente de Inteligencia Artificial"]
-        AIC["Cliente IA\n(Antigravity / Claude / Cursor / VS Code)"]
+    subgraph ClientLayer["AI Client Layer"]
+        AIC["AI Client\n(Antigravity / Claude / Cursor / VS Code)"]
     end
 
-    subgraph MCPLayer["Capa de Traducción y Validación (AutoCAD.McpServer)"]
-        STDIO["Transporte STDIO (JSON-RPC v2.0)"]
-        ToolsReg["MCP Tool Registry\n(27 Herramientas Tipadas)"]
-        HTTPClient["Typed HttpClient\n(X-Gateway-Token + Polling de Estado)"]
+    subgraph MCPLayer["Translation & Validation Layer (AutoCAD.McpServer / AutoCAD.McpPython)"]
+        STDIO["STDIO Transport (JSON-RPC v2.0)"]
+        ToolsReg["MCP Tool Registry\n(43 Strongly-Typed Tools)"]
+        HTTPClient["Typed HttpClient\n(X-Gateway-Token + Status Polling)"]
     end
 
-    subgraph GatewayLayer["Capa Nativa CAD (AutoCAD.Gateway.dll)"]
-        HTTPServer["HttpGatewayServer\n(Puerto 5055 / Hilo Background)"]
+    subgraph GatewayLayer["Native CAD Layer (AutoCAD.Gateway.dll)"]
+        HTTPServer["HttpGatewayServer\n(Port 5055 / Background Listener Thread)"]
         AuthMiddleware["Token Security Middleware"]
         Router["RequestRouter\n(/execute, /context/*, /civil3d/*)"]
-        Queue["ConcurrentQueue&lt;string&gt;\n(Cola Segura de Instrucciones)"]
-        IdleHandler["Manejador Application.Idle\n(Inyección en Hilo UI)"]
-        ContextReader["AutoCADContextReader\n(Lectura Transaccional de BD)"]
-        CivilService["Civil3DService\n(Reflexión Dinámica AeccDbMgd)"]
+        Queue["ConcurrentQueue&lt;string&gt;\n(Thread-Safe Instruction Queue)"]
+        IdleHandler["Application.Idle Handler\n(UI Thread Dispatcher)"]
+        ContextReader["AutoCADContextReader\n(Transactional Database Reads)"]
+        CivilService["Civil3DService\n(Dynamic Reflection over AeccDbMgd)"]
     end
 
     subgraph AutoCADApp["Autodesk AutoCAD 2027 / Civil 3D (acad.exe)"]
-        UIThread["Hilo Principal de UI (MdiActiveDocument)"]
-        CADDatabase["Base de Datos DWG (.NET ObjectARX)"]
+        UIThread["Main UI Thread (MdiActiveDocument)"]
+        CADDatabase["DWG Database (.NET ObjectARX)"]
     end
 
     AIC <-->|"JSON-RPC v2.0 (STDIO)"| STDIO
@@ -41,82 +41,82 @@ flowchart TD
     HTTPClient <-->|"HTTP REST (localhost:5055)\nHeader: X-Gateway-Token"| HTTPServer
     HTTPServer --> AuthMiddleware
     AuthMiddleware --> Router
-    Router -->|"Comandos de Dibujo"| Queue
+    Router -->|"Drawing Commands"| Queue
     Queue --> IdleHandler
     IdleHandler -->|"SendCommand / SendStringToExecute"| UIThread
-    Router -->|"Consultas de Lectura"| ContextReader
+    Router -->|"Read Queries"| ContextReader
     ContextReader <-->|"Transaction (Open / Read)"| CADDatabase
-    Router -->|"Operaciones Civiles"| CivilService
+    Router -->|"Civil Operations"| CivilService
     CivilService <-->|"AeccDatabase"| CADDatabase
 ```
 
 ---
 
-## 2. Los Dos Componentes y su Complementariedad Obligatoria
+## 2. Decoupled Components & Mandatory Complementarity
 
-| Componente | Entorno de Ejecución | Rol Crítico |
+| Component | Execution Environment | Critical Role |
 |---|---|---|
-| **AutoCAD.Gateway** | Dentro de `acad.exe` (cargado mediante `NETLOAD`). | **Sensor y Actuador:** Tiene acceso directo a la memoria del proceso de AutoCAD. Lee la base de datos de dibujo de forma transaccional e inyecta órdenes en el hilo principal de manera segura. |
-| **AutoCAD.McpServer** | Proceso de consola independiente (.NET 10). | **Traductor de la IA:** Implementa el Model Context Protocol (v2.2). Expone las herramientas fuertemente tipadas a los LLMs, valida los esquemas JSON y asla al cliente de llamadas HTTP directas y riesgos de formato. |
+| **AutoCAD.Gateway** | In-process within `acad.exe` (loaded via `NETLOAD`). | **Sensor & Actuator:** Direct memory access to the active AutoCAD process. Transactionally queries the drawing database and safely dispatches instructions to the main UI thread. |
+| **AutoCAD.McpServer / McpPython** | Independent console process (.NET 10 / Python). | **AI Translator:** Implements Model Context Protocol (v2.2). Exposes strongly-typed tools to LLMs, validates JSON schemas, and isolates the AI client from raw HTTP calls and syntax risks. |
 
 > [!IMPORTANT]
-> **Por qué no usar uno sin el otro:**
-> - El **MCP Server** por sí solo no puede acceder a los objetos COM ni al motor ObjectARX de AutoCAD sin el Gateway.
-> - El **Gateway** por sí solo obligaría a los agentes de IA a improvisar llamadas de red con PowerShell o cURL, consumiendo miles de tokens de contexto con respuestas JSON en crudo y aumentando la probabilidad de fallos de sintaxis.
+> **Why neither component can be used in isolation:**
+> - The **MCP Server** alone cannot access COM objects or the ObjectARX engine without the in-process Gateway.
+> - The **Gateway** alone would force AI agents to improvise terminal scripts via PowerShell or cURL, burning thousands of context tokens on raw JSON dumps and introducing syntax risks.
 
 ---
 
-## 3. Modelo de Concurrencia y Seguridad de Hilos (Thread Safety)
+## 3. Concurrency Model & Thread Safety
 
-Uno de los mayores desafíos al automatizar AutoCAD desde servicios de red externos es que **AutoCAD es una aplicación de hilo único (Single-Threaded Apartment - STA)** en su capa gráfica y documental.
+Automating AutoCAD from external network services presents a major challenge: **AutoCAD is a Single-Threaded Apartment (STA) application** across its graphic viewport and document object model.
 
-### El Riesgo:
-Si un hilo secundario (como el hilo de trabajo de `HttpListener`) intenta invocar `Document.SendStringToExecute()` o abrir una transacción en `Database`, AutoCAD genera de inmediato una excepción crítica (`InvalidOperationException: Drawing is busy` o Access Violation).
+### The Risk:
+If a background worker thread (such as the `HttpListener` thread pool) directly invokes `Document.SendStringToExecute()` or starts a transaction on `Database`, AutoCAD immediately throws a fatal exception (`InvalidOperationException: Drawing is busy` or an unhandled Access Violation).
 
-### La Solución Implementada:
-1. **Recepción en Segundo Plano:** Las peticiones HTTP entrantes son atendidas asíncronamente por `HttpGatewayServer` en el puerto `5055`.
-2. **Encolado Concurrente:** El comando se coloca en una estructura `ConcurrentQueue<string>`.
-3. **Sincronización con `Application.Idle`:**
-   - El Gateway se suscribe al evento `Application.Idle` de AutoCAD.
-   - Tan pronto como la interfaz de usuario de AutoCAD queda inactiva y segura para recibir comandos, el manejador se activa, extrae los comandos de la cola y los ejecuta en el contexto del hilo UI principal.
-   - Inmediatamente después de vaciar la cola, el evento se desacopla para no generar sobrecarga de CPU.
+### The Architecture Solution:
+1. **Asynchronous Background Ingestion:** Incoming HTTP requests are handled asynchronously by `HttpGatewayServer` on port `5055`.
+2. **Concurrent Queue:** Command strings are placed onto a thread-safe `ConcurrentQueue<string>`.
+3. **Synchronization with `Application.Idle`:**
+   - The Gateway attaches to AutoCAD's `Application.Idle` event.
+   - Once the AutoCAD UI thread completes its rendering cycle and enters an idle state, the handler wakes up, dequeues pending commands, and executes them within the primary UI thread context.
+   - Immediately after draining the queue, the handler detaches from `Application.Idle` to eliminate unnecessary CPU overhead.
 
 ```mermaid
 sequenceDiagram
-    participant IA as Cliente IA (MCP)
+    participant IA as AI Client (MCP)
     participant GW as Gateway (HttpListener)
     participant Q as ConcurrentQueue
     participant CAD as AutoCAD UI Thread (Application.Idle)
 
-    IA->>GW: POST /execute {"command": "_.LINE 0,0 10,0\n"}
+    IA->>GW: POST /execute {"command": "_.LINE\n0,0\n10,0\n\n"}
     GW->>Q: Enqueue(command)
     GW-->>IA: HTTP 200 OK {"status": "enqueued"}
-    Note over CAD: AutoCAD procesa su ciclo UI...
-    CAD->>CAD: Disparo evento Application.Idle
+    Note over CAD: AutoCAD processes UI message loop...
+    CAD->>CAD: Fires Application.Idle event
     CAD->>Q: TryDequeue(out command)
     CAD->>CAD: SendStringToExecute(command)
-    Note over CAD: Geometría dibujada en pantalla
+    Note over CAD: Geometry rendered on screen
 ```
 
 ---
 
-## 4. Robustez de Comandos: Auto-Cancelación y No Modalidad
+## 4. Command Robustness: Auto-Cancellation & Non-Modal Execution
 
-### Inyección de Secuencias de Escape (`\x03\x03`)
-Cualquier comando inyectado por el Gateway antepone automáticamente la secuencia ASCII `\x03\x03` (equivalente a presionar dos veces `Ctrl+C` o `ESC`). Esto garantiza que si el usuario o una rutina previa dejó un comando abierto o esperando un clic, AutoCAD cancele ese estado y reciba la nueva instrucción de forma limpia.
+### Escape Sequence Injection (`\x03\x03`)
+Every command dispatched by the Gateway automatically prepends the ASCII sequence `\x03\x03` (equivalent to double `Ctrl+C` or `ESC`). This ensures that if the user or a prior routine left an uncommitted command awaiting input, AutoCAD resets to a clean prompt before executing the new instruction.
 
-### Comandos de Modo Texto (`_.-`)
-Para evitar que se abran ventanas de diálogo modales de Windows (que detendrían la ejecución remota hasta que un usuario interactúe físicamente con el ratón), el Gateway y las herramientas MCP utilizan sistemáticamente comandos en su variante de línea de comandos:
-- `_.-LAYER` en lugar de `LAYER`.
-- `_.-INSERT` en lugar de `INSERT`.
-- `_.-PLOT` en lugar de `PLOT`.
+### Text-Mode Interactive Commands (`_.-`)
+To prevent Windows modal dialogs from halting remote execution (which would block the connection until a human physically clicks the UI), the Gateway and MCP tools strictly use text-mode command variants:
+- `_.-LAYER` instead of `LAYER`.
+- `_.-INSERT` instead of `INSERT`.
+- `_.-PLOT` instead of `PLOT`.
 
 ---
 
-## 5. Integración con Autodesk Civil 3D
+## 5. Autodesk Civil 3D Dynamic Integration
 
-Para no hacer que `AutoCAD.Gateway` dependa estrictamente de las DLLs de Civil 3D en máquinas que solo tengan AutoCAD básico:
-- Se utiliza el patrón Factory con **Carga Condicional por Reflexión**:
-  - `Civil3DServiceFactory` verifica en tiempo de ejecución si el módulo administrado `AeccDbMgd.dll` está presente en el proceso activo.
-  - Si está disponible, inicializa `Civil3DService` y permite la inspección y modelado de superficies TIN y alineamientos.
-  - Si no está disponible, inicializa `NullCivil3DService`, devolviendo respuestas estructuradas indicando que Civil 3D no está activo, sin provocar caídas de la aplicación.
+To ensure `AutoCAD.Gateway` does not crash on machines running standard vanilla AutoCAD:
+- The system employs a Factory pattern with **Conditional Reflection Loading**:
+  - `Civil3DServiceFactory` dynamically inspects the process memory at runtime to detect `AeccDbMgd.dll`.
+  - If present, it initializes `Civil3DService` enabling TIN surface inspection and alignment operations.
+  - If absent, it initializes `NullCivil3DService`, returning structured metadata indicating Civil 3D is inactive, without throwing exceptions or failing execution.

@@ -1,101 +1,106 @@
-# Registro de Cambios (Changelog)
+# Changelog
 
-Todos los cambios notables en este proyecto se documentarán en este archivo.
+All notable changes to this project will be documented in this file.
 
-El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y este proyecto se adhiere a [Semantic Versioning](https://semver.org/lang/es/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
 ## [2.4.0] - 2026-11-06
 
-### Añadido
-- **Servidor MCP en Python (`mcp-python/`) con Soporte `uvx`:**
-  - Implementación completa basada en FastMCP con paridad funcional total del catálogo de 43 herramientas.
-  - Empaquetado moderno con Hatchling y `uv` para ejecución instantánea con `uvx autocad-mcp`.
-  - Módulos `cad_math.py` (geometría analítica pura) y `client.py` (cliente HTTP asíncrono con `httpx`).
-  - Suite de pruebas automatizadas con `pytest` y `pytest-asyncio` (9 tests pasando al 100%).
-- **Soporte Dinámico de Red y Simplificación de Puerto:**
-  - Configuración limpia mediante el número de puerto `AUTOCAD_GATEWAY_PORT: "5055"` en lugar de URLs completas con protocolo, construyendo automáticamente la URL local en C# y Python.
-  - Resolución dinámica de `AUTOCAD_GATEWAY_PORT` tanto en el comando nativo `AI_START_SERVER` de AutoCAD como en los clientes C# y Python.
-- **Gestión Dinámica de Tokens en AutoCAD y Utilidades:**
-  - Nuevos comandos nativos de AutoCAD: `AI_SHOW_CONFIG` (inspección de estado y token), `AI_SET_TOKEN` (cambio de token en caliente en memoria) y `AI_GENERATE_TOKEN` (generador criptográfico aleatorio y persistencia en Windows).
-  - Script utilitario en PowerShell `scripts/set_gateway_token.ps1` para sincronización automática de credenciales entre Windows y las configuraciones de IA.
+### Added
+- **Python MCP Server (`AutoCAD.McpPython/`) with Instant `uvx` Support:**
+  - Complete implementation based on FastMCP providing 100% functional parity across all 43 tools.
+  - Packaged with Hatchling and `uv` for zero-install execution via `uvx autocad-mcp`.
+  - Modules `cad_math.py` (pure analytical geometry) and `client.py` (asynchronous HTTP client with `httpx`).
+  - Automated test suite with `pytest` and `pytest-asyncio` (9 passing unit tests).
+- **Dynamic Network Support & Simplified Port Configuration:**
+  - Simplified port configuration using `AUTOCAD_GATEWAY_PORT: "5055"` instead of full URLs, automatically constructing local endpoints in C# and Python.
+  - Dynamic resolution of `AUTOCAD_GATEWAY_PORT` in native AutoCAD command `AI_START_SERVER` and both MCP clients.
+- **Dynamic Token Management in AutoCAD:**
+  - New native AutoCAD commands: `AI_SHOW_CONFIG` (status & token inspection), `AI_SET_TOKEN` (hot-reloading token in memory), and `AI_GENERATE_TOKEN` (cryptographic random token generator with Windows environment variable persistence).
+  - PowerShell utility script `scripts/set-gateway-token.ps1` for automatic synchronization between Windows user variables and AI client configs.
+- **CI/CD Hardening & GitHub Governance:**
+  - Headless CI compilation via fallback NuGet packages (`AutoCAD.NET 26.0.0` and `Speckle.Civil3D.API 2027.0.1`).
+  - Node 24 runner opt-in (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`).
+  - CodeQL automated security analysis workflow (`codeql.yml`) and automated release pipeline (`release.yml`).
+  - Smart `paths-ignore` triggers preventing redundant CI executions on documentation and template changes.
 
-### Corregido
-- **Identidad de Marca y Autoría Oficial (Luiccian):**
-  - Atribución de autoría y créditos de creación a **Luiccian** (`LuiccianDev`) en licencia MIT, paquetes NuGet/PyPI y banner de bienvenida de AutoCAD al cargar vía `NETLOAD`.
-  - Estandarización del token de seguridad por defecto a `luiccian-autocad-token-2027` y generación de tokens aleatorios con prefijo `luiccian-`.
-- **CORS para Diagnósticos Locales:**
-  - Inclusión de `X-Gateway-Token` en las cabeceras permitidas (`Access-Control-Allow-Headers`) de `HttpGatewayServer.cs`.
+### Changed
+- **Folder and Project Standard Re-architecture:**
+  - Standardized all projects to Microsoft guidelines: `AutoCAD.Gateway`, `AutoCAD.McpServer`, and `AutoCAD.McpPython`.
+  - Flattened redundant `src/` hierarchy within `AutoCAD.Gateway`.
+  - Renamed scripts to kebab-case: `build.ps1`, `start-mcp.ps1`, `set-gateway-token.ps1`.
+- **License Switch to Apache License 2.0:**
+  - Transitioned repository licensing from MIT to Apache License Version 2.0 (Copyright 2026 LuiccianDev).
+- **Official Branding & Attribution (Luiccian):**
+  - Attribution and creator credits to **Luiccian** (`LuiccianDev`) across assemblies, packages, and AutoCAD welcome banners.
+  - Standardized default security token to `luiccian-autocad-token-2027`.
 
 ---
 
 ## [2.3.0] - 2026-11-06
 
-### Añadido
-- **Expansión del Catálogo MCP a 43 Herramientas Especializadas:**
-  - **Módulo `DrawingTools` (7 herramientas):** Geometría paramétrica tipada (`dibujar_linea`, `dibujar_polilinea`, `dibujar_rectangulo`, `dibujar_circulo`, `dibujar_arco`, `insertar_texto`, `insertar_bloque`) implementadas con `entmake` en metros, independientes de OSNAP y sin alterar la capa actual.
-  - **Módulo `LayerTools` (3 herramientas):** Gestión y control de capas (`crear_capa`, `establecer_capa_actual`, `establecer_estado_capa` para activar/desactivar, congelar/descongelar y bloquear/desbloquear).
-  - **Módulo `MeasurementTools` (4 herramientas):** Geometría computacional analítica local (`medir_distancia` 2D/3D con azimut y pendiente, `calcular_area_poligono` con fórmula de Gauss y centroide, `limpiar_y_purgar_dibujo` con auditoría `AUDIT`, y `regenerar_todo` con `REGENALL`).
-  - **Módulo `Civil3DTools`:** Nueva herramienta `consultar_perfil_longitudinal` para muestreo paramétrico de cotas de terreno a lo largo de alineamientos con análisis de pendientes y cotas extremas.
-  - **Utilidades de Formato `CadFormat`:** Normalización numérica invariante, filtrado de nombres de símbolos AutoCAD y parseo seguro de puntos.
-- **Corrección de Compatibilidad MCP Regex:** Eliminación de caracteres acentuados en nombres de herramientas (`insertar_cajetin_parametrico`) para estricta conformidad con la especificación `^[A-Za-z0-9_.-]{1,128}\z`.
+### Added
+- **MCP Catalog Expansion to 43 Specialized Tools:**
+  - **`DrawingTools` Module (7 tools):** Strongly-typed parametric geometry (`dibujar_linea`, `dibujar_polilinea`, `dibujar_rectangulo`, `dibujar_circulo`, `dibujar_arco`, `insertar_texto`, `insertar_bloque`) implemented with metric `entmake`, independent of OSNAP and preserving active layers.
+  - **`LayerTools` Module (3 tools):** Layer management and state control (`crear_capa`, `establecer_capa_actual`, `establecer_estado_capa` for visibility, freeze/thaw, and lock/unlock).
+  - **`MeasurementTools` Module (4 tools):** Local analytical computational geometry (`medir_distancia` 2D/3D with azimuth and slope, `calcular_area_poligono` using Gauss algorithm and centroid, `limpiar_y_purgar_dibujo` with `AUDIT`, and `regenerar_todo` with `REGENALL`).
+  - **`Civil3DTools` Module:** Added `consultar_perfil_longitudinal` for parametric ground profile sampling along alignments with slope and extreme elevation analysis.
+  - **`CadFormat` Utilities:** Invariant numeric formatting, AutoCAD symbol name validation, and safe point parsing.
+- **MCP Regex Compliance:** Sanitized tool names (`insertar_cajetin_parametrico`) to strictly match MCP specification `^[A-Za-z0-9_.-]{1,128}\z`.
 
 ---
 
 ## [2.2.0] - 2026-11-06
 
-### Añadido
-- **Suite Documental Open Source Completa:**
-  - `docs/ARCHITECTURE.md`: Documento de arquitectura integral con diagramas Mermaid C4 y ciclo de vida de concurrencia en hilo UI.
-  - `docs/GETTING_STARTED.md`: Guía de inicio rápido paso a paso para desarrolladores y usuarios finales.
-  - `docs/TOOLS_REFERENCE.md`: Catálogo y referencia técnica de las 27 herramientas MCP (parámetros, tipos, requeridos y ejemplos JSON).
-  - `docs/TROUBLESHOOTING.md`: Guía de resolución de problemas comunes (NETLOAD, bloqueo de DLLs, puertos y token).
-  - `ROADMAP.md`: Planificación estratégica e hitos futuros del proyecto.
-  - `SECURITY.md`, `SUPPORT.md`, `CODE_OF_CONDUCT.md`: Estándares de gobernanza y comunidad de código abierto.
-- **Plantillas de Comunidad (.github/):**
-  - Plantillas de Issue para reporte de errores (`bug_report.md`) y solicitud de características (`feature_request.md`).
-  - Plantilla estandarizada de Pull Request (`PULL_REQUEST_TEMPLATE.md`).
-  - Workflow de Integración Continua (CI) en GitHub Actions (`ci.yml`) para .NET 10 en Windows.
-- **Directorio de Ejemplos (`examples/`):**
-  - Configuraciones listas para Claude Desktop (`claude_desktop_config.json`) y Antigravity / Cursor / VS Code (`mcp_config.json`).
-  - Scripts de diagnóstico y prueba local en PowerShell (`test_gateway.ps1`) y Bash (`test_gateway.sh`).
-  - Rutina AutoLISP de muestra paramétrica métrica (`sample_metro_tunnel.lsp`).
-
-### Cambiado
-- **Estandarización de Identidad de Marca:** Transición y unificación definitiva bajo el nombre canónico **AutoCAD MCP Server & Gateway** (`autocad-mcp`).
-- Actualización de `README.md` y `CONTRIBUTING.md` con índices estructurados, enlaces directos a guías y directivas de Conventional Commits.
+### Added
+- **Full Open-Source Documentation Suite:**
+  - `docs/ARCHITECTURE.md`: Architecture document with Mermaid C4 diagrams and UI thread concurrency lifecycle.
+  - `docs/GETTING_STARTED.md`: 5-minute quickstart guide for developers and end users.
+  - `docs/TOOLS_REFERENCE.md`: Technical reference manual for MCP tools.
+  - `docs/TROUBLESHOOTING.md`: Common issue resolution guide (NETLOAD, file locking, ports, and tokens).
+  - `ROADMAP.md`: Strategic roadmap and future project milestones.
+  - `SECURITY.md`, `SUPPORT.md`, `CODE_OF_CONDUCT.md`: Open-source community governance standards.
+- **Community Templates (.github/):**
+  - Issue templates for bug reports (`bug_report.md`) and feature requests (`feature_request.md`).
+  - Standardized pull request template (`PULL_REQUEST_TEMPLATE.md`).
+  - Continuous Integration (CI) GitHub Actions workflow (`ci.yml`) for .NET 10 on Windows.
+- **Practical Examples Directory (`examples/`):**
+  - Ready-to-use configurations for Claude Desktop and Antigravity / Cursor / VS Code.
+  - Diagnostic scripts in PowerShell and Bash.
+  - Sample metric parametric AutoLISP routine (`sample_metro_tunnel.lsp`).
 
 ---
 
 ## [2.1.0] - 2026-11-05
 
-### Añadido
-- **Herramientas de Presentación, Cajetines y Ploteo PDF (5 nuevas herramientas):**
-  - `crear_layout`: Creación programática de presentaciones (espacio papel).
-  - `configurar_hoja_layout`: Configuración de tamaños métricos (A0 a A4), trazador `DWG To PDF.pc3` y plumillas `monochrome.ctb`.
-  - `crear_viewport`: Ventana gráfica con escala métrica calculada (`1000/Escala XP`) centrada en coordenadas del modelo.
-  - `insertar_cajetin_paramétrico`: Generación de cajetines técnicos normalizados con atributos dinámicos.
-  - `exportar_pdf`: Trazado físico directo a formato PDF.
-- **Herramienta de Visión `capturar_pantalla_autocad`:** Exportación visual del viewport activo para retroalimentación multimodal de la IA.
-- **Soporte AutoLISP Dinámico:** Herramientas `ejecutar_lisp` y `cargar_archivo_lisp` para evaluar rutinas complejas y manipulación de listas `entmake`.
+### Added
+- **Sheet Layouts, Title Blocks & PDF Plotting Tools (5 tools):**
+  - `crear_layout`: Programmatic paper space layout creation.
+  - `configurar_hoja_layout`: Metric paper sizing (A0 to A4), virtual plotter `DWG To PDF.pc3`, and plot style `monochrome.ctb`.
+  - `crear_viewport`: Viewport creation with metric scale (`1000/Scale XP`) centered on model coordinates.
+  - `insertar_cajetin_parametrico`: Standardized technical title blocks with dynamic fields.
+  - `exportar_pdf`: Physical PDF plotting from layout.
+- **Vision Tool `capturar_pantalla_autocad`:** Active viewport screenshot export for multimodal AI feedback.
+- **Dynamic AutoLISP Support:** Tools `ejecutar_lisp` and `cargar_archivo_lisp` for evaluating routines and manipulating `entmake` lists.
 
 ---
 
 ## [2.0.0] - 2026-11-04
 
-### Añadido
-- **Integración Nativa con Autodesk Civil 3D 2027:**
-  - `Civil3DService` y `NullCivil3DService` mediante carga condicional con reflexión para no romper sesiones de AutoCAD estándar.
-  - Herramientas MCP especializadas: inspección de superficies TIN (`listar_superficies_civil3d`), cotas de elevación Z (`consultar_elevacion_terreno`), alineamientos (`listar_alineamientos_civil3d`), cálculo de progresivas y desfasajes, y creación de alineamientos y superficies TIN.
-- **Compilación en .NET 10 y C# 13:** Migración integral al SDK de .NET 10 con soporte estricto de nulabilidad (`#nullable enable`).
+### Added
+- **Native Autodesk Civil 3D 2027 Integration:**
+  - `Civil3DService` and `NullCivil3DService` loaded conditionally via reflection to maintain AutoCAD compatibility.
+  - Specialized MCP tools: TIN surface inspection (`listar_superficies_civil3d`), elevation queries (`consultar_elevacion_terreno`), horizontal alignments (`listar_alineamientos_civil3d`), station/offset calculations, and alignment/surface generation.
+- **.NET 10 & C# 13 Migration:** Complete migration to .NET 10 SDK with strict nullable reference types (`#nullable enable`).
 
 ---
 
 ## [1.0.0] - 2026-11-01
 
-### Añadido
-- **Lanzamiento Inicial del Ecosistema:**
-  - Plugin nativo `AutoCAD_AI_Gateway` con inyección segura en hilo UI vía `Application.Idle` y `ConcurrentQueue`.
-  - Servidor `AutoCAD_MCP_Server` bajo protocolo MCP v2.2 y transporte STDIO.
-  - Primer lote de herramientas MCP de contexto (capas, entidades, límites, bloques, textos) y ejecución de comandos no modales.
+### Added
+- **Initial Ecosystem Release:**
+  - Native `AutoCAD.Gateway` plugin with thread-safe UI injection via `Application.Idle` and `ConcurrentQueue`.
+  - `AutoCAD.McpServer` implementing MCP v2.2 over STDIO transport.

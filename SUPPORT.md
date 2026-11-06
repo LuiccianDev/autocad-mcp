@@ -1,47 +1,48 @@
-# Canales de Soporte y Ayuda
+# Support & Community Help
 
-¡Bienvenido al centro de soporte y comunidad de **AutoCAD MCP** (`autocad-mcp`)! Aquí encontrarás las vías oficiales para resolver dudas, reportar anomalías técnicas o colaborar con otros desarrolladores e ingenieros de CAD.
-
----
-
-## 🧭 ¿Por dónde empezar?
-
-Antes de abrir una consulta o reporte, te recomendamos revisar los siguientes recursos:
-
-1. **[Guía de Inicio Rápido (Getting Started)](docs/GETTING_STARTED.md):** Paso a paso ilustrado para compilar, cargar el Gateway en AutoCAD y conectar tu cliente de IA en menos de 5 minutos.
-2. **[Guía de Solución de Problemas (Troubleshooting)](docs/TROUBLESHOOTING.md):** Respuestas y soluciones a las dudas más comunes (ensamblados bloqueados en Windows con `NETLOAD`, puertos ocupados, token mismatch y comandos modales).
-3. **[Referencia de Herramientas MCP](docs/TOOLS_REFERENCE.md):** Lista exhaustiva de las 27 herramientas MCP con sus parámetros, tipos y ejemplos de llamadas.
-4. **[Arquitectura del Sistema](docs/ARCHITECTURE.md):** Explicación del modelo de dos capas, concurrencia en hilo UI y protocolo MCP.
+Welcome to the **AutoCAD MCP** (`autocad-mcp`) support hub! Here you will find official resources for getting assistance, reporting issues, and collaborating with CAD developers and engineers.
 
 ---
 
-## 💬 Canales Oficiales
+## 🧭 Where to Start?
 
-### 1. Preguntas de Uso, Ideas y Comunidad (GitHub Discussions)
-Para dudas del tipo *"¿Cómo configuro el servidor MCP con Cursor?"* o *"¿Cómo puedo crear un plano con YQArch usando el Gateway?"*:
-- Utiliza **GitHub Discussions** en las categorías:
-  - **Q&A:** Dudas de configuración o uso cotidiano.
-  - **Ideas:** Propuestas de mejoras o flujos de trabajo.
-  - **Show and Tell:** Comparte planos, layouts o automatizaciones logradas con el proyecto.
+Before opening an issue or discussion, check these resources:
 
-### 2. Reporte de Errores Técnicos (GitHub Issues)
-Si has identificado un fallo en el código, una excepción en el Gateway o un comportamiento no deseado:
-- Abre un **[Bug Report](.github/ISSUE_TEMPLATE/bug_report.md)** en GitHub Issues.
-- Asegúrate de incluir la versión de AutoCAD, versión del SDK de .NET y los logs de la consola.
-
-### 3. Solicitud de Nuevas Funcionalidades
-Si deseas proponer una nueva herramienta MCP, soporte para una nueva versión de Civil 3D o mejoras de API:
-- Abre una **[Feature Request](.github/ISSUE_TEMPLATE/feature_request.md)**.
+1. **[Getting Started Guide](docs/GETTING_STARTED.md):** 5-minute setup guide to build, load the Gateway in AutoCAD, and connect your AI client.
+2. **[Troubleshooting Guide](docs/TROUBLESHOOTING.md):** Solutions for common issues (`NETLOAD` assembly blocking, port collisions, auth token mismatches, and modal dialog freezes).
+3. **[MCP Tools Reference Manual](docs/TOOLS_REFERENCE.md):** Comprehensive technical specification of all 43 MCP tools.
+4. **[System Architecture](docs/ARCHITECTURE.md):** Detailed guide to the decoupled two-tier architecture, UI thread concurrency, and security model.
 
 ---
 
-## 🧪 Pruebas de Diagnóstico Rápido
+## 💬 Community Channels
 
-Si experimentas problemas de comunicación entre la IA y AutoCAD, ejecuta el script de diagnóstico incluido:
+### 1. General Questions & Discussions (GitHub Discussions)
+For configuration questions or workflow ideas:
+- Use **GitHub Discussions**:
+  - **Q&A:** Configuration questions and general assistance.
+  - **Ideas:** Feature suggestions, workflow concepts, and proposals.
+  - **Show and Tell:** Share scripts, drawings, or layouts generated with the project.
+
+### 2. Bug Reports (GitHub Issues)
+If you found an issue or unexpected behavior:
+- Open a **[Bug Report](.github/ISSUE_TEMPLATE/bug_report.md)**.
+- Include your AutoCAD version, .NET SDK version, operating system, and reproduction steps.
+
+### 3. Feature Requests
+To propose a new MCP tool or Civil 3D capability:
+- Open a **[Feature Request](.github/ISSUE_TEMPLATE/feature_request.md)**.
+
+---
+
+## 🧪 Quick Diagnostic Verification
+
+To verify Gateway connectivity and active token configuration:
 ```powershell
-.\examples\scripts\test_gateway.ps1
+$headers = @{ "X-Gateway-Token" = "luiccian-autocad-token-2027" }
+Invoke-RestMethod -Uri "http://localhost:5055/context/info" -Headers $headers
 ```
-Este script validará si:
-- El Gateway está activo en `http://localhost:5055/`.
-- El token de seguridad `X-Gateway-Token` coincide.
-- AutoCAD responde correctamente a solicitudes de información de dibujo.
+This confirms:
+- The Gateway is listening on `http://localhost:5055/`.
+- The `X-Gateway-Token` is recognized.
+- AutoCAD is responding with active drawing metadata.

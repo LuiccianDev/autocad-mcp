@@ -1,84 +1,87 @@
-# Guía de Inicio Rápido — AutoCAD MCP (`autocad-mcp`)
+# Getting Started Guide — AutoCAD MCP (`autocad-mcp`)
 
-Esta guía te conducirá paso a paso para compilar la solución, desplegar el Gateway dentro de AutoCAD 2027 y conectar tu cliente de Inteligencia Artificial (Antigravity, Claude Desktop o Cursor) en menos de 5 minutos.
+This step-by-step guide walks you through building the solution, deploying the native Gateway plugin inside AutoCAD 2027, and connecting your Artificial Intelligence client (Antigravity, Claude Desktop, Cursor, or VS Code) in under 5 minutes.
 
 ---
 
-## 📋 Requisitos Previos
+## 📋 Prerequisites
 
-1. **Sistema Operativo:** Windows 10 o Windows 11 (64-bit).
-2. **SDK de .NET 10:**
-   - Comprueba tu versión abriendo una terminal PowerShell:
+1. **Operating System:** Windows 10 or Windows 11 (64-bit).
+2. **.NET 10 SDK:**
+   - Verify your version by opening a PowerShell console:
      ```powershell
      dotnet --version
      ```
-   - Debe retornar `10.0.100` o superior. Si no lo tienes, descárgalo desde [.NET 10 Download](https://dotnet.microsoft.com/download/dotnet/10.0).
-3. **Autodesk AutoCAD 2027 o Civil 3D 2027:**
-   - Instalado en la ruta estándar: `C:\Program Files\Autodesk\AutoCAD 2027\`.
+   - Must output `10.0.100` or higher. If not installed, download from [.NET 10 Download](https://dotnet.microsoft.com/download/dotnet/10.0).
+3. **Autodesk AutoCAD 2027 or Autodesk Civil 3D 2027:**
+   - Installed at the default location: `C:\Program Files\Autodesk\AutoCAD 2027\`.
+4. **Python (Optional for Python MCP Server):**
+   - Python 3.10+ or [`uv`](https://astral.sh/uv) installed.
 
 ---
 
-## 🛠️ Paso 1: Clonar y Compilar la Solución
+## 🛠️ Step 1: Clone and Build the Solution
 
-1. Abre tu terminal favorita en el directorio donde quieras trabajar:
+1. Open PowerShell in your working workspace:
    ```powershell
-   git clone https://github.com/tu-usuario/autocad-mcp.git
+   git clone https://github.com/LuiccianDev/autocad-mcp.git
    cd autocad-mcp
    ```
 
-2. Ejecuta el script de compilación incluido en el repositorio:
+2. Run the automated build script:
    ```powershell
    .\scripts\build.ps1
    ```
-   *O alternativamente, mediante el CLI de .NET:*
+   *Or build manually via .NET CLI:*
    ```powershell
    dotnet build AutoCAD_Integration.slnx -c Release
    ```
 
-3. Verifica que la salida confirme `0 Errores` y que se hayan generado los binarios:
-   - `AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll`
-   - `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.dll`
+3. Confirm the output reports `0 Errors` and produced the following artifacts:
+   - `AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll` (Native AutoCAD Plugin).
+   - `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.dll` (Portable .NET MCP Server).
+   - `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.exe` (Windows Executable).
 
 ---
 
-## 🔌 Paso 2: Cargar el Plugin Gateway en AutoCAD
+## 🔌 Step 2: Load the Gateway Plugin in AutoCAD
 
-1. Abre **AutoCAD 2027** o **Autodesk Civil 3D 2027**.
-2. Abre un dibujo nuevo o existente (en unidades métricas).
-3. En la línea de comandos de AutoCAD, escribe:
+1. Launch **AutoCAD 2027** or **Autodesk Civil 3D 2027**.
+2. Open a new or existing drawing (using metric units).
+3. In the AutoCAD command prompt, type:
    ```text
    NETLOAD
    ```
-4. Se abrirá una ventana de selección de archivos. Navega hasta la carpeta del proyecto y selecciona:
+4. In the file dialog, navigate to and select:
    `...\autocad-mcp\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll`
-5. En la barra de comandos verás el mensaje de confirmación:
+5. The command line will display the welcome confirmation:
    ```text
-   >>> AutoCAD AI Gateway Plugin cargado exitosamente.
-   >>> Comandos disponibles:
-       - AI_START_SERVER   : Inicia el servidor HTTP Gateway.
-       - AI_STOP_SERVER    : Detiene el servidor HTTP Gateway.
-       - AI_SHOW_CONFIG    : Muestra el estado y token activo.
-       - AI_SET_TOKEN      : Cambia el token en memoria en caliente.
-       - AI_GENERATE_TOKEN : Genera un nuevo token criptografico seguro.
+   >>> AutoCAD AI Gateway Plugin loaded successfully.
+   >>> Available commands:
+       - AI_START_SERVER   : Starts the HTTP Gateway server.
+       - AI_STOP_SERVER    : Stops the HTTP Gateway server.
+       - AI_SHOW_CONFIG    : Displays server status and active token.
+       - AI_SET_TOKEN      : Updates the active token in memory.
+       - AI_GENERATE_TOKEN : Generates a cryptographically secure token.
    ```
 
 > [!TIP]
-> **Desbloqueo de DLL (Solo si AutoCAD muestra error de carga):**
-> Si Windows bloquea la DLL por haber sido descargada, abre PowerShell como administrador y ejecuta:
+> **DLL Unblock (If AutoCAD fails to load the file):**
+> If Windows blocks downloaded DLLs, run this in PowerShell:
 > ```powershell
 > Unblock-File -Path ".\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll"
 > ```
 
 ---
 
-## 🤖 Paso 3: Conectar el Servidor MCP a tu Cliente de IA
+## 🤖 Step 3: Connect the MCP Server to Your AI Client
 
-Elige tu entorno preferido:
+Choose your preferred MCP runtime:
 
-### Opción 1: Despliegue Instantáneo con Python (`uvx`) — Recomendado
-Si utilizas [`uv`](https://astral.sh/uv), no requieres compilar nada:
+### Option 1: Instant Python Deployment with `uvx` (Recommended)
+If using [`uv`](https://astral.sh/uv), no manual compilation is required:
 
-**Para Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):**
+**Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):**
 ```json
 {
   "mcpServers": {
@@ -94,7 +97,7 @@ Si utilizas [`uv`](https://astral.sh/uv), no requieres compilar nada:
 }
 ```
 
-**Para Antigravity / Cursor / VS Code (`mcp_config.json`):**
+**Antigravity / Cursor / VS Code (`mcp_config.json`):**
 ```json
 {
   "mcpServers": {
@@ -115,16 +118,16 @@ Si utilizas [`uv`](https://astral.sh/uv), no requieres compilar nada:
 }
 ```
 
-### Opción 2: Servidor Nativo Compilado en C# (.NET 10)
+### Option 2: Native C# Server (.NET 10)
 
-**Para Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):**
+**Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):**
 ```json
 {
   "mcpServers": {
     "autocad-mcp": {
       "command": "dotnet",
       "args": [
-        "C:\\Ruta\\Completa\\autocad-mcp\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
+        "C:\\Path\\To\\autocad-mcp\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
       ],
       "env": {
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
@@ -134,7 +137,7 @@ Si utilizas [`uv`](https://astral.sh/uv), no requieres compilar nada:
 }
 ```
 
-**Para Antigravity / Cursor / VS Code (`mcp_config.json`):**
+**Antigravity / Cursor / VS Code (`mcp_config.json`):**
 ```json
 {
   "mcpServers": {
@@ -153,24 +156,24 @@ Si utilizas [`uv`](https://astral.sh/uv), no requieres compilar nada:
 
 ---
 
-## 🎯 Paso 4: Primera Prueba y Verificación
+## 🎯 Step 4: First Test & Verification
 
-Una vez que reinicies o conectes tu cliente de IA, pídele en el chat:
-> *"Consulta el estado de mi dibujo activo en AutoCAD y dibuja un rectángulo de 20x10 metros en la capa ARQ-MUROS."*
+Once your AI client is connected, ask it in the chat:
+> *"Inspect my active AutoCAD drawing status and draw a 20x10 meter rectangle on the layer ARQ-WALLS."*
 
-La IA ejecutará automáticamente:
-1. `configurar_entorno_dibujo` (asegurando `INSUNITS = 4` para metros).
-2. `obtener_info_dibujo` (verificando nombre y estado del archivo).
-3. `dibujar_rectangulo` (o creación de capa e inyección de geometría paramétrica).
-4. `zoom_extension` (encuadrando la geometría en tu pantalla).
+The AI will automatically:
+1. `configurar_entorno_dibujo` (ensuring `INSUNITS = 4` for metric meters).
+2. `obtener_info_dibujo` (verifying drawing name and status).
+3. `crear_capa` & `dibujar_rectangulo` (injecting parametric geometry without dialogs).
+4. `zoom_extension` (framing the new geometry on your screen).
 
-¡Felicidades! Ya tienes tu copiloto de ingeniería y dibujo conectado bidireccionalmente con AutoCAD.
+Congratulations! Your engineering AI copilot is now fully connected with AutoCAD.
 
 ---
 
-## 📚 Siguientes Pasos y Referencias
+## 📚 Next Steps & References
 
-- 🛠️ **[Manual de Referencia Técnica (43 Tools)](TOOLS_REFERENCE.md):** Consulta el catálogo completo de herramientas con todos sus parámetros, tipos y ejemplos de respuesta JSON.
-- ⚡ **[Guía Rápida y Cheat Sheet de Prompts](TOOLS_CHEAT_SHEET.md):** Árbol de decisión para saber exactamente qué herramienta pedir a la IA en cada tarea de diseño.
-- 🏗️ **[Arquitectura del Sistema](ARCHITECTURE.md):** Modelo de concurrencia e inyección segura en el hilo UI.
-- 🔧 **[Solución de Problemas](TROUBLESHOOTING.md):** Respuestas a incidencias de red, NETLOAD y comandos.
+- 🛠️ **[MCP Tools Reference Manual (43 Tools)](TOOLS_REFERENCE.md):** Complete catalog with parameter schemas, types, and JSON responses.
+- ⚡ **[Tools Quick Reference & Cheat Sheet](TOOLS_CHEAT_SHEET.md):** Decision tree for selecting the right tool for each CAD design task.
+- 🏗️ **[System Architecture](ARCHITECTURE.md):** Deep dive into the concurrency model and UI thread dispatcher.
+- 🔧 **[Troubleshooting Guide](TROUBLESHOOTING.md):** Resolving network, NETLOAD, and command execution issues.
