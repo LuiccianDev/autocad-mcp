@@ -1,0 +1,56 @@
+[project]
+name = "autocad-mcp"
+version = "2.3.0"
+description = "Model Context Protocol (MCP) server connecting Autodesk AutoCAD 2027 and Civil 3D with AI agents (Claude, Antigravity, Cursor) via AutoCAD AI Gateway."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Luiccian", email = "luicciandev@gmail.com" }
+]
+maintainers = [
+    { name = "LuiccianDev", email = "luicciandev@gmail.com" }
+]
+keywords = ["mcp", "autocad", "civil3d", "ai-agents", "model-context-protocol", "cad-automation"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/LuiccianDev/autocad-mcp"
+Documentation = "https://github.com/LuiccianDev/autocad-mcp#readme"
+Repository = "https://github.com/LuiccianDev/autocad-mcp.git"
+Issues = "https://github.com/LuiccianDev/autocad-mcp/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+autocad-mcp = "autocad_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/autocad_mcp"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"
