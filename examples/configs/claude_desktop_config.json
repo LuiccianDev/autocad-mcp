@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "autocad-mcp": {
+      "command": "uvx",
+      "args": [
+        "autocad-mcp"
+      ],
+      "env": {
+        "AUTOCAD_GATEWAY_PORT": "5055",
+        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+      }
+    },
+    "autocad-mcp-dotnet": {
+      "command": "dotnet",
+      "args": [
+        "C:\\Ruta\\A\\Tu\\Repositorio\\autocad-mcp\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
+      ],
+      "env": {
+        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+      }
+    }
+  }
+}
