@@ -30,4 +30,4 @@ jobs:
       run: dotnet build AutoCAD_Integration.slnx -c Release --no-restore
 
     - name: Run Python MCP Server Tests
-      run: uv run --directory AutoCAD.McpPython pytest
+      run: uv run --directory AutoCAD.McpPython --all-extras pytest
