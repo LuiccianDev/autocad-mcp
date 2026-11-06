@@ -14,7 +14,8 @@
     <Copyright>Copyright (c) 2026 Luiccian (LuiccianDev)</Copyright>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!-- Si existe AutoCAD instalado localmente en C:, usamos los ensamblados locales -->
+  <ItemGroup Condition="Exists('C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll')">
     <Reference Include="acdbmgd">
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll</HintPath>
       <Private>False</Private>
@@ -36,6 +37,12 @@
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\ACA\AecBaseMgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
+  </ItemGroup>
+
+  <!-- Si NO existe AutoCAD instalado (ej. GitHub Actions CI/CD), usamos paquetes NuGet de referencia -->
+  <ItemGroup Condition="!Exists('C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll')">
+    <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
+    <PackageReference Include="Speckle.Civil3D.API" Version="2027.0.1" ExcludeAssets="runtime" />
   </ItemGroup>
 
 </Project>
