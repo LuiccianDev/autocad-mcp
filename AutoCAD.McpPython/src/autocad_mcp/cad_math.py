@@ -328,11 +328,20 @@ def build_batch_geometry_lisp(
             raise ValueError(f"Unsupported entity type: '{entity_type}' at index {idx}.")
 
     full_lisp = f"(progn {' '.join(lisp_expressions)} (princ))\n"
+    desglose = {
+        **summary_counts,
+        "linea": summary_counts.get("line", 0),
+        "rectangulo": summary_counts.get("rectangle", 0),
+        "circulo": summary_counts.get("circle", 0),
+        "arco": summary_counts.get("arc", 0),
+        "polilinea": summary_counts.get("polyline", 0),
+        "texto": summary_counts.get("text", 0),
+    }
     summary = {
         "status": "success",
         "total": len(lisp_expressions),
         "breakdown": summary_counts,
-        "desglose": summary_counts,
+        "desglose": desglose,
     }
     return full_lisp, summary
 

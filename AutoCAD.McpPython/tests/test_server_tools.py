@@ -1,4 +1,4 @@
-"""Pruebas de introspección de herramientas y validación de configuración de red del Gateway."""
+"""Tool introspection tests and Gateway network configuration validation."""
 
 import os
 import pytest
@@ -6,25 +6,58 @@ from autocad_mcp.client import AutoCADGatewayClient
 from autocad_mcp.server import mcp
 
 EXPECTED_TOOLS = [
-    # Módulo 1 (8)
-    "obtener_info_dibujo", "leer_capas_autocad", "leer_objetos_autocad", "obtener_limites_dibujo",
-    "leer_textos_autocad", "listar_bloques_disponibles", "leer_seleccion_autocad", "capturar_pantalla_autocad",
-    # Módulo 2 (8)
-    "dibujar_geometria_lote", "dibujar_linea", "dibujar_polilinea", "dibujar_rectangulo", "dibujar_circulo",
-    "dibujar_arco", "insertar_texto", "insertar_bloque",
-    # Módulo 3 (3)
-    "crear_capa", "establecer_capa_actual", "establecer_estado_capa",
-    # Módulo 4 (4)
-    "medir_distancia", "calcular_area_poligono", "limpiar_y_purgar_dibujo", "regenerar_todo",
-    # Módulo 5 (8)
-    "ping_autocad_gateway", "ejecutar_comandos_lote", "ejecutar_comando_autocad", "ejecutar_lisp", "cargar_archivo_lisp",
-    "configurar_entorno_dibujo", "zoom_extension", "guardar_dibujo",
-    # Módulo 6 (5)
-    "crear_layout", "configurar_hoja_layout", "crear_viewport", "insertar_cajetin_parametrico", "exportar_pdf",
-    # Módulo 7 (9)
-    "verificar_estado_civil3d", "listar_superficies_civil3d", "consultar_elevacion_terreno",
-    "listar_alineamientos_civil3d", "consultar_estacion_alineamiento", "obtener_coordenada_en_estacion",
-    "consultar_perfil_longitudinal", "crear_alineamiento_civil3d", "crear_superficie_civil3d",
+    # Module 1: Inspection, Context & Vision (8)
+    "get_drawing_info",
+    "get_layers",
+    "get_entities",
+    "get_drawing_extents",
+    "get_texts",
+    "list_blocks",
+    "get_selection_count",
+    "capture_screenshot",
+    # Module 2: Parametric Geometry & Drawing (8)
+    "draw_batch_geometry",
+    "draw_line",
+    "draw_polyline",
+    "draw_rectangle",
+    "draw_circle",
+    "draw_arc",
+    "insert_text",
+    "insert_block",
+    # Module 3: Advanced Layer Management (3)
+    "create_layer",
+    "set_current_layer",
+    "set_layer_state",
+    # Module 4: Measurement, Computational Geometry & Audit (4)
+    "measure_distance",
+    "calculate_polygon_area",
+    "purge_and_audit_drawing",
+    "regen_all",
+    # Module 5: Execution, Control & AutoLISP (8)
+    "ping_gateway",
+    "execute_batch_commands",
+    "execute_command",
+    "evaluate_lisp",
+    "load_lisp_file",
+    "configure_drawing_units",
+    "zoom_extents",
+    "save_drawing",
+    # Module 6: Sheet Layouts, Title Blocks & PDF Plotting (5)
+    "create_layout",
+    "configure_layout_page",
+    "create_viewport",
+    "insert_title_block",
+    "export_pdf",
+    # Module 7: Autodesk Civil 3D (9)
+    "check_civil3d_status",
+    "list_civil3d_surfaces",
+    "get_surface_elevation",
+    "list_civil3d_alignments",
+    "get_alignment_station_offset",
+    "get_point_at_station",
+    "sample_longitudinal_profile",
+    "create_civil3d_alignment",
+    "create_civil3d_surface",
 ]
 
 
@@ -33,14 +66,13 @@ async def test_tool_count_and_names():
     tools = await mcp.list_tools()
     tool_names = [t.name for t in tools]
 
-    assert len(tool_names) == 45, f"Se esperaban 45 herramientas pero se encontraron {len(tool_names)}: {tool_names}"
+    assert len(tool_names) == 45, f"Expected 45 tools, found {len(tool_names)}: {tool_names}"
 
     for expected in EXPECTED_TOOLS:
-        assert expected in tool_names, f"Falta la herramienta esperada: {expected}"
+        assert expected in tool_names, f"Missing expected tool: {expected}"
 
 
 def test_gateway_client_default_configuration():
-    # Asegurar que sin variables de entorno se usan los defaults oficiales
     old_token = os.environ.pop("AUTOCAD_GATEWAY_TOKEN", None)
     old_url = os.environ.pop("AUTOCAD_GATEWAY_URL", None)
     old_port = os.environ.pop("AUTOCAD_GATEWAY_PORT", None)
@@ -67,21 +99,18 @@ def test_gateway_client_environment_overrides():
     old_port = os.environ.get("AUTOCAD_GATEWAY_PORT")
 
     try:
-        # Test con AUTOCAD_GATEWAY_URL personalizada
         os.environ["AUTOCAD_GATEWAY_URL"] = "http://localhost:5060"
-        os.environ["AUTOCAD_GATEWAY_TOKEN"] = "mi-token-personalizado"
+        os.environ["AUTOCAD_GATEWAY_TOKEN"] = "my-custom-token"
         client = AutoCADGatewayClient()
         assert client.base_url == "http://localhost:5060/"
-        assert client.token == "mi-token-personalizado"
-        assert client._headers()["X-Gateway-Token"] == "mi-token-personalizado"
+        assert client.token == "my-custom-token"
+        assert client._headers()["X-Gateway-Token"] == "my-custom-token"
 
-        # Test con AUTOCAD_GATEWAY_PORT
         del os.environ["AUTOCAD_GATEWAY_URL"]
         os.environ["AUTOCAD_GATEWAY_PORT"] = "5070"
         client_port = AutoCADGatewayClient()
         assert client_port.base_url == "http://localhost:5070/"
 
-        # Test pasando el puerto como argumento directo al constructor
         client_arg_int = AutoCADGatewayClient(port=5080)
         assert client_arg_int.base_url == "http://localhost:5080/"
 
