@@ -73,15 +73,40 @@ jobs:
       run: |
         uv build --directory AutoCAD.McpPython
 
+    - name: Generate Release Body
+      shell: pwsh
+      run: |
+        $ver = "${{ steps.tag_info.outputs.version }}"
+        $tag = "${{ steps.tag_info.outputs.tag }}"
+        $body = @"
+# AutoCAD 2027 & Civil 3D AI Gateway and MCP Server — Version $ver
+
+Automated release $tag for the AutoCAD AI Gateway and MCP Server ecosystem.
+
+## Artifacts Included
+- AutoCAD.Gateway-Release.zip: Native .NET 10 AutoCAD extension plugin (acad.exe NETLOAD).
+- AutoCAD.McpServer-Release.zip: Standalone C# .NET 10 MCP server (STDIO).
+- Python Distributions: Python FastMCP wheel and sdist packages.
+
+## Highlights
+- 45 typed MCP tools covering inspection, geometry, layers, calculations, layouts, and Civil 3D.
+- High-performance batch drafting engine (dibujar_geometria_lote).
+- Thread-safe command dispatching with Application.Idle synchronization.
+- Zero-secret security with X-Gateway-Token authentication.
+"@
+        Set-Content -Path "release_body.md" -Value $body
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.tag_info.outputs.tag }}
         name: Release ${{ steps.tag_info.outputs.tag }}
+        body_path: release_body.md
         files: |
           AutoCAD.Gateway-Release.zip
           AutoCAD.McpServer-Release.zip
-          AutoCAD.McpPython/dist/*
+          AutoCAD.McpPython/dist/*.whl
+          AutoCAD.McpPython/dist/*.tar.gz
         generate_release_notes: true
         make_latest: true
 
