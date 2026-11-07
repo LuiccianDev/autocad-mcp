@@ -6,7 +6,7 @@
 
 Model Context Protocol (MCP) server connecting **Autodesk AutoCAD 2027** and **Autodesk Civil 3D 2027** with AI agents (Claude Desktop, Antigravity, Cursor, VS Code) via the **AutoCAD AI Gateway**.
 
-Exposes **43 strongly-typed tools** covering parametric drawing, layer control, geometric calculations, layout/PDF generation, and native Civil 3D design (surfaces, alignments, profiles).
+Exposes **45 strongly-typed tools** covering parametric drawing, layer control, geometric calculations, layout/PDF generation, and native Civil 3D design (surfaces, alignments, profiles).
 
 ---
 

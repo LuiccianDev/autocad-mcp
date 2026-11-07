@@ -3,7 +3,7 @@
     "autocad-mcp": {
       "command": "uvx",
       "args": [
-        "autocad-mcp"
+        "luiccian-autocad-mcp"
       ],
       "env": {
         "AUTOCAD_GATEWAY_PORT": "5055",

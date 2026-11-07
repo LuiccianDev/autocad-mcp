@@ -10,7 +10,7 @@
 [![CI Build](https://img.shields.io/badge/CI-GitHub_Actions-2ea44f?style=flat&logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
 [![Changelog](https://img.shields.io/badge/Changelog-Keep_a_Changelog-orange?style=flat)](CHANGELOG.md)
 
-High-performance, bidirectional bridge connecting **Artificial Intelligence Models** (Claude, Antigravity, Cursor, ChatGPT, etc.) with **Autodesk AutoCAD 2027 & Civil 3D**. Features dual MCP client architectures (**Python with instant `uvx` support** or **native C# on .NET 10**) adhering to the **Model Context Protocol (MCP v2.2)** specification with 43 strongly-typed tools.
+High-performance, bidirectional bridge connecting **Artificial Intelligence Models** (Claude, Antigravity, Cursor, ChatGPT, etc.) with **Autodesk AutoCAD 2027 & Civil 3D**. Features dual MCP client architectures (**Python with instant `uvx` support** or **native C# on .NET 10**) adhering to the **Model Context Protocol (MCP v2.2)** specification with 45 strongly-typed tools.
 
 ---
 
@@ -82,7 +82,7 @@ The ecosystem uses a decoupled, two-layer architecture ensuring thread safety, h
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              MCP Servers (45 Available Tools)               │
-│  Option A: Python FastMCP (`uvx autocad-mcp`)               │
+│  Option A: Python FastMCP (`uvx luiccian-autocad-mcp`)      │
 │  Option B: AutoCAD.McpServer (.NET 10 Native)               │
 │  - DI Container & Tool Registry                             │
 │  - Typed HttpClient with Timeout & Token Authentication     │
@@ -174,26 +174,26 @@ Build outputs:
 
 ## Getting Started
 
+Connect AutoCAD 2027 to your AI assistant in under 2 minutes:
+
 ### Step 1: Load the Gateway into AutoCAD 2027
-1. Launch AutoCAD 2027 or Civil 3D 2027.
-2. In the AutoCAD command line, type:
+1. Launch **AutoCAD 2027** or **Autodesk Civil 3D 2027**.
+2. Download the pre-built native plugin [`AutoCAD.Gateway-Release.zip`](https://github.com/LuiccianDev/autocad-mcp/releases/latest) from the latest GitHub Release (or build from source using `dotnet build -c Release`).
+3. Extract `AutoCAD.Gateway.dll` and in the AutoCAD command prompt, type:
    ```text
    NETLOAD
    ```
-3. Browse and select the built assembly:
-   `...\autocad-mcp\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll`
-4. The AutoCAD command window will confirm:
+4. Select `AutoCAD.Gateway.dll`. The AutoCAD command window will confirm:
    ```text
    >>> AutoCAD AI Gateway Plugin loaded successfully.
    >>> Available commands: AI_START_SERVER, AI_STOP_SERVER, AI_SHOW_CONFIG, AI_SET_TOKEN, AI_GENERATE_TOKEN
    ```
+   *(The HTTP listener starts automatically on `http://localhost:5055/`).*
 
 ### Step 2: Connect the MCP Server to Your AI Client
 
-You can use either MCP server implementation with identical 43-tool parity:
-
-#### Option A: Instant Python Deployment with `uvx` (Recommended)
-If using [`uv`](https://astral.sh/uv), no manual compilation is required:
+#### Primary Option: Zero-Install with `uvx` (Recommended)
+No local compilation or manual environment setup required if you have [`uv`](https://astral.sh/uv). The server runs the official PyPI package [`luiccian-autocad-mcp`](https://pypi.org/project/luiccian-autocad-mcp/) on demand with full 45-tool parity:
 
 **Claude Desktop (`claude_desktop_config.json`):**
 ```json
@@ -216,13 +216,8 @@ If using [`uv`](https://astral.sh/uv), no manual compilation is required:
 {
   "mcpServers": {
     "autocad-mcp": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "${workspaceFolder}/AutoCAD.McpPython",
-        "run",
-        "autocad-mcp"
-      ],
+      "command": "uvx",
+      "args": ["luiccian-autocad-mcp"],
       "env": {
         "AUTOCAD_GATEWAY_PORT": "5055",
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
@@ -232,8 +227,14 @@ If using [`uv`](https://astral.sh/uv), no manual compilation is required:
 }
 ```
 
-#### Option B: Native C# Server (.NET 10)
+---
+
+## Alternative Execution Modes
+
+### Option B: Native C# Server (.NET 10)
 For environments where native compiled binary performance is preferred:
+1. Download `AutoCAD.McpServer-Release.zip` from [Releases](https://github.com/LuiccianDev/autocad-mcp/releases/latest) or build via `dotnet build AutoCAD_Integration.slnx -c Release`.
+2. Configure your AI client:
 
 **Claude Desktop (`claude_desktop_config.json`):**
 ```json
@@ -262,6 +263,35 @@ For environments where native compiled binary performance is preferred:
         "${workspaceFolder}/AutoCAD.McpServer/bin/Release/net10.0/AutoCAD.McpServer.dll"
       ],
       "env": {
+        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+      }
+    }
+  }
+}
+```
+
+### Option C: Local Python Development (`uv run`)
+For contributors modifying Python tools directly from a cloned workspace:
+```powershell
+git clone https://github.com/LuiccianDev/autocad-mcp.git
+cd autocad-mcp/AutoCAD.McpPython
+uv run autocad-mcp
+```
+
+**Configuration (`mcp_config.json`):**
+```json
+{
+  "mcpServers": {
+    "autocad-mcp": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "${workspaceFolder}/AutoCAD.McpPython",
+        "run",
+        "autocad-mcp"
+      ],
+      "env": {
+        "AUTOCAD_GATEWAY_PORT": "5055",
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
       }
     }

@@ -1,60 +1,51 @@
 # Getting Started Guide — AutoCAD MCP (`autocad-mcp`)
 
-This step-by-step guide walks you through building the solution, deploying the native Gateway plugin inside AutoCAD 2027, and connecting your Artificial Intelligence client (Antigravity, Claude Desktop, Cursor, or VS Code) in under 5 minutes.
+This step-by-step guide walks you through deploying the native Gateway plugin inside AutoCAD 2027 and connecting your Artificial Intelligence client (Antigravity, Claude Desktop, Cursor, or VS Code) in under 2 minutes.
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 1. **Operating System:** Windows 10 or Windows 11 (64-bit).
-2. **.NET 10 SDK:**
-   - Verify your version by opening a PowerShell console:
-     ```powershell
-     dotnet --version
-     ```
-   - Must output `10.0.100` or higher. If not installed, download from [.NET 10 Download](https://dotnet.microsoft.com/download/dotnet/10.0).
-3. **Autodesk AutoCAD 2027 or Autodesk Civil 3D 2027:**
+2. **Autodesk AutoCAD 2027 or Autodesk Civil 3D 2027:**
    - Installed at the default location: `C:\Program Files\Autodesk\AutoCAD 2027\`.
-4. **Python (Optional for Python MCP Server):**
-   - Python 3.10+ or [`uv`](https://astral.sh/uv) installed.
+3. **MCP Runner (Recommended):**
+   - [`uv`](https://astral.sh/uv) installed (enables instant zero-compile execution via `uvx`).
+4. **Developer SDK (Only if compiling from source):**
+   - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`dotnet --version` >= 10.0.100).
 
 ---
 
-## 🛠️ Step 1: Clone and Build the Solution
+## Step 1: Load the Gateway Plugin into AutoCAD 2027
 
-1. Open PowerShell in your working workspace:
+To enable AI access to your active AutoCAD drawing, the native Gateway extension must run inside `acad.exe`:
+
+### Option A: Use Pre-Built Binary (Fastest)
+1. Download the latest release asset [`AutoCAD.Gateway-Release.zip`](https://github.com/LuiccianDev/autocad-mcp/releases/latest).
+2. Extract the archive to a local folder (e.g., `C:\Tools\AutoCAD.Gateway\`).
+3. If downloaded from the internet, unblock the DLL in PowerShell:
    ```powershell
-   git clone https://github.com/LuiccianDev/autocad-mcp.git
-   cd autocad-mcp
+   Unblock-File -Path "C:\Tools\AutoCAD.Gateway\AutoCAD.Gateway.dll"
    ```
 
-2. Run the automated build script:
-   ```powershell
-   .\scripts\build.ps1
-   ```
-   *Or build manually via .NET CLI:*
-   ```powershell
-   dotnet build AutoCAD_Integration.slnx -c Release
-   ```
+### Option B: Build from Source
+If building locally with the .NET 10 SDK:
+```powershell
+git clone https://github.com/LuiccianDev/autocad-mcp.git
+cd autocad-mcp
+dotnet build AutoCAD_Integration.slnx -c Release
+```
+The output assembly is located at `AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll`.
 
-3. Confirm the output reports `0 Errors` and produced the following artifacts:
-   - `AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll` (Native AutoCAD Plugin).
-   - `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.dll` (Portable .NET MCP Server).
-   - `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.exe` (Windows Executable).
-
----
-
-## 🔌 Step 2: Load the Gateway Plugin in AutoCAD
-
+### Load into AutoCAD
 1. Launch **AutoCAD 2027** or **Autodesk Civil 3D 2027**.
-2. Open a new or existing drawing (using metric units).
+2. Open any drawing (or create a new metric drawing).
 3. In the AutoCAD command prompt, type:
    ```text
    NETLOAD
    ```
-4. In the file dialog, navigate to and select:
-   `...\autocad-mcp\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll`
-5. The command line will display the welcome confirmation:
+4. Select `AutoCAD.Gateway.dll`.
+5. The command window will confirm:
    ```text
    >>> AutoCAD AI Gateway Plugin loaded successfully.
    >>> Available commands:
@@ -64,30 +55,23 @@ This step-by-step guide walks you through building the solution, deploying the n
        - AI_SET_TOKEN      : Updates the active token in memory.
        - AI_GENERATE_TOKEN : Generates a cryptographically secure token.
    ```
-
-> [!TIP]
-> **DLL Unblock (If AutoCAD fails to load the file):**
-> If Windows blocks downloaded DLLs, run this in PowerShell:
-> ```powershell
-> Unblock-File -Path ".\AutoCAD.Gateway\bin\Release\net10.0-windows\AutoCAD.Gateway.dll"
-> ```
+   *(The server starts automatically listening on `http://localhost:5055/`).*
 
 ---
 
-## 🤖 Step 3: Connect the MCP Server to Your AI Client
+## Step 2: Connect the MCP Server to Your AI Client
 
-Choose your preferred MCP runtime:
+### Primary Option: Zero-Install with `uvx` (Recommended)
 
-### Option 1: Instant Python Deployment with `uvx` (Recommended)
-If using [`uv`](https://astral.sh/uv), no manual compilation is required:
+Requires only [`uv`](https://astral.sh/uv). Runs the official PyPI distribution [`luiccian-autocad-mcp`](https://pypi.org/project/luiccian-autocad-mcp/) on demand without cloning or building:
 
-**Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):**
+#### Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`)
 ```json
 {
   "mcpServers": {
     "autocad-mcp": {
       "command": "uvx",
-      "args": ["autocad-mcp"],
+      "args": ["luiccian-autocad-mcp"],
       "env": {
         "AUTOCAD_GATEWAY_PORT": "5055",
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
@@ -97,7 +81,58 @@ If using [`uv`](https://astral.sh/uv), no manual compilation is required:
 }
 ```
 
-**Antigravity / Cursor / VS Code (`mcp_config.json`):**
+#### Antigravity / Cursor / VS Code (`mcp_config.json`)
+```json
+{
+  "mcpServers": {
+    "autocad-mcp": {
+      "command": "uvx",
+      "args": ["luiccian-autocad-mcp"],
+      "env": {
+        "AUTOCAD_GATEWAY_PORT": "5055",
+        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+      }
+    }
+  }
+}
+```
+
+---
+
+## Alternative Execution Modes
+
+### Option B: Native C# Server (.NET 10)
+
+For environments where native compiled binary performance is preferred:
+
+1. Download `AutoCAD.McpServer-Release.zip` from [Releases](https://github.com/LuiccianDev/autocad-mcp/releases/latest) or build the solution locally.
+2. Configure your AI client:
+
+```json
+{
+  "mcpServers": {
+    "autocad-mcp": {
+      "command": "dotnet",
+      "args": [
+        "C:\\Path\\To\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
+      ],
+      "env": {
+        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+      }
+    }
+  }
+}
+```
+
+### Option C: Local Python Development (`uv run`)
+
+For contributors modifying Python tools directly from source:
+```powershell
+git clone https://github.com/LuiccianDev/autocad-mcp.git
+cd autocad-mcp/AutoCAD.McpPython
+uv run autocad-mcp
+```
+
 ```json
 {
   "mcpServers": {
@@ -118,62 +153,24 @@ If using [`uv`](https://astral.sh/uv), no manual compilation is required:
 }
 ```
 
-### Option 2: Native C# Server (.NET 10)
-
-**Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):**
-```json
-{
-  "mcpServers": {
-    "autocad-mcp": {
-      "command": "dotnet",
-      "args": [
-        "C:\\Path\\To\\autocad-mcp\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
-      ],
-      "env": {
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
-      }
-    }
-  }
-}
-```
-
-**Antigravity / Cursor / VS Code (`mcp_config.json`):**
-```json
-{
-  "mcpServers": {
-    "autocad-mcp": {
-      "command": "dotnet",
-      "args": [
-        "${workspaceFolder}/AutoCAD.McpServer/bin/Release/net10.0/AutoCAD.McpServer.dll"
-      ],
-      "env": {
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
-      }
-    }
-  }
-}
-```
-
 ---
 
-## 🎯 Step 4: First Test & Verification
+## Step 3: Verification & Test Run
 
-Once your AI client is connected, ask it in the chat:
+Once your AI client is connected, ask it in chat:
 > *"Inspect my active AutoCAD drawing status and draw a 20x10 meter rectangle on the layer ARQ-WALLS."*
 
-The AI will automatically:
-1. `configurar_entorno_dibujo` (ensuring `INSUNITS = 4` for metric meters).
-2. `obtener_info_dibujo` (verifying drawing name and status).
-3. `crear_capa` & `dibujar_rectangulo` (injecting parametric geometry without dialogs).
-4. `zoom_extension` (framing the new geometry on your screen).
-
-Congratulations! Your engineering AI copilot is now fully connected with AutoCAD.
+The AI will sequentially execute:
+1. `configurar_entorno_dibujo`: Sets metric units (`INSUNITS = 4`).
+2. `obtener_info_dibujo`: Verifies active DWG name and read/write state.
+3. `crear_capa` & `dibujar_rectangulo`: Creates the layer and draws the geometry atomically without dialog blocks.
+4. `zoom_extension`: Frames the drafted elements on screen.
 
 ---
 
-## 📚 Next Steps & References
+## References & Documentation
 
-- 🛠️ **[MCP Tools Reference Manual (43 Tools)](TOOLS_REFERENCE.md):** Complete catalog with parameter schemas, types, and JSON responses.
-- ⚡ **[Tools Quick Reference & Cheat Sheet](TOOLS_CHEAT_SHEET.md):** Decision tree for selecting the right tool for each CAD design task.
-- 🏗️ **[System Architecture](ARCHITECTURE.md):** Deep dive into the concurrency model and UI thread dispatcher.
-- 🔧 **[Troubleshooting Guide](TROUBLESHOOTING.md):** Resolving network, NETLOAD, and command execution issues.
+- [MCP Tools Reference Manual (45 Tools)](TOOLS_REFERENCE.md): Complete catalog with parameter schemas, types, and JSON responses.
+- [Tools Quick Reference & Cheat Sheet](TOOLS_CHEAT_SHEET.md): Decision tree for selecting the right tool for each CAD design task.
+- [System Architecture](ARCHITECTURE.md): Deep dive into the concurrency model and UI thread dispatcher.
+- [Troubleshooting Guide](TROUBLESHOOTING.md): Resolving network, NETLOAD, and command execution issues.
