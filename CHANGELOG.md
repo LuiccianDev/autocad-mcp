@@ -11,8 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Atomic Batch Drafting Engine (45 Tools Parity):**
-  - Added `dibujar_geometria_lote`: Atomic batch drafting tool consolidating lines, polylines, rectangles, circles, arcs, and text into a single AutoLISP evaluation `(progn (entmake ...) ...)`, reducing execution latency by ~99% and token usage by ~95%.
-  - Added `ejecutar_comandos_lote`: Atomic command sequencing without intermediate client roundtrips.
+  - Added `draw_batch_geometry`: Atomic batch drafting tool consolidating lines, polylines, rectangles, circles, arcs, and text into a single AutoLISP evaluation `(progn (entmake ...) ...)`, reducing execution latency by ~99% and token usage by ~95%.
+  - Added `execute_batch_commands`: Atomic command sequencing without intermediate client roundtrips.
 - **PyPI Trusted Publishing (OIDC):** Automated provenance and cryptographic attestations via GitHub Actions workflow `publish-pypi.yml`.
 - **Zero-Install Deployment via `uvx luiccian-autocad-mcp`:** Formalized as the primary Tier 1 setup for Claude Desktop, Antigravity, and Cursor.
 
@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release Asset Sanitation:** Fixed asset globbing to exclude unintended files (`.gitignore`) from GitHub Releases.
 
 ### Changed
+- **English-First Standardization Across MCP Tools, Gateway and Documentation:**
+  - Standardized all 45 MCP tools in both C# .NET 10 (`AutoCAD.McpServer`) and Python FastMCP (`AutoCAD.McpPython`) to canonical Technical English names (`get_drawing_info`, `draw_batch_geometry`, `draw_line`, `create_layer`, `measure_distance`, `execute_command`, `create_layout`, `check_civil3d_status`, `list_civil3d_alignments`, `create_civil3d_surface`, etc.).
+  - Standardized all tool input parameters, XML docstrings, and analytical math utilities (`calculate_distance`, `calculate_polygon_area`, `build_batch_geometry_lisp`) to English signatures.
+  - Standardized Gateway REST models, endpoints, and JSON serialization keys to English while maintaining backward-compatibility aliases for existing clients.
+  - Synchronized documentation across `README.md`, `docs/TOOLS_REFERENCE.md`, `docs/TOOLS_CHEAT_SHEET.md`, `docs/GETTING_STARTED.md`, `docs/TROUBLESHOOTING.md`, and agent skills.
 - Standardized tool count to 45 across `README.md`, `docs/GETTING_STARTED.md`, `AutoCAD.McpPython/README.md`, and example configs.
 - Modernized root `README.md` with centered HTML hero section, badges, and quick navigation breadcrumbs.
 
