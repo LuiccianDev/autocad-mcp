@@ -76,6 +76,23 @@ public sealed class Civil3DTools
             return Err("The interval must be a number greater than zero.");
         }
 
+        // Fast path: Query atomic profile endpoint first
+        string qAlFast = string.IsNullOrWhiteSpace(alignmentName) ? "" : $"&alignment={Uri.EscapeDataString(alignmentName)}";
+        string qSfFast = string.IsNullOrWhiteSpace(surfaceName) ? "" : $"&surface={Uri.EscapeDataString(surfaceName)}";
+        try
+        {
+            string atomicRes = await _gatewayClient.GetContextAsync($"civil/profile?interval={Num(interval)}{qAlFast}{qSfFast}");
+            using var atomicDoc = ParseSafe(atomicRes);
+            if (IsSuccess(atomicDoc.RootElement))
+            {
+                return atomicRes;
+            }
+        }
+        catch
+        {
+            // Fall back to sequential sampling if atomic route not available
+        }
+
         using var listDoc = ParseSafe(await _gatewayClient.GetContextAsync("civil/alignments"));
         var listRoot = listDoc.RootElement;
         if (!IsSuccess(listRoot) || !listRoot.TryGetProperty("data", out var data) ||
@@ -279,4 +296,17 @@ public sealed class Civil3DTools
         });
         return await _gatewayClient.PostJsonAsync("civil/surface/create", json);
     }
+
+    /// <summary>Alias for sample_longitudinal_profile.</summary>
+    [McpServerTool(Name = "get_longitudinal_profile")]
+    [Description("Alias for sample_longitudinal_profile: Sample terrain longitudinal profile along an alignment.")]
+    public Task<string> GetLongitudinalProfile(
+        double interval = 20.0, string? alignmentName = null, string? surfaceName = null) =>
+        SampleLongitudinalProfile(interval, alignmentName, surfaceName);
+
+    /// <summary>Alias for get_point_at_station.</summary>
+    [McpServerTool(Name = "get_station_coordinate")]
+    [Description("Alias for get_point_at_station: Calculate (X, Y) coordinate given a station and lateral offset.")]
+    public Task<string> GetStationCoordinate(double station, double offset = 0, string? alignmentName = null) =>
+        GetPointAtStation(station, offset, alignmentName);
 }

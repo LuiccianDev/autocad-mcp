@@ -146,6 +146,14 @@ public sealed class RequestRouter
                     return TryNumbers(q, out var so, "station", "offset")
                         ? (200, await civil.GetPointAtStationAsync(q["alignment"], so[0], so[1]))
                         : BadQuery("station", "offset");
+                case "/civil/profile":
+                    double interval = 20.0;
+                    if (!string.IsNullOrWhiteSpace(q["interval"]) &&
+                        double.TryParse(q["interval"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double parsedInterval))
+                    {
+                        interval = parsedInterval;
+                    }
+                    return (200, await civil.GetProfileAsync(q["alignment"], q["surface"], interval));
             }
         }
         else if (method == "POST" && (path == "/civil/alignment/create" || path == "/civil/surface/create"))

@@ -205,4 +205,27 @@ public sealed class PlottingTools
 
         return await _gatewayClient.ExecuteCommandAsync(sb.ToString());
     }
+
+    /// <summary>Alias for configure_layout_page.</summary>
+    [McpServerTool(Name = "configure_layout_sheet")]
+    [Description("Alias for configure_layout_page: Configure standardized sheet size (A0 to A4) of a Layout.")]
+    public async Task<string> ConfigureLayoutSheet(
+        string layoutName,
+        string paperSize = "A1",
+        string plotStyle = "monochrome.ctb") =>
+        await ConfigureLayoutPage(layoutName, paperSize, plotStyle);
+
+    /// <summary>Alias for insert_title_block.</summary>
+    [McpServerTool(Name = "insert_parametric_titleblock")]
+    [Description("Alias for insert_title_block: Insert and draw a parametric engineering title block in PaperSpace.")]
+    public async Task<string> InsertParametricTitleblock(
+        double cornerX,
+        double cornerY,
+        string projectTitle = "ENGINEERING PROJECT",
+        string drawingName = "GENERAL PLAN",
+        string sheetCode = "L-01",
+        string scaleText = "1:1000",
+        string author = "ENGINEERING",
+        string? date = null) =>
+        await InsertTitleBlock(cornerX, cornerY, projectTitle, drawingName, sheetCode, scaleText, author, date);
 }

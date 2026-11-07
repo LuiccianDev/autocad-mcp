@@ -173,4 +173,19 @@ public sealed class ExecutionTools
 
         return await _gatewayClient.ExecuteCommandAsync(script);
     }
+
+    /// <summary>Alias for ping_gateway.</summary>
+    [McpServerTool(Name = "ping_autocad_gateway")]
+    [Description("Alias for ping_gateway: Ping the AutoCAD Gateway to verify connectivity.")]
+    public async Task<string> PingAutoCADGateway() => await PingGateway();
+
+    /// <summary>Alias for evaluate_lisp.</summary>
+    [McpServerTool(Name = "execute_lisp")]
+    [Description("Alias for evaluate_lisp: Evaluate and inject dynamic AutoLISP expressions into AutoCAD.")]
+    public async Task<string> ExecuteLisp(string code) => await EvaluateLisp(code);
+
+    /// <summary>Alias for configure_drawing_units.</summary>
+    [McpServerTool(Name = "configure_drawing_environment")]
+    [Description("Alias for configure_drawing_units: Configure AutoCAD drawing environment to METRIC METERS.")]
+    public async Task<string> ConfigureDrawingEnvironment() => await ConfigureDrawingUnits();
 }

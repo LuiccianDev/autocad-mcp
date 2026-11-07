@@ -45,4 +45,10 @@ public interface ICivil3DService
     /// <summary>Creates a TIN surface from survey points.</summary>
     /// <param name="request">Validated creation request.</param>
     Task<string> CreateSurfaceAsync(CrearSuperficieRequest request);
+
+    /// <summary>Samples longitudinal ground profile along an alignment in a single atomic transaction.</summary>
+    /// <param name="alignmentName">Alignment name; null uses the first available.</param>
+    /// <param name="surfaceName">Surface name; null uses the first available.</param>
+    /// <param name="interval">Sampling station interval in meters.</param>
+    Task<string> GetProfileAsync(string? alignmentName, string? surfaceName, double interval);
 }
