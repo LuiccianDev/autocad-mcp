@@ -14,25 +14,62 @@ High-performance, bidirectional bridge connecting **Artificial Intelligence Mode
 
 ---
 
-## 📚 Technical Documentation & Guides
+## Technical Documentation & Guides
 
 To foster adoption, technical transparency, and open-source collaboration, explore our dedicated guides:
 
-| Document | Description |
-|---|---|
-| 🚀 **[Getting Started Guide](docs/GETTING_STARTED.md)** | Step-by-step setup, compilation, and AI client configuration in under 5 minutes. |
-| 🐍 **[Python MCP Server (`AutoCAD.McpPython/`)](AutoCAD.McpPython/README.md)** | Instant runtime with `uvx autocad-mcp` without manual compilation. |
-| 📦 **[PyPI Publishing Guide](docs/PYPI_PUBLISHING_GUIDE.md)** | Official guide for publishing `autocad-mcp` via Trusted Publishing (OIDC). |
-| 🏗️ **[System Architecture](docs/ARCHITECTURE.md)** | Concurrency model, UI thread dispatcher, secure queue, and C4/Mermaid diagrams. |
-| 🛠️ **[MCP Tools Reference Manual](docs/TOOLS_REFERENCE.md)** | Comprehensive technical spec for all 43 tools (parameters, schemas, JSON-RPC, and returns). |
-| ⚡ **[Tools Quick Reference & Cheat Sheet](docs/TOOLS_CHEAT_SHEET.md)** | Decision matrix ("Goal -> Tool to call") and chained prompting recipes for LLMs. |
-| 🔧 **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** | Resolving issues with NETLOAD, ports, auth tokens, modal dialog freezes, and Civil 3D. |
-| 🛣️ **[Project Roadmap](ROADMAP.md)** | Strategic vision and release milestones (Civil 3D surfaces, streaming, YQArch). |
-| 📁 **[Practical Examples (`examples/`)](examples/)** | JSON configs, PowerShell/Bash test scripts, and AutoLISP routines. |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4><a href="docs/GETTING_STARTED.md">Getting Started Guide</a></h4>
+      <p>Step-by-step setup, compilation, and AI client configuration in under 5 minutes.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4><a href="AutoCAD.McpPython/README.md">Python MCP Server</a></h4>
+      <p>Instant runtime with <code>uvx luiccian-autocad-mcp</code> without manual compilation.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h4><a href="docs/PYPI_PUBLISHING_GUIDE.md">PyPI Publishing Guide</a></h4>
+      <p>Official guide for publishing via Trusted Publishing (OIDC) and provenance attestations.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4><a href="docs/ARCHITECTURE.md">System Architecture</a></h4>
+      <p>Concurrency model, UI thread dispatcher, secure queue, and technical diagrams.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h4><a href="docs/TOOLS_REFERENCE.md">MCP Tools Reference Manual</a></h4>
+      <p>Comprehensive technical spec for all 45 tools (schemas, parameters, and returns).</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4><a href="docs/TOOLS_CHEAT_SHEET.md">Tools Quick Reference</a></h4>
+      <p>Decision matrix (Goal &rarr; Tool) and chained prompting recipes for AI models.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h4><a href="docs/TROUBLESHOOTING.md">Troubleshooting Guide</a></h4>
+      <p>Resolving NETLOAD, ports, auth tokens, modal dialog freezes, and Civil 3D.</p>
+    </td>
+    <td width="50%" valign="top">
+      <h4><a href="ROADMAP.md">Project Roadmap</a></h4>
+      <p>Strategic vision and release milestones (Civil 3D surfaces, streaming, YQArch).</p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2" valign="top">
+      <h4><a href="examples/">Practical Examples &amp; Scripts</a></h4>
+      <p>JSON configuration templates, PowerShell/Bash diagnostic scripts, and AutoLISP routines.</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 The ecosystem uses a decoupled, two-layer architecture ensuring thread safety, high concurrency, and fault tolerance:
 
@@ -71,21 +108,21 @@ The ecosystem uses a decoupled, two-layer architecture ensuring thread safety, h
 
 ---
 
-## 💡 Why Must Gateway and MCP Be Used Together?
+## Why Gateway and MCP Must Be Used Together
 
 For an AI model (or autonomous assistant) to operate safely with AutoCAD, **both components must be deployed and configured together**:
 
 | Component | Ecosystem Role | If used in isolation... |
 |---|---|---|
 | **AutoCAD.Gateway** (.NET DLL in `acad.exe`) | **The Executor & Sensor:** Directly accesses the AutoCAD DWG database, queries entities/layers, and injects commands safely into the UI thread via `Application.Idle`. | Acts as a local REST API. While you can send raw commands via PowerShell or curl, the AI agent would have to write terminal scripts blindly and parse raw JSON responses, wasting context window and risking syntax errors. |
-| **MCP Servers** (`uvx autocad-mcp` or `.NET 10`) | **The AI Translator:** Implements the Model Context Protocol (MCP v2.2), exposing 45 typed tools (`dibujar_geometria_lote`, `dibujar_linea`, `crear_capa`, `medir_distancia`, `consultar_perfil_longitudinal`, etc.) with strict JSON schemas and validation. | **Cannot function alone.** Requires an active Gateway connection to interact with a live AutoCAD session. |
+| **MCP Servers** (`uvx luiccian-autocad-mcp` or `.NET 10`) | **The AI Translator:** Implements the Model Context Protocol (MCP v2.2), exposing 45 typed tools (`dibujar_geometria_lote`, `dibujar_linea`, `crear_capa`, `medir_distancia`, `consultar_perfil_longitudinal`, etc.) with strict JSON schemas and validation. | **Cannot function alone.** Requires an active Gateway connection to interact with a live AutoCAD session. |
 
 > [!IMPORTANT]
 > **Integration Policy:** The complete AI copilot experience requires building the solution, loading `AutoCAD.Gateway.dll` into AutoCAD via `NETLOAD`, and registering the MCP Server in your AI client configuration (`mcp_config.json` or `claude_desktop_config.json`). This enables the AI to inspect context and draw cleanly, parametrically, and bidirectionally without manual PowerShell scripts.
 
 ---
 
-## 🚀 Key Features
+## Key Architecture Features
 
 1. **Thread-Safe UI Dispatcher:** Never blocks or corrupts the active AutoCAD document; all drawing operations synchronize with the `Application.Idle` event.
 2. **Command Lockout Immunity:** Automatically prepends double cancellation sequences `\x03\x03` (`ESC`/`Ctrl+C`) before commands to clear hung prompts.
@@ -102,7 +139,7 @@ For an AI model (or autonomous assistant) to operate safely with AutoCAD, **both
 
 ---
 
-## 📋 Prerequisites
+## Prerequisites
 
 - **Operating System:** Windows 10/11 (x64).
 - **SDK:** [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`dotnet --version` >= 10.0.100).
@@ -112,7 +149,7 @@ For an AI model (or autonomous assistant) to operate safely with AutoCAD, **both
 
 ---
 
-## ⚙️ Build & Installation
+## Build & Installation
 
 ### 1. Clone the Repository
 ```powershell
@@ -135,7 +172,7 @@ Build outputs:
 
 ---
 
-## 🔌 Getting Started
+## Getting Started
 
 ### Step 1: Load the Gateway into AutoCAD 2027
 1. Launch AutoCAD 2027 or Civil 3D 2027.
@@ -164,7 +201,7 @@ If using [`uv`](https://astral.sh/uv), no manual compilation is required:
   "mcpServers": {
     "autocad-mcp": {
       "command": "uvx",
-      "args": ["autocad-mcp"],
+      "args": ["luiccian-autocad-mcp"],
       "env": {
         "AUTOCAD_GATEWAY_PORT": "5055",
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
@@ -234,7 +271,7 @@ For environments where native compiled binary performance is preferred:
 
 ---
 
-## 🛠️ MCP Tools Catalog (45 Tools)
+## MCP Tools Catalog (45 Tools)
 
 ### 1. Inspection, Context & Vision Tools (8)
 | Tool | Description |
@@ -251,7 +288,7 @@ For environments where native compiled binary performance is preferred:
 ### 2. Parametric Geometry & Drawing Tools (8)
 | Tool | Description |
 |---|---|
-| `dibujar_geometria_lote` | ⚡ **Preferred batch tool:** Draws entire floor plans and multiple entities (lines, rects, circles, polylines, texts) in one atomic call, slashing tokens and latency by 95%. |
+| `dibujar_geometria_lote` | **Batch Optimized:** Draws entire floor plans and multiple entities (lines, rects, circles, polylines, texts) in one atomic call, slashing tokens and latency by 95%. |
 | `dibujar_linea` | Draws a 3D straight line segment between two metric points (preserves active layer, independent of OSNAP). |
 | `dibujar_polilinea` | Draws a 2D polyline (`LWPOLYLINE`), open or closed, from an array of metric vertices. |
 | `dibujar_rectangulo` | Draws a closed polyline rectangle defined by two diagonal corner points. |
@@ -279,7 +316,7 @@ For environments where native compiled binary performance is preferred:
 | Tool | Description |
 |---|---|
 | `ping_autocad_gateway` | Performs an HTTP connectivity check against port 5055. |
-| `ejecutar_comandos_lote` | ⚡ **Batch command runner:** Dispatches a sequential list of AutoCAD commands/macros in a single request. |
+| `ejecutar_comandos_lote` | **Batch Command Dispatcher:** Dispatches a sequential list of AutoCAD commands/macros in a single request. |
 | `ejecutar_comando_autocad` | Injects non-modal text commands (`_.-`) with guaranteed `\n` terminators. |
 | `ejecutar_lisp` | Evaluates dynamic in-memory AutoLISP expressions (e.g. `entmake`, variables, custom functions). |
 | `cargar_archivo_lisp` | Loads and executes an external `.lsp` file from disk via `(load ...)`. |
@@ -311,7 +348,7 @@ For environments where native compiled binary performance is preferred:
 
 ---
 
-## 🔒 Safe Command Guidelines
+## Safe Command Guidelines
 
 1. **Avoid Modal Dialogs:** Always prepend interactive commands with `_.-` (e.g. `_.-LAYER` instead of `LAYER`, `_.-INSERT` instead of `INSERT`). If AutoCAD opens a Windows modal dialog, the Gateway connection will block until manually closed.
 2. **Internationalization:** Use the `_.` command prefix to ensure compatibility across localized AutoCAD versions (Spanish, English, etc.), e.g. `_.LINE`, `_.RECTANG`.
@@ -319,19 +356,44 @@ For environments where native compiled binary performance is preferred:
 
 ---
 
-## 🤝 Community, Governance & Support
+## Community, Governance & Support
 
 This project is built to serve as an open standard maintained by and for the CAD developer, civil engineering, and AI community.
 
-- 📖 **[Code of Conduct](CODE_OF_CONDUCT.md):** Fostering an inclusive, welcoming community (Contributor Covenant v2.1).
-- 💡 **[Contributing Guide](CONTRIBUTING.md):** Development guidelines, Git workflow, and Conventional Commits.
-- 🛡️ **[Security Policy](SECURITY.md):** Responsible vulnerability disclosure and Gateway best practices.
-- 💬 **[Support Channels](SUPPORT.md):** Where to ask questions, suggest features, and report bugs.
-- 📝 **[Changelog](CHANGELOG.md):** Chronological history of releases and improvements.
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h4><a href="CODE_OF_CONDUCT.md">Code of Conduct</a></h4>
+      <p>Standards for an inclusive and professional technical environment.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h4><a href="CONTRIBUTING.md">Contributing Guide</a></h4>
+      <p>Architecture requirements, PR flows, and code style standards.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h4><a href="SECURITY.md">Security Policy</a></h4>
+      <p>Responsible disclosure protocol and Gateway authentication model.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <h4><a href="SUPPORT.md">Support Channels</a></h4>
+      <p>Where to ask architecture questions, request tools, or report issues.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h4><a href="CHANGELOG.md">Changelog</a></h4>
+      <p>Chronological breakdown of features, improvements, and releases.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h4><a href="LICENSE">License (Apache 2.0)</a></h4>
+      <p>Open-source permissive terms, commercial rights, and liability limits.</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## 👨‍💻 Author & Maintainer
+## Author & Maintainer
 
 Conceived, architected, and developed by:
 
@@ -341,6 +403,6 @@ Conceived, architected, and developed by:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **Apache License, Version 2.0** (Copyright 2026 LuiccianDev). See the [LICENSE](LICENSE) file for full details.

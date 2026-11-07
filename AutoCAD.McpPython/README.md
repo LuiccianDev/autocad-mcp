@@ -10,7 +10,7 @@ Exposes **43 strongly-typed tools** covering parametric drawing, layer control, 
 
 ---
 
-## ⚡ Quickstart with `uvx` (Zero-Config)
+## Quickstart with `uvx` (Zero-Config)
 
 To run this server in **Claude Desktop** or **Cursor**, add this block to your MCP settings:
 
@@ -65,6 +65,6 @@ uv run --directory AutoCAD.McpPython --all-extras pytest
 
 ---
 
-## 📋 Requirements
+## Requirements
 - **Python 3.10+** (or the modern package manager [uv](https://astral.sh/uv)).
 - **AutoCAD 2027** or **Civil 3D 2027** with `AutoCAD.Gateway.dll` loaded and listening on port `5055`.
