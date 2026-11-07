@@ -7,7 +7,7 @@ using AutoCAD.McpServer.Services;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// Proporciona herramientas MCP de solo lectura para inspeccionar el estado, entidades y contexto de AutoCAD.
+/// Provides read-only MCP tools to inspect AutoCAD drawing state, entities, and context.
 /// </summary>
 [McpServerToolType]
 public sealed class ContextTools
@@ -15,75 +15,75 @@ public sealed class ContextTools
     private readonly IAutoCADGatewayClient _gatewayClient;
 
     /// <summary>
-    /// Inicializa una nueva instancia de la clase <see cref="ContextTools"/>.
+    /// Initializes a new instance of the <see cref="ContextTools"/> class.
     /// </summary>
-    /// <param name="gatewayClient">El cliente para comunicación con el Gateway de AutoCAD.</param>
+    /// <param name="gatewayClient">The client for communicating with the AutoCAD Gateway.</param>
     public ContextTools(IAutoCADGatewayClient gatewayClient)
     {
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
     }
 
     /// <summary>
-    /// Obtiene metadatos del dibujo activo en AutoCAD: nombre de archivo DWG, estado de solo lectura y unidades configuradas.
+    /// Retrieves metadata of the active AutoCAD drawing: DWG filename, read-only state, and configured units.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es el JSON con los metadatos del documento DWG.</returns>
-    [McpServerTool(Name = "obtener_info_dibujo")]
-    [Description("Obtiene metadatos del dibujo activo en AutoCAD: nombre de archivo DWG, estado de solo lectura y unidades configuradas.")]
-    public async Task<string> ObtenerInfoDibujo() => await _gatewayClient.GetContextAsync("context/info");
+    /// <returns>Asynchronous task returning JSON with DWG document metadata.</returns>
+    [McpServerTool(Name = "get_drawing_info")]
+    [Description("Retrieve metadata of the active AutoCAD drawing: DWG filename, read-only state, and configured units.")]
+    public async Task<string> GetDrawingInfo() => await _gatewayClient.GetContextAsync("context/info");
 
     /// <summary>
-    /// Lee y devuelve un resumen con el conteo por tipo de todas las entidades en el espacio modelo de AutoCAD.
+    /// Reads and returns a summary with counts by entity type of all entities in AutoCAD ModelSpace.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es el resumen de entidades agrupadas por tipo.</returns>
-    [McpServerTool(Name = "leer_objetos_autocad")]
-    [Description("Lee y devuelve un resumen (conteos por tipo) de todas las entidades y objetos que existen actualmente en el dibujo de AutoCAD (ModelSpace).")]
-    public async Task<string> LeerObjetosAutoCAD() => await _gatewayClient.GetContextAsync("context/entities");
+    /// <returns>Asynchronous task returning entity counts grouped by type.</returns>
+    [McpServerTool(Name = "get_entities")]
+    [Description("Read and return a summary (counts by type) of all entities and objects existing in AutoCAD ModelSpace.")]
+    public async Task<string> GetEntities() => await _gatewayClient.GetContextAsync("context/entities");
 
     /// <summary>
-    /// Obtiene la lista completa de capas del dibujo de AutoCAD con sus estados (bloqueada, congelada, apagada) y código de color.
+    /// Retrieves the complete list of drawing layers with their states (locked, frozen, off) and ACI color code.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la lista de capas.</returns>
-    [McpServerTool(Name = "leer_capas_autocad")]
-    [Description("Obtiene la lista completa de capas del dibujo de AutoCAD con sus estados (bloqueada, congelada, apagada) y código de color.")]
-    public async Task<string> LeerCapasAutoCAD() => await _gatewayClient.GetContextAsync("context/layers");
+    /// <returns>Asynchronous task returning the layer list.</returns>
+    [McpServerTool(Name = "get_layers")]
+    [Description("Retrieve the complete list of drawing layers with their states (locked, frozen, off) and ACI color code.")]
+    public async Task<string> GetLayers() => await _gatewayClient.GetContextAsync("context/layers");
 
     /// <summary>
-    /// Lista todos los textos (DBText y MText) del dibujo con sus contenidos, coordenadas exactas y capa.
+    /// Lists all text entities (DBText and MText) in the drawing with content, exact coordinates, and layer.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es el listado de textos y ubicaciones.</returns>
-    [McpServerTool(Name = "leer_textos_autocad")]
-    [Description("Lista todos los textos (DBText y MText) del dibujo con sus contenidos, coordenadas exactas (X, Y) y capa para ubicar ambientes (ej. DORMITORIO, SALA, BAÑO).")]
-    public async Task<string> LeerTextosAutoCAD() => await _gatewayClient.GetContextAsync("context/texts");
+    /// <returns>Asynchronous task returning text entities and their locations.</returns>
+    [McpServerTool(Name = "get_texts")]
+    [Description("List all text entities (DBText and MText) in the drawing with content, exact (X, Y) coordinates, and layer.")]
+    public async Task<string> GetTexts() => await _gatewayClient.GetContextAsync("context/texts");
 
     /// <summary>
-    /// Obtiene las coordenadas mínimas (X, Y) y máximas (X, Y) del dibujo actual (Extmin y Extmax).
+    /// Retrieves minimum (X, Y) and maximum (X, Y) bounding coordinates of the active drawing (Extmin and Extmax).
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado son las coordenadas de extensión del dibujo.</returns>
-    [McpServerTool(Name = "obtener_limites_dibujo")]
-    [Description("Obtiene las coordenadas mínimas (X, Y) y máximas (X, Y) del dibujo actual (Extmin y Extmax) para calcular áreas de diseño libres.")]
-    public async Task<string> ObtenerLimitesDibujo() => await _gatewayClient.GetContextAsync("context/extents");
+    /// <returns>Asynchronous task returning drawing bounding coordinates.</returns>
+    [McpServerTool(Name = "get_drawing_extents")]
+    [Description("Retrieve minimum (X, Y) and maximum (X, Y) coordinates of the active drawing (Extmin and Extmax).")]
+    public async Task<string> GetDrawingExtents() => await _gatewayClient.GetContextAsync("context/extents");
 
     /// <summary>
-    /// Obtiene el número de entidades seleccionadas actualmente por el usuario con el ratón en AutoCAD.
+    /// Gets the number of entities currently selected by the user in AutoCAD.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la cantidad de entidades seleccionadas.</returns>
-    [McpServerTool(Name = "leer_seleccion_autocad")]
-    [Description("Obtiene el número de entidades seleccionadas actualmente por el usuario con el ratón en AutoCAD.")]
-    public async Task<string> LeerSeleccionAutoCAD() => await _gatewayClient.GetContextAsync("context/selection");
+    /// <returns>Asynchronous task returning selected entity count.</returns>
+    [McpServerTool(Name = "get_selection_count")]
+    [Description("Get the number of entities currently selected by the user in AutoCAD.")]
+    public async Task<string> GetSelectionCount() => await _gatewayClient.GetContextAsync("context/selection");
 
     /// <summary>
-    /// Obtiene los nombres de todas las definiciones de bloques cargadas en el archivo actual.
+    /// Retrieves names of all block definitions loaded into the current drawing.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es el listado de nombres de bloques disponibles.</returns>
-    [McpServerTool(Name = "listar_bloques_disponibles")]
-    [Description("Obtiene los nombres de todas las definiciones de bloques cargadas en el archivo actual.")]
-    public async Task<string> ListarBloquesDisponibles() => await _gatewayClient.GetContextAsync("context/blocks");
+    /// <returns>Asynchronous task returning list of block names.</returns>
+    [McpServerTool(Name = "list_blocks")]
+    [Description("Retrieve names of all block definitions loaded into the current drawing.")]
+    public async Task<string> ListBlocks() => await _gatewayClient.GetContextAsync("context/blocks");
 
     /// <summary>
-    /// Captura una imagen de la pantalla y ventana activa de AutoCAD y devuelve la ruta del archivo PNG generado para inspección visual.
+    /// Captures a PNG screenshot of the active AutoCAD window and returns the generated file path.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es el JSON con la ruta del archivo PNG generado y sus dimensiones.</returns>
-    [McpServerTool(Name = "capturar_pantalla_autocad")]
-    [Description("Captura una imagen PNG de la ventana activa de AutoCAD ('ojos para la IA') y guarda la captura en disco. Devuelve la ruta absoluta del archivo para verificar visualmente planos, layouts o geometrías.")]
-    public async Task<string> CapturarPantallaAutoCAD() => await _gatewayClient.GetContextAsync("context/screenshot");
+    /// <returns>Asynchronous task returning JSON with screenshot path and dimensions.</returns>
+    [McpServerTool(Name = "capture_screenshot")]
+    [Description("Capture a PNG screenshot of the active AutoCAD window ('eyes for AI') and save it to disk. Returns absolute file path.")]
+    public async Task<string> CaptureScreenshot() => await _gatewayClient.GetContextAsync("context/screenshot");
 }

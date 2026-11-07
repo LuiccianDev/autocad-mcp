@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
@@ -10,8 +11,8 @@ using ModelContextProtocol.Server;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// Herramientas MCP para Autodesk Civil 3D 2027: superficies, cotas de terreno y alineamientos
-/// (lectura y creación). Requieren Civil 3D con el Gateway activo.
+/// MCP tools for Autodesk Civil 3D 2027: surfaces, ground elevations, and alignments
+/// (inspection, sampling, and creation). Requires Civil 3D with active Gateway.
 /// </summary>
 [McpServerToolType]
 public sealed class Civil3DTools
@@ -19,9 +20,9 @@ public sealed class Civil3DTools
     private readonly IAutoCADGatewayClient _gatewayClient;
 
     /// <summary>
-    /// Inicializa una nueva instancia de la clase <see cref="Civil3DTools"/>.
+    /// Initializes a new instance of the <see cref="Civil3DTools"/> class.
     /// </summary>
-    /// <param name="gatewayClient">El cliente para comunicación con el Gateway.</param>
+    /// <param name="gatewayClient">The client for communicating with the Gateway.</param>
     public Civil3DTools(IAutoCADGatewayClient gatewayClient)
     {
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
@@ -29,122 +30,125 @@ public sealed class Civil3DTools
 
     private static string Num(double v) => v.ToString("R", CultureInfo.InvariantCulture);
 
-    private static string Err(string mensaje) =>
-        JsonSerializer.Serialize(new { status = "error", message = mensaje });
+    private static string Err(string message) =>
+        JsonSerializer.Serialize(new { status = "error", message });
 
     /// <summary>
-    /// Convierte "v1,v2[,v3];..." en filas de números. Devuelve null si el formato es inválido.
+    /// Parses "v1,v2[,v3];..." into numeric rows. Returns null if invalid.
     /// </summary>
-    private static double[][]? ParsePuntos(string puntos, int columnas) => CadFormat.ParsePoints(puntos, columnas);
+    private static double[][]? ParsePoints(string points, int columns) => CadFormat.ParsePoints(points, columns);
 
-    /// <summary>Número máximo de muestras por perfil para acotar el tiempo de bloqueo del hilo UI de AutoCAD.</summary>
-    private const int MaxMuestrasPerfil = 500;
+    private const int MaxProfileSamples = 500;
 
-    /// <summary>Lee una propiedad numérica de un JSON del Gateway; null si no existe o no es numérica.</summary>
-    private static double? LeerNumero(JsonElement root, string propiedad) =>
-        root.TryGetProperty(propiedad, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+    private static double? ReadNumber(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
 
-    /// <summary>Indica si la respuesta JSON del Gateway tiene status = "success".</summary>
-    private static bool EsExito(JsonElement root) =>
+    private static bool IsSuccess(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object &&
         root.TryGetProperty("status", out var s) && s.GetString() == "success";
 
-    /// <summary>
-    /// Analiza una respuesta del Gateway tolerando cuerpos no JSON (p. ej. errores de conexión con comillas sin escapar):
-    /// en ese caso devuelve un documento de error equivalente.
-    /// </summary>
-    private static JsonDocument ParseSeguro(string respuesta)
+    private static JsonDocument ParseSafe(string response)
     {
         try
         {
-            return JsonDocument.Parse(respuesta);
+            return JsonDocument.Parse(response);
         }
         catch (JsonException)
         {
-            return JsonDocument.Parse(Err(respuesta));
+            return JsonDocument.Parse(Err(response));
         }
     }
 
     /// <summary>
-    /// Muestrea el perfil longitudinal del terreno a lo largo de un alineamiento.
+    /// Samples the longitudinal ground profile along a Civil 3D horizontal alignment.
     /// </summary>
-    /// <param name="intervalo">Distancia entre muestras en metros (mayor que cero).</param>
-    /// <param name="alineamiento">Nombre del alineamiento; si se omite se usa el primero.</param>
-    /// <param name="superficie">Nombre de la superficie TIN; si se omite se usa la primera.</param>
-    /// <returns>JSON con la lista de progresivas, coordenadas y cotas, más un resumen de cotas y pendiente.</returns>
-    [McpServerTool(Name = "consultar_perfil_longitudinal")]
-    [Description("Muestrea el perfil longitudinal del terreno a lo largo de un alineamiento de Civil 3D: cada 'intervalo' metros (más la progresiva final) devuelve progresiva, estaca, X, Y y cota Z de la superficie. Incluye cota mínima/máxima y pendiente media. Máximo 500 muestras; los puntos fuera de la superficie se reportan con cota null.")]
-    public async Task<string> ConsultarPerfilLongitudinal(
-        double intervalo = 20.0, string? alineamiento = null, string? superficie = null)
+    /// <param name="interval">Sampling step distance in meters (must be > 0).</param>
+    /// <param name="alignmentName">Alignment name; defaults to first available alignment if omitted.</param>
+    /// <param name="surfaceName">TIN surface name; defaults to first available surface if omitted.</param>
+    /// <returns>JSON containing sampled stations, coordinates, elevations, and slope summary.</returns>
+    [McpServerTool(Name = "sample_longitudinal_profile")]
+    [Description("Sample terrain longitudinal profile along a Civil 3D alignment every 'interval' meters, returning station, X, Y, and elevation.")]
+    public async Task<string> SampleLongitudinalProfile(
+        double interval = 20.0, string? alignmentName = null, string? surfaceName = null)
     {
-        if (double.IsNaN(intervalo) || double.IsInfinity(intervalo) || intervalo <= 0)
+        if (double.IsNaN(interval) || double.IsInfinity(interval) || interval <= 0)
         {
-            return Err("El intervalo debe ser un número mayor que cero.");
+            return Err("The interval must be a number greater than zero.");
         }
 
-        // 1. Rango de progresivas del alineamiento.
-        using var listaDoc = ParseSeguro(await _gatewayClient.GetContextAsync("civil/alignments"));
-        var listaRoot = listaDoc.RootElement;
-        if (!EsExito(listaRoot) || !listaRoot.TryGetProperty("data", out var data) ||
+        using var listDoc = ParseSafe(await _gatewayClient.GetContextAsync("civil/alignments"));
+        var listRoot = listDoc.RootElement;
+        if (!IsSuccess(listRoot) || !listRoot.TryGetProperty("data", out var data) ||
             data.ValueKind != JsonValueKind.Array || data.GetArrayLength() == 0)
         {
-            return Err("No se encontraron alineamientos (¿Civil 3D activo y Gateway cargado?).");
+            return Err("No alignments found in Civil 3D.");
         }
 
-        JsonElement? elegido = null;
+        JsonElement? chosen = null;
         foreach (var a in data.EnumerateArray())
         {
-            if (string.IsNullOrWhiteSpace(alineamiento) ||
-                string.Equals(a.GetProperty("nombre").GetString(), alineamiento, StringComparison.OrdinalIgnoreCase))
+            string currentName = a.TryGetProperty("name", out var np) ? np.GetString() ?? "" :
+                                 a.TryGetProperty("nombre", out var npo) ? npo.GetString() ?? "" : "";
+
+            if (string.IsNullOrWhiteSpace(alignmentName) ||
+                string.Equals(currentName, alignmentName, StringComparison.OrdinalIgnoreCase))
             {
-                elegido = a;
+                chosen = a;
                 break;
             }
         }
 
-        if (elegido is not { } al)
+        if (chosen is not { } al)
         {
-            return Err($"Alineamiento no encontrado: '{alineamiento}'.");
+            return Err($"Alignment not found: '{alignmentName}'.");
         }
 
-        string nombreAl = al.GetProperty("nombre").GetString() ?? string.Empty;
-        double inicio = al.GetProperty("progresiva_inicial").GetDouble();
-        double fin = al.GetProperty("progresiva_final").GetDouble();
+        string chosenName = al.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? "" :
+                            al.TryGetProperty("nombre", out var nameOld) ? nameOld.GetString() ?? "" : "";
 
-        // 2. Progresivas a muestrear (incluye siempre la final).
-        var progresivas = new System.Collections.Generic.List<double>();
-        for (double st = inicio; st < fin - 1e-6; st += intervalo)
+        double startStation = al.TryGetProperty("start_station", out var ss) ? ss.GetDouble() :
+                              al.TryGetProperty("progresiva_inicial", out var sso) ? sso.GetDouble() : 0.0;
+
+        double endStation = al.TryGetProperty("end_station", out var es) ? es.GetDouble() :
+                            al.TryGetProperty("progresiva_final", out var eso) ? eso.GetDouble() : 0.0;
+
+        var stations = new List<double>();
+        for (double st = startStation; st < endStation - 1e-6; st += interval)
         {
-            progresivas.Add(st);
+            stations.Add(st);
+        }
+        stations.Add(endStation);
+
+        if (stations.Count > MaxProfileSamples)
+        {
+            return Err($"Interval generates {stations.Count} samples (max {MaxProfileSamples}). Increase interval.");
         }
 
-        progresivas.Add(fin);
-        if (progresivas.Count > MaxMuestrasPerfil)
-        {
-            return Err($"El intervalo genera {progresivas.Count} muestras (máximo {MaxMuestrasPerfil}). " +
-                       $"Use un intervalo de al menos {Math.Ceiling((fin - inicio) / (MaxMuestrasPerfil - 1))} m.");
-        }
+        string qAl = $"&alignment={Uri.EscapeDataString(chosenName)}";
+        string qSup = string.IsNullOrWhiteSpace(surfaceName) ? string.Empty : $"&surface={Uri.EscapeDataString(surfaceName)}";
 
-        string qAl = $"&alignment={Uri.EscapeDataString(nombreAl)}";
-        string qSup = string.IsNullOrWhiteSpace(superficie) ? string.Empty : $"&surface={Uri.EscapeDataString(superficie)}";
-
-        // 3. Coordenada y cota en cada progresiva.
-        var muestras = new System.Collections.Generic.List<object>(progresivas.Count);
+        var samples = new List<object>(stations.Count);
         double? zMin = null, zMax = null, zIni = null, zFin = null;
-        foreach (double st in progresivas)
+
+        foreach (double st in stations)
         {
-            using var ptDoc = ParseSeguro(await _gatewayClient.GetContextAsync(
+            using var ptDoc = ParseSafe(await _gatewayClient.GetContextAsync(
                 $"civil/alignment/point-at-station?station={Num(st)}&offset=0{qAl}"));
             var pt = ptDoc.RootElement;
-            if (!EsExito(pt) || LeerNumero(pt, "x") is not { } x || LeerNumero(pt, "y") is not { } y)
+            if (!IsSuccess(pt) || ReadNumber(pt, "x") is not { } x || ReadNumber(pt, "y") is not { } y)
             {
-                muestras.Add(new { progresiva = st, x = (double?)null, y = (double?)null, cota = (double?)null });
+                samples.Add(new { station = st, x = (double?)null, y = (double?)null, elevation = (double?)null });
                 continue;
             }
 
-            using var zDoc = ParseSeguro(await _gatewayClient.GetContextAsync(
+            using var zDoc = ParseSafe(await _gatewayClient.GetContextAsync(
                 $"civil/surface/elevation?x={Num(x)}&y={Num(y)}{qSup}"));
-            double? z = EsExito(zDoc.RootElement) ? LeerNumero(zDoc.RootElement, "elevacion") : null;
+
+            double? z = null;
+            if (IsSuccess(zDoc.RootElement))
+            {
+                z = ReadNumber(zDoc.RootElement, "elevation") ?? ReadNumber(zDoc.RootElement, "elevacion");
+            }
 
             if (z is { } zv)
             {
@@ -154,124 +158,124 @@ public sealed class Civil3DTools
                 zFin = zv;
             }
 
-            muestras.Add(new
+            samples.Add(new
             {
-                progresiva = Math.Round(st, 3),
+                station = Math.Round(st, 3),
                 x = Math.Round(x, 4),
                 y = Math.Round(y, 4),
-                cota = z is null ? (double?)null : Math.Round(z.Value, 3)
+                elevation = z is null ? (double?)null : Math.Round(z.Value, 3)
             });
         }
 
-        double longitud = fin - inicio;
+        double length = endStation - startStation;
         return JsonSerializer.Serialize(new
         {
             status = "success",
-            alineamiento = nombreAl,
-            superficie = string.IsNullOrWhiteSpace(superficie) ? "(primera disponible)" : superficie,
-            intervalo,
-            progresiva_inicial = inicio,
-            progresiva_final = fin,
-            muestras_total = muestras.Count,
-            cota_minima = zMin,
-            cota_maxima = zMax,
-            pendiente_media_porcentaje = zIni is { } a0 && zFin is { } a1 && longitud > 0
-                ? Math.Round((a1 - a0) / longitud * 100.0, 4)
+            alignment = chosenName,
+            surface = string.IsNullOrWhiteSpace(surfaceName) ? "(first available)" : surfaceName,
+            interval,
+            start_station = startStation,
+            end_station = endStation,
+            total_samples = samples.Count,
+            min_elevation = zMin,
+            max_elevation = zMax,
+            average_slope_percent = zIni is { } a0 && zFin is { } a1 && length > 0
+                ? Math.Round((a1 - a0) / length * 100.0, 4)
                 : (double?)null,
-            muestras
+            samples
         });
     }
 
-    /// <summary>Verifica si el host activo es Civil 3D y resume superficies y alineamientos.</summary>
-    [McpServerTool(Name = "verificar_estado_civil3d")]
-    [Description("Verifica si el dibujo activo corre sobre Civil 3D 2027 y cuenta superficies y alineamientos. En AutoCAD estándar responde civil_available=false.")]
-    public async Task<string> VerificarEstadoCivil3D() => await _gatewayClient.GetContextAsync("civil/status");
+    /// <summary>Checks whether active host is Civil 3D and counts surfaces and alignments.</summary>
+    [McpServerTool(Name = "check_civil3d_status")]
+    [Description("Check whether the active drawing runs under Civil 3D 2027 and count available surfaces and alignments.")]
+    public async Task<string> CheckCivil3DStatus() => await _gatewayClient.GetContextAsync("civil/status");
 
-    /// <summary>Lista las superficies con cota mínima y máxima.</summary>
-    [McpServerTool(Name = "listar_superficies_civil3d")]
-    [Description("Lista las superficies topográficas (TIN) del dibujo con nombre, tipo, cota mínima, cota máxima y número de triángulos.")]
-    public async Task<string> ListarSuperficies() => await _gatewayClient.GetContextAsync("civil/surfaces");
+    /// <summary>Lists TIN surfaces with minimum and maximum elevations.</summary>
+    [McpServerTool(Name = "list_civil3d_surfaces")]
+    [Description("List TIN surfaces in Civil 3D with name, type, minimum elevation, maximum elevation, and triangle count.")]
+    public async Task<string> ListCivil3DSurfaces() => await _gatewayClient.GetContextAsync("civil/surfaces");
 
-    /// <summary>Obtiene la cota del terreno en un punto.</summary>
-    /// <param name="x">Coordenada Este (X) en metros.</param>
-    /// <param name="y">Coordenada Norte (Y) en metros.</param>
-    /// <param name="superficie">Nombre de la superficie; si se omite se usa la primera.</param>
-    [McpServerTool(Name = "consultar_elevacion_terreno")]
-    [Description("Devuelve la cota Z exacta del terreno (superficie TIN de Civil 3D) en el punto (x, y). Falla si el punto está fuera de la superficie.")]
-    public async Task<string> ConsultarElevacion(double x, double y, string? superficie = null) =>
+    /// <summary>Queries ground elevation at a specific coordinate.</summary>
+    /// <param name="x">East (X) coordinate in meters.</param>
+    /// <param name="y">North (Y) coordinate in meters.</param>
+    /// <param name="surfaceName">Surface name; first available surface is used if omitted.</param>
+    [McpServerTool(Name = "get_surface_elevation")]
+    [Description("Query exact ground elevation (Z coordinate) at point (x, y) on a Civil 3D TIN surface.")]
+    public async Task<string> GetSurfaceElevation(double x, double y, string? surfaceName = null) =>
         await _gatewayClient.GetContextAsync(
             $"civil/surface/elevation?x={Num(x)}&y={Num(y)}" +
-            (string.IsNullOrWhiteSpace(superficie) ? string.Empty : $"&surface={Uri.EscapeDataString(superficie)}"));
+            (string.IsNullOrWhiteSpace(surfaceName) ? string.Empty : $"&surface={Uri.EscapeDataString(surfaceName)}"));
 
-    /// <summary>Lista los alineamientos con sus progresivas.</summary>
-    [McpServerTool(Name = "listar_alineamientos_civil3d")]
-    [Description("Lista los alineamientos horizontales con nombre, progresiva inicial/final, estacas y longitud total.")]
-    public async Task<string> ListarAlineamientos() => await _gatewayClient.GetContextAsync("civil/alignments");
+    /// <summary>Lists horizontal alignments with their stations.</summary>
+    [McpServerTool(Name = "list_civil3d_alignments")]
+    [Description("List horizontal alignments in Civil 3D with name, start station, end station, and length.")]
+    public async Task<string> ListCivil3DAlignments() => await _gatewayClient.GetContextAsync("civil/alignments");
 
-    /// <summary>Calcula progresiva y desfase de un punto respecto a un alineamiento.</summary>
-    /// <param name="x">Coordenada Este (X) en metros.</param>
-    /// <param name="y">Coordenada Norte (Y) en metros.</param>
-    /// <param name="alineamiento">Nombre del alineamiento; si se omite se usa el primero.</param>
-    [McpServerTool(Name = "consultar_estacion_alineamiento")]
-    [Description("Calcula la progresiva (estaca) y el desfase lateral de un punto (x, y) respecto a un alineamiento de Civil 3D.")]
-    public async Task<string> ConsultarEstacion(double x, double y, string? alineamiento = null) =>
+    /// <summary>Calculates station and lateral offset of a point relative to an alignment.</summary>
+    /// <param name="x">East (X) coordinate in meters.</param>
+    /// <param name="y">North (Y) coordinate in meters.</param>
+    /// <param name="alignmentName">Alignment name; first available alignment used if omitted.</param>
+    [McpServerTool(Name = "get_alignment_station_offset")]
+    [Description("Calculate station and lateral offset of point (x, y) relative to a Civil 3D horizontal alignment.")]
+    public async Task<string> GetAlignmentStationOffset(double x, double y, string? alignmentName = null) =>
         await _gatewayClient.GetContextAsync(
             $"civil/alignment/station-offset?x={Num(x)}&y={Num(y)}" +
-            (string.IsNullOrWhiteSpace(alineamiento) ? string.Empty : $"&alignment={Uri.EscapeDataString(alineamiento)}"));
+            (string.IsNullOrWhiteSpace(alignmentName) ? string.Empty : $"&alignment={Uri.EscapeDataString(alignmentName)}"));
 
-    /// <summary>Obtiene la coordenada (X, Y) de una progresiva y desfase.</summary>
-    /// <param name="progresiva">Progresiva en metros (por ejemplo 1250.5 = 1+250.50).</param>
-    /// <param name="desfase">Desfase lateral en metros (+ derecha, - izquierda).</param>
-    /// <param name="alineamiento">Nombre del alineamiento; si se omite se usa el primero.</param>
-    [McpServerTool(Name = "obtener_coordenada_en_estacion")]
-    [Description("Devuelve la coordenada (x, y) correspondiente a una progresiva y desfase sobre un alineamiento de Civil 3D.")]
-    public async Task<string> ObtenerCoordenadaEnEstacion(double progresiva, double desfase = 0, string? alineamiento = null) =>
+    /// <summary>Calculates (X, Y) coordinate for a given station and offset.</summary>
+    /// <param name="station">Station in meters (e.g. 1250.5 = 1+250.50).</param>
+    /// <param name="offset">Lateral offset in meters (+ right, - left).</param>
+    /// <param name="alignmentName">Alignment name; first available alignment used if omitted.</param>
+    [McpServerTool(Name = "get_point_at_station")]
+    [Description("Calculate (X, Y) coordinate given a station and lateral offset along a Civil 3D alignment.")]
+    public async Task<string> GetPointAtStation(double station, double offset = 0, string? alignmentName = null) =>
         await _gatewayClient.GetContextAsync(
-            $"civil/alignment/point-at-station?station={Num(progresiva)}&offset={Num(desfase)}" +
-            (string.IsNullOrWhiteSpace(alineamiento) ? string.Empty : $"&alignment={Uri.EscapeDataString(alineamiento)}"));
+            $"civil/alignment/point-at-station?station={Num(station)}&offset={Num(offset)}" +
+            (string.IsNullOrWhiteSpace(alignmentName) ? string.Empty : $"&alignment={Uri.EscapeDataString(alignmentName)}"));
 
-    /// <summary>Crea un alineamiento horizontal desde PIs.</summary>
-    /// <param name="nombre">Nombre único del alineamiento.</param>
-    /// <param name="puntos">PIs como "x1,y1;x2,y2;x3,y3" (mínimo 2, en orden de progresiva).</param>
-    /// <param name="radio">Radio de curva circular en metros; 0 = sin curvas.</param>
-    /// <param name="capa">Capa destino (se crea si no existe); por defecto "0".</param>
-    [McpServerTool(Name = "crear_alineamiento_civil3d")]
-    [Description("Crea un alineamiento horizontal en Civil 3D a partir de PIs 'x1,y1;x2,y2;...' con curvas circulares tangentes de radio fijo (0 = sin curvas). Rechaza nombres duplicados y radios que no caben en el trazo.")]
-    public async Task<string> CrearAlineamiento(string nombre, string puntos, double radio = 0, string? capa = null)
+    /// <summary>Creates a horizontal alignment from PI coordinates.</summary>
+    /// <param name="name">Unique alignment name.</param>
+    /// <param name="points">PIs formatted as 'x1,y1;x2,y2;...' (minimum 2 PIs).</param>
+    /// <param name="radius">Fixed curve radius in meters; 0 = no curves.</param>
+    /// <param name="layer">Target layer name.</param>
+    [McpServerTool(Name = "create_civil3d_alignment")]
+    [Description("Create a horizontal alignment in Civil 3D from PI vertices 'x1,y1;x2,y2;...' with fixed radius tangent circular curves.")]
+    public async Task<string> CreateCivil3DAlignment(string name, string points, double radius = 0, string? layer = null)
     {
-        var pts = ParsePuntos(puntos, 2);
+        var pts = ParsePoints(points, 2);
         if (pts == null || pts.Length < 2)
         {
-            return Err("Formato de 'puntos' invalido. Use 'x1,y1;x2,y2;...' con al menos 2 PIs numericos.");
+            return Err("Invalid 'points' format. Use 'x1,y1;x2,y2;...' with at least 2 numeric PIs.");
         }
 
         string json = JsonSerializer.Serialize(new
         {
-            nombre,
-            puntos = pts.Select(p => new { x = p[0], y = p[1] }),
-            radio,
-            capa
+            name,
+            points = pts.Select(p => new { x = p[0], y = p[1] }),
+            radius,
+            layer
         });
         return await _gatewayClient.PostJsonAsync("civil/alignment/create", json);
     }
 
-    /// <summary>Crea una superficie TIN desde puntos topográficos.</summary>
-    /// <param name="nombre">Nombre único de la superficie.</param>
-    /// <param name="puntos">Puntos como "x1,y1,z1;x2,y2,z2;..." (mínimo 3, no colineales).</param>
-    [McpServerTool(Name = "crear_superficie_civil3d")]
-    [Description("Crea una superficie TIN en Civil 3D a partir de puntos topográficos 'x1,y1,z1;x2,y2,z2;...' (mínimo 3). Rechaza nombres duplicados.")]
-    public async Task<string> CrearSuperficie(string nombre, string puntos)
+    /// <summary>Creates a TIN surface from survey points.</summary>
+    /// <param name="name">Unique surface name.</param>
+    /// <param name="points">Points formatted as 'x1,y1,z1;x2,y2,z2;...' (minimum 3 points).</param>
+    [McpServerTool(Name = "create_civil3d_surface")]
+    [Description("Create a TIN surface in Civil 3D from survey points 'x1,y1,z1;x2,y2,z2;...' (minimum 3 points).")]
+    public async Task<string> CreateCivil3DSurface(string name, string points)
     {
-        var pts = ParsePuntos(puntos, 3);
+        var pts = ParsePoints(points, 3);
         if (pts == null || pts.Length < 3)
         {
-            return Err("Formato de 'puntos' invalido. Use 'x1,y1,z1;x2,y2,z2;...' con al menos 3 puntos numericos.");
+            return Err("Invalid 'points' format. Use 'x1,y1,z1;x2,y2,z2;...' with at least 3 numeric points.");
         }
 
         string json = JsonSerializer.Serialize(new
         {
-            nombre,
-            puntos = pts.Select(p => new { x = p[0], y = p[1], z = p[2] })
+            name,
+            points = pts.Select(p => new { x = p[0], y = p[1], z = p[2] })
         });
         return await _gatewayClient.PostJsonAsync("civil/surface/create", json);
     }

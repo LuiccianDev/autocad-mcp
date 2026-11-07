@@ -6,21 +6,21 @@ using System.Text.Json;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// Utilidades compartidas de formato para construir expresiones AutoLISP y comandos CAD seguros
-/// (números en cultura invariante, cadenas LISP escapadas, parseo de listas de puntos y respuestas JSON).
+/// Shared formatting utilities for building safe AutoLISP expressions and CAD commands
+/// (culture-invariant numbers, escaped LISP strings, point list parsing, and JSON responses).
 /// </summary>
 internal static class CadFormat
 {
-    /// <summary>Formatea un número en cultura invariante con precisión de ida y vuelta.</summary>
-    /// <param name="value">Valor numérico a formatear.</param>
-    /// <returns>Representación textual con punto decimal.</returns>
+    /// <summary>Formats a floating-point number in culture-invariant notation with round-trip precision.</summary>
+    /// <param name="value">Numeric value to format.</param>
+    /// <returns>Textual representation with a decimal point.</returns>
     public static string Num(double value) => value.ToString("R", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// Convierte un texto en un literal de cadena AutoLISP entre comillas, escapando barras invertidas y comillas.
+    /// Converts text into an escaped AutoLISP string literal enclosed in double quotes.
     /// </summary>
-    /// <param name="value">Texto a escapar.</param>
-    /// <returns>Literal LISP, por ejemplo <c>"MUROS"</c>.</returns>
+    /// <param name="value">Text to escape.</param>
+    /// <returns>LISP string literal, e.g. <c>"WALLS"</c>.</returns>
     public static string LispString(string value)
     {
         var sb = new StringBuilder(value.Length + 2);
@@ -42,10 +42,10 @@ internal static class CadFormat
     }
 
     /// <summary>
-    /// Valida un nombre de capa, bloque o tipo de línea de AutoCAD (no vacío, sin caracteres reservados).
+    /// Validates an AutoCAD layer, block, or linetype symbol name (non-empty, length &lt;= 255, no reserved characters).
     /// </summary>
-    /// <param name="name">Nombre a validar.</param>
-    /// <returns><c>true</c> si el nombre es aceptable para la tabla de símbolos.</returns>
+    /// <param name="name">Symbol name to validate.</param>
+    /// <returns><c>true</c> if valid for the symbol table.</returns>
     public static bool IsValidSymbolName(string? name)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 255)
@@ -56,17 +56,17 @@ internal static class CadFormat
         return name.IndexOfAny(['<', '>', '/', '\\', '"', ':', ';', '?', '*', '|', ',', '=', '`']) < 0;
     }
 
-    /// <summary>Convierte grados sexagesimales a radianes.</summary>
-    /// <param name="degrees">Ángulo en grados.</param>
-    /// <returns>Ángulo en radianes.</returns>
+    /// <summary>Converts sexagesimal degrees to radians.</summary>
+    /// <param name="degrees">Angle in degrees.</param>
+    /// <returns>Angle in radians.</returns>
     public static double ToRadians(double degrees) => degrees * Math.PI / 180.0;
 
     /// <summary>
-    /// Convierte <c>"v1,v2[,v3];..."</c> en filas numéricas. Devuelve <c>null</c> si el formato es inválido.
+    /// Parses a string formatted as <c>"v1,v2[,v3];..."</c> into numeric coordinate rows. Returns <c>null</c> if invalid.
     /// </summary>
-    /// <param name="points">Cadena de puntos separados por punto y coma.</param>
-    /// <param name="columns">Número de componentes por punto (2 para XY, 3 para XYZ).</param>
-    /// <returns>Matriz de puntos o <c>null</c> ante cualquier error de formato.</returns>
+    /// <param name="points">Semicolon-separated coordinate list.</param>
+    /// <param name="columns">Dimension count per vertex (2 for XY, 3 for XYZ).</param>
+    /// <returns>Array of coordinate arrays, or <c>null</c> on syntax error.</returns>
     public static double[][]? ParsePoints(string? points, int columns)
     {
         if (string.IsNullOrWhiteSpace(points))
@@ -98,9 +98,9 @@ internal static class CadFormat
         return result;
     }
 
-    /// <summary>Indica si todos los valores son números finitos.</summary>
-    /// <param name="values">Valores a comprobar.</param>
-    /// <returns><c>true</c> si ninguno es NaN ni infinito.</returns>
+    /// <summary>Indicates whether all supplied numeric values are finite (not NaN or infinite).</summary>
+    /// <param name="values">Values to check.</param>
+    /// <returns><c>true</c> if all values are finite.</returns>
     public static bool AllFinite(params double[] values)
     {
         foreach (double v in values)
@@ -114,8 +114,8 @@ internal static class CadFormat
         return true;
     }
 
-    /// <summary>Serializa una respuesta de error estándar.</summary>
-    /// <param name="message">Mensaje descriptivo del error.</param>
+    /// <summary>Serializes a standard error JSON response.</summary>
+    /// <param name="message">Descriptive error message.</param>
     /// <returns>JSON <c>{"status":"error","message":...}</c>.</returns>
     public static string Error(string message) =>
         JsonSerializer.Serialize(new { status = "error", message });

@@ -1,5 +1,7 @@
 using System;
 using System.ComponentModel;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using ModelContextProtocol.Server;
 using AutoCAD.McpServer.Services;
@@ -7,7 +9,7 @@ using AutoCAD.McpServer.Services;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// Proporciona herramientas MCP para la ejecución de comandos, navegación y configuración en AutoCAD.
+/// Provides MCP tools for command execution, AutoLISP evaluation, viewport navigation, and environment setup in AutoCAD.
 /// </summary>
 [McpServerToolType]
 public sealed class ExecutionTools
@@ -15,41 +17,41 @@ public sealed class ExecutionTools
     private readonly IAutoCADGatewayClient _gatewayClient;
 
     /// <summary>
-    /// Inicializa una nueva instancia de la clase <see cref="ExecutionTools"/>.
+    /// Initializes a new instance of the <see cref="ExecutionTools"/> class.
     /// </summary>
-    /// <param name="gatewayClient">El cliente para comunicación con el Gateway de AutoCAD.</param>
+    /// <param name="gatewayClient">The client for communicating with the AutoCAD Gateway.</param>
     public ExecutionTools(IAutoCADGatewayClient gatewayClient)
     {
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
     }
 
     /// <summary>
-    /// Envía un ping al Gateway de AutoCAD para verificar la conectividad activa.
+    /// Sends a ping to the AutoCAD Gateway to verify active HTTP connectivity.
     /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es el estado de la conexión.</returns>
-    [McpServerTool(Name = "ping_autocad_gateway")]
-    [Description("Envía un ping al Gateway de AutoCAD para verificar la conectividad.")]
-    public async Task<string> PingAutoCAD() => await _gatewayClient.PingGatewayAsync();
+    /// <returns>Asynchronous task returning connection status.</returns>
+    [McpServerTool(Name = "ping_gateway")]
+    [Description("Ping the AutoCAD Gateway to verify connectivity.")]
+    public async Task<string> PingGateway() => await _gatewayClient.PingGatewayAsync();
 
     /// <summary>
-    /// Ejecuta una lista secuencial de comandos o macros de AutoCAD en un único envío por lotes.
+    /// Executes a sequential list of AutoCAD command strings or macros in a single transactional batch payload.
     /// </summary>
-    /// <param name="comandosJson">Arreglo JSON de comandos a ejecutar en secuencia.</param>
-    /// <returns>Una tarea asíncrona con el resultado de la inyección por lotes.</returns>
-    [McpServerTool(Name = "ejecutar_comandos_lote")]
-    [Description("⚡ Ejecuta una lista secuencial de comandos o macros de AutoCAD en un único envío por lotes. 'comandosJson' es un arreglo JSON con cadenas de comandos.")]
-    public async Task<string> EjecutarComandosLote(string comandosJson)
+    /// <param name="commandsJson">JSON array of command strings to execute sequentially.</param>
+    /// <returns>Asynchronous task returning result of batch injection.</returns>
+    [McpServerTool(Name = "execute_batch_commands")]
+    [Description("Execute a sequential list of AutoCAD commands or macros in a single batch delivery. 'commandsJson' is a JSON array of command strings.")]
+    public async Task<string> ExecuteBatchCommands(string commandsJson)
     {
-        if (string.IsNullOrWhiteSpace(comandosJson))
+        if (string.IsNullOrWhiteSpace(commandsJson))
         {
-            return "{\"status\": \"error\", \"message\": \"El parámetro 'comandosJson' no puede estar vacío.\"}";
+            return "{\"status\": \"error\", \"message\": \"The 'commandsJson' parameter cannot be empty.\"}";
         }
 
-        var cmdSb = new System.Text.StringBuilder();
+        var cmdSb = new StringBuilder();
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(comandosJson);
-            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            using var doc = JsonDocument.Parse(commandsJson);
+            if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
@@ -60,48 +62,47 @@ public sealed class ExecutionTools
                     }
                 }
             }
-            else if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            else if (doc.RootElement.ValueKind == JsonValueKind.String)
             {
                 cmdSb.Append(doc.RootElement.GetString()?.TrimEnd('\r', '\n')).Append('\n');
             }
             else
             {
-                return "{\"status\": \"error\", \"message\": \"'comandosJson' debe ser un arreglo de cadenas de comandos.\"}";
+                return "{\"status\": \"error\", \"message\": \"'commandsJson' must be a JSON array of command strings.\"}";
             }
         }
-        catch (System.Text.Json.JsonException)
+        catch (JsonException)
         {
-            // Si el cliente envió una cadena con saltos de línea directa
-            cmdSb.Append(comandosJson.TrimEnd('\r', '\n')).Append('\n');
+            cmdSb.Append(commandsJson.TrimEnd('\r', '\n')).Append('\n');
         }
 
         return await _gatewayClient.ExecuteCommandAsync(cmdSb.ToString());
     }
 
     /// <summary>
-    /// Envía comandos de dibujo, macros AutoLISP o comandos YQArch directamente a AutoCAD.
+    /// Enqueues native non-modal AutoCAD commands, AutoLISP macros, or YQArch commands directly into the main UI thread.
     /// </summary>
-    /// <param name="command">Comandos a enviar (deben incluir \n donde se requiera pulsar Enter).</param>
-    /// <returns>Una tarea asíncrona con el resultado de la inyección del comando.</returns>
-    [McpServerTool(Name = "ejecutar_comando_autocad")]
-    [Description("Envía comandos de dibujo, macros AutoLISP o comandos YQArch (ej. WW, JJ, AD, WD, ZXW) directamente a AutoCAD a través del Gateway. Los comandos deben incluir saltos de línea (\\n) donde se requiera pulsar Enter.")]
-    public async Task<string> EjecutarComandoAutoCAD(string command) => await _gatewayClient.ExecuteCommandAsync(command);
+    /// <param name="command">Command strings to send (must include \\n where Enter is required).</param>
+    /// <returns>Asynchronous task returning result of command injection.</returns>
+    [McpServerTool(Name = "execute_command")]
+    [Description("Enqueue native non-modal AutoCAD commands, AutoLISP macros, or YQArch commands (e.g. WW, JJ, AD, WD, ZXW) directly to AutoCAD through the Gateway. Include newlines (\\n) where Enter is required.")]
+    public async Task<string> ExecuteCommand(string command) => await _gatewayClient.ExecuteCommandAsync(command);
 
     /// <summary>
-    /// Evalúa e inyecta expresiones o rutinas AutoLISP dinámicas en el espacio de trabajo de AutoCAD.
+    /// Evaluates and injects dynamic AutoLISP expressions into AutoCAD.
     /// </summary>
-    /// <param name="codigoLisp">Código AutoLISP a evaluar (ej. '(entmake ...)', '(setq ...)' o funciones completas).</param>
-    /// <returns>Una tarea asíncrona con la confirmación de la inyección de la expresión LISP.</returns>
-    [McpServerTool(Name = "ejecutar_lisp")]
-    [Description("Evalúa e inyecta expresiones o rutinas AutoLISP dinámicas directamente en AutoCAD (ej. creación de entidades ultrarrápidas con entmake, definición de variables o funciones).")]
-    public async Task<string> EjecutarLisp(string codigoLisp)
+    /// <param name="code">AutoLISP code to evaluate (e.g. '(entmake ...)', '(setq ...)' or full routines).</param>
+    /// <returns>Asynchronous task returning confirmation of LISP injection.</returns>
+    [McpServerTool(Name = "evaluate_lisp")]
+    [Description("Evaluate and inject dynamic AutoLISP expressions directly into AutoCAD (e.g. fast entity creation with entmake, variable or function definitions).")]
+    public async Task<string> EvaluateLisp(string code)
     {
-        if (string.IsNullOrWhiteSpace(codigoLisp))
+        if (string.IsNullOrWhiteSpace(code))
         {
-            return "{\"status\": \"error\", \"message\": \"El código AutoLISP no puede estar vacío.\"}";
+            return "{\"status\": \"error\", \"message\": \"AutoLISP code cannot be empty.\"}";
         }
 
-        string lispCommand = codigoLisp.Trim();
+        string lispCommand = code.Trim();
         if (!lispCommand.EndsWith('\n'))
         {
             lispCommand += "\n";
@@ -111,48 +112,47 @@ public sealed class ExecutionTools
     }
 
     /// <summary>
-    /// Carga y ejecuta un archivo AutoLISP (.lsp) externo en la sesión activa de AutoCAD.
+    /// Loads and executes an external AutoLISP script file (.lsp) from disk inside AutoCAD via (load ...).
     /// </summary>
-    /// <param name="rutaArchivoLsp">Ruta completa en disco del archivo .lsp (ej. 'C:/scripts/rutina.lsp').</param>
-    /// <returns>Una tarea asíncrona con el resultado de la carga del archivo.</returns>
-    [McpServerTool(Name = "cargar_archivo_lisp")]
-    [Description("Carga y evalúa un archivo de script AutoLISP (.lsp) desde el sistema de archivos dentro de AutoCAD mediante la función (load ...).")]
-    public async Task<string> CargarArchivoLisp(string rutaArchivoLsp)
+    /// <param name="filePath">Full file path of the .lsp script (e.g. 'C:/scripts/routine.lsp').</param>
+    /// <returns>Asynchronous task returning file load result.</returns>
+    [McpServerTool(Name = "load_lisp_file")]
+    [Description("Load and evaluate an external AutoLISP script file (.lsp) from disk inside AutoCAD via the (load ...) function.")]
+    public async Task<string> LoadLispFile(string filePath)
     {
-        if (string.IsNullOrWhiteSpace(rutaArchivoLsp))
+        if (string.IsNullOrWhiteSpace(filePath))
         {
-            return "{\"status\": \"error\", \"message\": \"La ruta del archivo .lsp no puede estar vacía.\"}";
+            return "{\"status\": \"error\", \"message\": \"File path cannot be empty.\"}";
         }
 
-        // AutoLISP requiere barras diagonales estándar '/' en las rutas de archivo
-        string normalizedPath = rutaArchivoLsp.Replace('\\', '/');
+        string normalizedPath = filePath.Replace('\\', '/');
         string command = $"(load \"{normalizedPath}\")\n";
         return await _gatewayClient.ExecuteCommandAsync(command);
     }
 
     /// <summary>
-    /// Ejecuta un Zoom Extensión ('_.ZOOM E') en AutoCAD para encuadrar y centrar automáticamente todos los elementos en pantalla.
+    /// Executes Zoom Extents ('_.ZOOM E') in AutoCAD to center and fit all entities in the viewport.
     /// </summary>
-    /// <returns>Una tarea asíncrona con la confirmación de la operación.</returns>
-    [McpServerTool(Name = "zoom_extension")]
-    [Description("Ejecuta un Zoom Extensión ('_.ZOOM E') en AutoCAD para encuadrar y centrar automáticamente todos los elementos en pantalla.")]
-    public async Task<string> ZoomExtension() => await _gatewayClient.ExecuteCommandAsync("_.ZOOM\nE\n");
+    /// <returns>Asynchronous task returning confirmation.</returns>
+    [McpServerTool(Name = "zoom_extents")]
+    [Description("Execute Zoom Extents ('_.ZOOM E') in AutoCAD to center and fit all elements in the viewport.")]
+    public async Task<string> ZoomExtents() => await _gatewayClient.ExecuteCommandAsync("_.ZOOM\nE\n");
 
     /// <summary>
-    /// Guarda el archivo de dibujo actual en AutoCAD ('_.QSAVE').
+    /// Saves the active AutoCAD drawing file ('_.QSAVE').
     /// </summary>
-    /// <returns>Una tarea asíncrona con la confirmación de la operación.</returns>
-    [McpServerTool(Name = "guardar_dibujo")]
-    [Description("Guarda el archivo de dibujo actual en AutoCAD ('_.QSAVE').")]
-    public async Task<string> GuardarDibujo() => await _gatewayClient.ExecuteCommandAsync("_.QSAVE\n");
+    /// <returns>Asynchronous task returning confirmation.</returns>
+    [McpServerTool(Name = "save_drawing")]
+    [Description("Save the active AutoCAD drawing file ('_.QSAVE').")]
+    public async Task<string> SaveDrawing() => await _gatewayClient.ExecuteCommandAsync("_.QSAVE\n");
 
     /// <summary>
-    /// Configura el entorno de trabajo activo en AutoCAD a METROS (INSUNITS=4, MEASUREMENT=1, LUNITS=2, LUPREC=3) y calibra las cotas y textos.
+    /// Configures AutoCAD drawing environment to METRIC METERS (INSUNITS=4, MEASUREMENT=1, LUNITS=2, LUPREC=3) and calibrates dimensions.
     /// </summary>
-    /// <returns>Una tarea asíncrona con la confirmación de la configuración.</returns>
-    [McpServerTool(Name = "configurar_entorno_dibujo")]
-    [Description("Configura el entorno de trabajo activo en AutoCAD a METROS (INSUNITS=4, MEASUREMENT=1, LUNITS=2, LUPREC=3) y calibra las escalas de cotas/textos para evitar anotaciones gigantescas o microscópicas.")]
-    public async Task<string> ConfigurarEntornoDibujo()
+    /// <returns>Asynchronous task returning configuration result.</returns>
+    [McpServerTool(Name = "configure_drawing_units")]
+    [Description("Configure AutoCAD drawing environment to METRIC METERS (INSUNITS=4, MEASUREMENT=1, LUNITS=2, LUPREC=3) and calibrate dimension scales.")]
+    public async Task<string> ConfigureDrawingUnits()
     {
         const string script =
             "_.-SETVAR\nINSUNITS\n4\n" +

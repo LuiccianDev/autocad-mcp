@@ -8,13 +8,9 @@ using static AutoCAD.McpServer.Tools.CadFormat;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// Herramientas MCP para la gestión de capas: creación con color, tipo de línea y descripción,
-/// cambio de capa actual y control de estados (encendida, congelada, bloqueada).
+/// MCP tools for layer management: creation with ACI color, linetype, and description,
+/// setting active layer, and controlling layer states (on/off, frozen/thawed, locked/unlocked).
 /// </summary>
-/// <remarks>
-/// Se usa la API ActiveX de AutoLISP (<c>vla-*</c>) en lugar de <c>-LAYER</c> para evitar secuencias de
-/// preguntas que varían entre versiones e idiomas, y para cargar tipos de línea sin abrir cuadros de diálogo.
-/// </remarks>
 [McpServerToolType]
 public sealed class LayerTools
 {
@@ -24,10 +20,10 @@ public sealed class LayerTools
     private readonly IAutoCADGatewayClient _gatewayClient;
 
     /// <summary>
-    /// Inicializa una nueva instancia de la clase <see cref="LayerTools"/>.
+    /// Initializes a new instance of the <see cref="LayerTools"/> class.
     /// </summary>
-    /// <param name="gatewayClient">El cliente para comunicación con el Gateway de AutoCAD.</param>
-    /// <exception cref="ArgumentNullException">Si <paramref name="gatewayClient"/> es nulo.</exception>
+    /// <param name="gatewayClient">The client for communicating with the AutoCAD Gateway.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="gatewayClient"/> is null.</exception>
     public LayerTools(IAutoCADGatewayClient gatewayClient)
     {
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
@@ -37,108 +33,108 @@ public sealed class LayerTools
         _gatewayClient.ExecuteCommandAsync($"(progn {LispPrelude}{body} (princ))\n");
 
     /// <summary>
-    /// Crea una capa (o actualiza la existente) con color ACI, tipo de línea y descripción.
+    /// Creates a layer (or updates existing) with ACI color, linetype, and description.
     /// </summary>
-    /// <param name="nombre">Nombre de la capa (ej. <c>ARQ-MUROS</c>).</param>
-    /// <param name="colorAci">Color ACI entre 1 y 255 (7 = blanco/negro).</param>
-    /// <param name="tipoLinea">Tipo de línea; si no está cargado se intenta cargar desde <c>acadiso.lin</c>.</param>
-    /// <param name="descripcion">Descripción opcional de la capa.</param>
-    /// <returns>Respuesta JSON del Gateway o un JSON de error de validación.</returns>
-    [McpServerTool(Name = "crear_capa")]
-    [Description("Crea una capa o actualiza una existente con color ACI (1-255), tipo de línea (se carga desde acadiso.lin si falta; si no existe se mantiene Continuous) y descripción. No cambia la capa actual.")]
-    public async Task<string> CrearCapa(
-        string nombre, int colorAci = 7, string tipoLinea = "Continuous", string descripcion = "")
+    /// <param name="name">Layer name (e.g. <c>ARCH-WALLS</c>).</param>
+    /// <param name="colorAci">ACI color index between 1 and 255 (7 = white/black).</param>
+    /// <param name="linetype">Linetype name; loaded automatically from <c>acadiso.lin</c> if not loaded.</param>
+    /// <param name="description">Optional layer description.</param>
+    /// <returns>JSON response from Gateway or validation error.</returns>
+    [McpServerTool(Name = "create_layer")]
+    [Description("Create a layer or update an existing one with ACI color (1-255), linetype, and description. Does not change current layer.")]
+    public async Task<string> CreateLayer(
+        string name, int colorAci = 7, string linetype = "Continuous", string description = "")
     {
-        if (!IsValidSymbolName(nombre))
+        if (!IsValidSymbolName(name))
         {
-            return Error($"Nombre de capa inválido: '{nombre}'.");
+            return Error($"Invalid layer name: '{name}'.");
         }
 
         if (colorAci is < 1 or > 255)
         {
-            return Error("El color ACI debe estar entre 1 y 255.");
+            return Error("ACI color must be between 1 and 255.");
         }
 
-        if (!IsValidSymbolName(tipoLinea))
+        if (!IsValidSymbolName(linetype))
         {
-            return Error($"Nombre de tipo de línea inválido: '{tipoLinea}'.");
+            return Error($"Invalid linetype name: '{linetype}'.");
         }
 
-        string lt = LispString(tipoLinea.Trim());
+        string lt = LispString(linetype.Trim());
         string body =
             $"(if (not (tblsearch \"LTYPE\" {lt})) " +
             $"(vl-catch-all-apply 'vla-load (list (vla-get-Linetypes *mcp-doc*) {lt} \"acadiso.lin\"))) " +
-            $"(setq *mcp-lay* (vla-add (vla-get-Layers *mcp-doc*) {LispString(nombre.Trim())})) " +
+            $"(setq *mcp-lay* (vla-add (vla-get-Layers *mcp-doc*) {LispString(name.Trim())})) " +
             $"(vla-put-Color *mcp-lay* {colorAci}) " +
             $"(if (tblsearch \"LTYPE\" {lt}) (vla-put-Linetype *mcp-lay* {lt})) " +
-            $"(vla-put-Description *mcp-lay* {LispString(descripcion ?? string.Empty)})";
+            $"(vla-put-Description *mcp-lay* {LispString(description ?? string.Empty)})";
 
         return await SendLispAsync(body);
     }
 
     /// <summary>
-    /// Establece la capa actual de trabajo (variable <c>CLAYER</c>).
+    /// Sets the active drawing layer (CLAYER variable).
     /// </summary>
-    /// <param name="nombre">Nombre de una capa existente y no congelada.</param>
-    /// <returns>Respuesta JSON del Gateway o un JSON de error de validación.</returns>
-    [McpServerTool(Name = "establecer_capa_actual")]
-    [Description("Establece la capa actual (CLAYER). La capa debe existir y no estar congelada; en caso contrario AutoCAD lo informa en la línea de comandos sin cambios.")]
-    public async Task<string> EstablecerCapaActual(string nombre)
+    /// <param name="name">Name of an existing, non-frozen layer.</param>
+    /// <returns>JSON response from Gateway or validation error.</returns>
+    [McpServerTool(Name = "set_current_layer")]
+    [Description("Set the active drawing layer (CLAYER). Layer must exist and not be frozen.")]
+    public async Task<string> SetCurrentLayer(string name)
     {
-        if (!IsValidSymbolName(nombre))
+        if (!IsValidSymbolName(name))
         {
-            return Error($"Nombre de capa inválido: '{nombre}'.");
+            return Error($"Invalid layer name: '{name}'.");
         }
 
-        string name = LispString(nombre.Trim());
+        string nm = LispString(name.Trim());
         string body =
-            $"(if (tblsearch \"LAYER\" {name}) " +
-            $"(if (vl-catch-all-error-p (vl-catch-all-apply 'setvar (list \"CLAYER\" {name}))) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] No se pudo activar la capa (congelada?): \" {name}))) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] La capa no existe: \" {name})))";
+            $"(if (tblsearch \"LAYER\" {nm}) " +
+            $"(if (vl-catch-all-error-p (vl-catch-all-apply 'setvar (list \"CLAYER\" {nm}))) " +
+            $"(princ (strcat \"\\n[AutoCAD MCP] Could not activate layer (frozen?): \" {nm}))) " +
+            $"(princ (strcat \"\\n[AutoCAD MCP] Layer does not exist: \" {nm})))";
 
         return await SendLispAsync(body);
     }
 
     /// <summary>
-    /// Cambia el estado de visibilidad, congelación o bloqueo de una capa.
+    /// Modifies the visibility, frozen state, or lock state of a layer.
     /// </summary>
-    /// <param name="nombre">Nombre de una capa existente.</param>
-    /// <param name="accion">Una de: <c>activar</c>, <c>desactivar</c>, <c>congelar</c>, <c>descongelar</c>, <c>bloquear</c>, <c>desbloquear</c>.</param>
-    /// <returns>Respuesta JSON del Gateway o un JSON de error de validación.</returns>
-    [McpServerTool(Name = "establecer_estado_capa")]
-    [Description("Cambia el estado de una capa. 'accion' admite: activar, desactivar, congelar, descongelar, bloquear, desbloquear. La capa actual no se puede congelar.")]
-    public async Task<string> EstablecerEstadoCapa(string nombre, string accion)
+    /// <param name="name">Name of an existing layer.</param>
+    /// <param name="action">One of: <c>on</c>, <c>off</c>, <c>freeze</c>, <c>thaw</c>, <c>lock</c>, <c>unlock</c>.</param>
+    /// <returns>JSON response from Gateway or validation error.</returns>
+    [McpServerTool(Name = "set_layer_state")]
+    [Description("Modify the state of a layer: on, off, freeze, thaw, lock, or unlock.")]
+    public async Task<string> SetLayerState(string name, string action)
     {
-        if (!IsValidSymbolName(nombre))
+        if (!IsValidSymbolName(name))
         {
-            return Error($"Nombre de capa inválido: '{nombre}'.");
+            return Error($"Invalid layer name: '{name}'.");
         }
 
-        (string Property, string Value)? op = accion?.Trim().ToLowerInvariant() switch
+        (string Property, string Value)? op = action?.Trim().ToLowerInvariant() switch
         {
-            "activar" => ("LayerOn", ":vlax-true"),
-            "desactivar" => ("LayerOn", ":vlax-false"),
-            "congelar" => ("Freeze", ":vlax-true"),
-            "descongelar" => ("Freeze", ":vlax-false"),
-            "bloquear" => ("Lock", ":vlax-true"),
-            "desbloquear" => ("Lock", ":vlax-false"),
+            "on" or "activar" => ("LayerOn", ":vlax-true"),
+            "off" or "desactivar" => ("LayerOn", ":vlax-false"),
+            "freeze" or "congelar" => ("Freeze", ":vlax-true"),
+            "thaw" or "descongelar" => ("Freeze", ":vlax-false"),
+            "lock" or "bloquear" => ("Lock", ":vlax-true"),
+            "unlock" or "desbloquear" => ("Lock", ":vlax-false"),
             _ => null
         };
 
         if (op is not { } o)
         {
-            return Error("Acción inválida. Use: activar, desactivar, congelar, descongelar, bloquear o desbloquear.");
+            return Error("Invalid action. Use: on, off, freeze, thaw, lock, or unlock.");
         }
 
-        string name = LispString(nombre.Trim());
+        string nm = LispString(name.Trim());
         string body =
-            $"(if (tblsearch \"LAYER\" {name}) " +
+            $"(if (tblsearch \"LAYER\" {nm}) " +
             $"(if (vl-catch-all-error-p (vl-catch-all-apply 'vlax-put-property " +
-            $"(list (vla-item (vla-get-Layers *mcp-doc*) {name}) \"{o.Property}\" {o.Value}))) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] No se pudo cambiar el estado de la capa: \" {name})) " +
+            $"(list (vla-item (vla-get-Layers *mcp-doc*) {nm}) \"{o.Property}\" {o.Value}))) " +
+            $"(princ (strcat \"\\n[AutoCAD MCP] Could not change layer state: \" {nm})) " +
             $"(vla-regen *mcp-doc* acActiveViewport)) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] La capa no existe: \" {name})))";
+            $"(princ (strcat \"\\n[AutoCAD MCP] Layer does not exist: \" {nm})))";
 
         return await SendLispAsync(body);
     }
