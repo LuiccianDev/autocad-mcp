@@ -17,7 +17,8 @@ def test_package_metadata_consistency():
         data = tomllib.load(f)
 
     project = data["project"]
-    assert project["name"] == "autocad-mcp"
+    assert project["name"] == "luiccian-autocad-mcp"
     assert project["version"] == autocad_mcp.__version__
     assert project["readme"] == "README.md"
+    assert "luiccian-autocad-mcp" in project["scripts"]
     assert "autocad-mcp" in project["scripts"]

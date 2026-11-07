@@ -1,6 +1,6 @@
-# PyPI Publishing & Automation Guide (`autocad-mcp`)
+# PyPI Publishing & Automation Guide (`luiccian-autocad-mcp`)
 
-Este documento detalla el procedimiento oficial, seguro y automatizado para publicar y distribuir el paquete Python **`autocad-mcp`** en **[PyPI.org](https://pypi.org)** mediante **Astral `uv`**, **GitHub Actions Trusted Publishing (OIDC)** y **Atestaciones de Procedencia Criptográfica (PEP 740)**.
+Este documento detalla el procedimiento oficial, seguro y automatizado para publicar y distribuir el paquete Python **`luiccian-autocad-mcp`** en **[PyPI.org](https://pypi.org)** mediante **Astral `uv`**, **GitHub Actions Trusted Publishing (OIDC)** y **Atestaciones de Procedencia Criptográfica (PEP 740)**.
 
 ---
 
@@ -18,9 +18,9 @@ En lugar de almacenar secretos permanentes o contraseñas en GitHub (`PYPI_API_T
 1. Inicia sesión en **[PyPI.org](https://pypi.org)** (asegúrate de tener 2FA activo en tu cuenta).
 2. Ve a: **[https://pypi.org/manage/account/publishing/](https://pypi.org/manage/account/publishing/)**.
 3. En la sección **"Add a publisher"**, selecciona **GitHub**:
-   - **PyPI Project Name:** `autocad-mcp`
+   - **PyPI Project Name:** `luiccian-autocad-mcp`
    - **Owner:** `LuiccianDev`
-   - **Repository name:** `autocad-mcp`
+   - **Repository name:** `autocad-mcp`  *(el repositorio en GitHub se mantiene tal como está)*
    - **Workflow name:** `publish-pypi.yml`
    - **Environment name:** `pypi`
 4. Haz clic en **"Add"**.
@@ -85,12 +85,12 @@ El flujo `.github/workflows/publish-pypi.yml` está programado para ejecutarse e
 
 Una vez que el workflow termine en verde:
 1. Tu paquete estará visible en:  
-   👉 **[https://pypi.org/project/autocad-mcp/](https://pypi.org/project/autocad-mcp/)**
+   👉 **[https://pypi.org/project/luiccian-autocad-mcp/](https://pypi.org/project/luiccian-autocad-mcp/)**
 2. Cualquier usuario en el mundo podrá ejecutarlo directamente sin instalar nada:
    ```bash
-   uvx autocad-mcp
+   uvx luiccian-autocad-mcp
    ```
    O instalarlo con pip:
    ```bash
-   pip install autocad-mcp
+   pip install luiccian-autocad-mcp
    ```

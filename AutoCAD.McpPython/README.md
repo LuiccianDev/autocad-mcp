@@ -1,7 +1,7 @@
-# autocad-mcp (Python MCP Server)
+# luiccian-autocad-mcp (Python MCP Server)
 
-[![PyPI version](https://img.shields.io/pypi/v/autocad-mcp.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/autocad-mcp/)
-[![Python versions](https://img.shields.io/pypi/pyversions/autocad-mcp.svg?logo=python&logoColor=white)](https://pypi.org/project/autocad-mcp/)
+[![PyPI version](https://img.shields.io/pypi/v/luiccian-autocad-mcp.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/luiccian-autocad-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/luiccian-autocad-mcp.svg?logo=python&logoColor=white)](https://pypi.org/project/luiccian-autocad-mcp/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Model Context Protocol (MCP) server connecting **Autodesk AutoCAD 2027** and **Autodesk Civil 3D 2027** with AI agents (Claude Desktop, Antigravity, Cursor, VS Code) via the **AutoCAD AI Gateway**.
@@ -20,7 +20,7 @@ To run this server in **Claude Desktop** or **Cursor**, add this block to your M
   "mcpServers": {
     "autocad-mcp": {
       "command": "uvx",
-      "args": ["autocad-mcp"],
+      "args": ["luiccian-autocad-mcp"],
       "env": {
         "AUTOCAD_GATEWAY_PORT": "5055",
         "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"

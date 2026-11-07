@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event.inputs.target_env || 'pypi' }}
-      url: ${{ (github.event.inputs.target_env == 'testpypi') && 'https://test.pypi.org/p/autocad-mcp' || 'https://pypi.org/p/autocad-mcp' }}
+      url: ${{ (github.event.inputs.target_env == 'testpypi') && 'https://test.pypi.org/p/luiccian-autocad-mcp' || 'https://pypi.org/p/luiccian-autocad-mcp' }}
     permissions:
       id-token: write        # Mandatory for Trusted Publishing (OIDC)
       attestations: write    # Mandatory for PEP 740 Cryptographic Attestation

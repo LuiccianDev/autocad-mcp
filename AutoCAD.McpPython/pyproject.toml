@@ -1,10 +1,11 @@
 [project]
-name = "autocad-mcp"
+name = "luiccian-autocad-mcp"
 version = "2.3.0"
 description = "Model Context Protocol (MCP) server connecting Autodesk AutoCAD 2027 and Civil 3D with AI agents (Claude, Antigravity, Cursor) via AutoCAD AI Gateway."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
+license-files = ["LICENSE"]
 authors = [
     { name = "Luiccian", email = "luicciandev@gmail.com" }
 ]
@@ -43,6 +44,7 @@ dev = [
 ]
 
 [project.scripts]
+luiccian-autocad-mcp = "autocad_mcp.server:main"
 autocad-mcp = "autocad_mcp.server:main"
 
 [build-system]
