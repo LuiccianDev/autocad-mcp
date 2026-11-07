@@ -69,6 +69,29 @@ To foster adoption, technical transparency, and open-source collaboration, explo
 
 ---
 
+## Agent Skills & Automation Workflow
+
+This repository includes specialized **Agent Skills** in [`skills/`](skills/) to guide autonomous AI agents (Antigravity, Claude, Cursor) and contributors in operating, drafting, and testing the CAD environment correctly:
+
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h4><a href="skills/autocad-mcp-automation/SKILL.md">AutoCAD MCP Automation</a></h4>
+      <p>Master guide: Gateway handshake, metric enforcement (<code>INSUNITS = 4</code>), atomic batch geometry (<code>dibujar_geometria_lote</code>), Civil 3D surfaces/alignments, and non-modal command safety.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h4><a href="skills/yqarch-fast-drafting/SKILL.md">YQArch Fast Drafting</a></h4>
+      <p>Rapid architectural modeling: structural grid axes (<code>ZXW</code>), parametric double-line walls (<code>WW</code>), openings (<code>AD</code>/<code>WD</code>), and automated dimensioning.</p>
+    </td>
+    <td width="33%" valign="top">
+      <h4><a href="skills/autolisp-drafting/SKILL.md">AutoLISP Drafting Standards</a></h4>
+      <p>OSNAP-independent parametric generation using atomic <code>entmake</code> primitives, metric precision, and institutional layer naming conventions.</p>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## System Architecture
 
 The ecosystem uses a decoupled, two-layer architecture ensuring thread safety, high concurrency, and fault tolerance:

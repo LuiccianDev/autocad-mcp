@@ -106,3 +106,5 @@ $RECYCLE.BIN/
 # ====================================================================
 docs/superpowers/
 .superpowers/
+.agents/**/mcp_config.json
+.agents/**/mcp_plugins.json
