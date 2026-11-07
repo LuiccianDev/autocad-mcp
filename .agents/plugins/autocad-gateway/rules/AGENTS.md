@@ -80,3 +80,25 @@ El ecosistema está diseñado para que el **Gateway** (dentro de AutoCAD) y el *
 - **Subcarpetas internas:** `PascalCase` directo bajo el proyecto (`Commands/`, `Core/`, `Models/`, `Server/`, `Services/`, `Tools/`). No anidar carpetas `src/` dentro de proyectos C#.
 - **Archivos C#:** `PascalCase.cs` e interfaces con prefijo `I` (`IAutoCADGatewayClient.cs`).
 - **Scripts:** `kebab-case.ps1` (`build.ps1`, `start-mcp.ps1`, `set-gateway-token.ps1`).
+
+---
+
+## 5. Estética y Redacción Formal (Cero Emojis Informales)
+
+- **Prohibición Estricta:** Queda terminantemente prohibido el uso de emojis informales (`📚`, `🚀`, `⚡`, `📦`, `📋`, `🛠️`, `🔌`, `🤖`, `🧪`) en la documentación Markdown, encabezados de secciones, notas de lanzamiento (*release notes*), plantillas de issues/PR y mensajes de commit.
+- **Estándar de Ingeniería:** Mantener un estilo sobrio y profesional. Utilizar tablas Markdown y alertas nativas de GitHub (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`).
+
+---
+
+## 6. Optimización de Minutos y Cuota en GitHub Actions
+
+Para proteger los minutos de cómputo y evitar ejecuciones innecesarias de runners en GitHub Actions:
+
+1. **Exclusión de Archivos No Ejecutables (`paths-ignore`):**
+   - Los workflows de CI (`ci.yml`) y CodeQL (`codeql.yml`) deben ignorar cambios que afecten exclusivamente a documentación (`**.md`, `docs/**`), ejemplos (`examples/**`), directivas de agentes (`.agents/**`), plantillas de issues/PR (`.github/ISSUE_TEMPLATE/**`, `.github/*.md`), y archivos de configuración git (`.gitignore`, `.gitattributes`, `.editorconfig`).
+
+2. **Uso de `[skip ci]` en Commits Documentales:**
+   - En commits puramente documentales, de notas de versión o de reglas que no requieran validación de compilación, incluir siempre la etiqueta `[skip ci]` o `[ci skip]` en el mensaje del commit para garantizar 0 consumo de minutos.
+
+3. **Cancelación Automática de Trabajos Obsoletos (`concurrency`):**
+   - Mantener siempre configurado `concurrency: cancel-in-progress: true` en los workflows de CI para cancelar ejecuciones en curso previas al recibir nuevos commits en la misma rama.
