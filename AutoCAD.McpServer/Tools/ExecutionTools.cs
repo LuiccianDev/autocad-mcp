@@ -32,6 +32,53 @@ public sealed class ExecutionTools
     public async Task<string> PingAutoCAD() => await _gatewayClient.PingGatewayAsync();
 
     /// <summary>
+    /// Ejecuta una lista secuencial de comandos o macros de AutoCAD en un único envío por lotes.
+    /// </summary>
+    /// <param name="comandosJson">Arreglo JSON de comandos a ejecutar en secuencia.</param>
+    /// <returns>Una tarea asíncrona con el resultado de la inyección por lotes.</returns>
+    [McpServerTool(Name = "ejecutar_comandos_lote")]
+    [Description("⚡ Ejecuta una lista secuencial de comandos o macros de AutoCAD en un único envío por lotes. 'comandosJson' es un arreglo JSON con cadenas de comandos.")]
+    public async Task<string> EjecutarComandosLote(string comandosJson)
+    {
+        if (string.IsNullOrWhiteSpace(comandosJson))
+        {
+            return "{\"status\": \"error\", \"message\": \"El parámetro 'comandosJson' no puede estar vacío.\"}";
+        }
+
+        var cmdSb = new System.Text.StringBuilder();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(comandosJson);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    string s = el.GetString()?.TrimEnd('\r', '\n') ?? "";
+                    if (!string.IsNullOrEmpty(s))
+                    {
+                        cmdSb.Append(s).Append('\n');
+                    }
+                }
+            }
+            else if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                cmdSb.Append(doc.RootElement.GetString()?.TrimEnd('\r', '\n')).Append('\n');
+            }
+            else
+            {
+                return "{\"status\": \"error\", \"message\": \"'comandosJson' debe ser un arreglo de cadenas de comandos.\"}";
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // Si el cliente envió una cadena con saltos de línea directa
+            cmdSb.Append(comandosJson.TrimEnd('\r', '\n')).Append('\n');
+        }
+
+        return await _gatewayClient.ExecuteCommandAsync(cmdSb.ToString());
+    }
+
+    /// <summary>
     /// Envía comandos de dibujo, macros AutoLISP o comandos YQArch directamente a AutoCAD.
     /// </summary>
     /// <param name="command">Comandos a enviar (deben incluir \n donde se requiera pulsar Enter).</param>

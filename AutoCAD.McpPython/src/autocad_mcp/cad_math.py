@@ -145,3 +145,181 @@ def calcular_area_poligono_analitico(points_str: str) -> dict[str, Any]:
         "sentido": "antihorario" if area > 0 else "horario",
         "vertices": n,
     }
+
+
+def build_batch_geometry_lisp(
+    elements: list[dict[str, Any]] | str, default_layer: str = "0"
+) -> tuple[str, dict[str, Any]]:
+    """Compila una lista de definiciones geométricas en un único bloque AutoLISP atómico (progn ...)."""
+    import json
+
+    if isinstance(elements, str):
+        try:
+            elements = json.loads(elements)
+        except Exception as exc:
+            raise ValueError(f"Error parseando JSON de elementos: {exc}") from exc
+
+    if not isinstance(elements, list):
+        raise ValueError("El parámetro 'elementos' debe ser una lista de diccionarios o un string JSON válido.")
+
+    if not elements:
+        raise ValueError("La lista de elementos no puede estar vacía.")
+
+    lisp_expressions: list[str] = []
+    summary_counts: dict[str, int] = {}
+
+    for idx, item in enumerate(elements):
+        if not isinstance(item, dict):
+            raise ValueError(f"El elemento en el índice {idx} debe ser un diccionario.")
+
+        tipo = str(item.get("tipo", "")).lower().strip()
+        if not tipo:
+            raise ValueError(f"El elemento en el índice {idx} no especifica 'tipo'.")
+
+        capa = str(item.get("capa") or default_layer).strip()
+        if not is_valid_symbol_name(capa):
+            raise ValueError(f"Nombre de capa inválido '{capa}' en el elemento {idx}.")
+        layer_lisp = f"(cons 8 {lisp_string(capa)})"
+
+        if tipo in ("linea", "line"):
+            x1 = float(item.get("x1", 0.0))
+            y1 = float(item.get("y1", 0.0))
+            x2 = float(item.get("x2", 0.0))
+            y2 = float(item.get("y2", 0.0))
+            z1 = float(item.get("z1", 0.0))
+            z2 = float(item.get("z2", 0.0))
+
+            if not all_finite(x1, y1, z1, x2, y2, z2):
+                raise ValueError(f"Coordenadas inválidas en elemento línea {idx}.")
+            if x1 == x2 and y1 == y2 and z1 == z2:
+                raise ValueError(f"La línea {idx} tiene longitud cero (inicio y fin idénticos).")
+
+            expr = (
+                f"(entmake (list '(0 . \"LINE\") {layer_lisp} "
+                f"(list 10 {num(x1)} {num(y1)} {num(z1)}) "
+                f"(list 11 {num(x2)} {num(y2)} {num(z2)})))"
+            )
+            lisp_expressions.append(expr)
+            summary_counts["linea"] = summary_counts.get("linea", 0) + 1
+
+        elif tipo in ("rectangulo", "rectangle"):
+            x1 = float(item.get("x1", 0.0))
+            y1 = float(item.get("y1", 0.0))
+            x2 = float(item.get("x2", 0.0))
+            y2 = float(item.get("y2", 0.0))
+
+            if not all_finite(x1, y1, x2, y2):
+                raise ValueError(f"Coordenadas inválidas en elemento rectángulo {idx}.")
+            if x1 == x2 or y1 == y2:
+                raise ValueError(f"El rectángulo {idx} tiene área nula.")
+
+            min_x, max_x = min(x1, x2), max(x1, x2)
+            min_y, max_y = min(y1, y2), max(y1, y2)
+
+            expr = (
+                f"(entmake (list '(0 . \"LWPOLYLINE\") '(100 . \"AcDbEntity\") '(100 . \"AcDbPolyline\") "
+                f"{layer_lisp} '(90 . 4) '(70 . 1) "
+                f"(list 10 {num(min_x)} {num(min_y)}) "
+                f"(list 10 {num(max_x)} {num(min_y)}) "
+                f"(list 10 {num(max_x)} {num(max_y)}) "
+                f"(list 10 {num(min_x)} {num(max_y)})))"
+            )
+            lisp_expressions.append(expr)
+            summary_counts["rectangulo"] = summary_counts.get("rectangulo", 0) + 1
+
+        elif tipo in ("circulo", "circle"):
+            cx = float(item.get("centro_x", item.get("centroX", item.get("x", 0.0))))
+            cy = float(item.get("centro_y", item.get("centroY", item.get("y", 0.0))))
+            cz = float(item.get("centro_z", item.get("centroZ", item.get("z", 0.0))))
+            r = float(item.get("radio", item.get("r", 0.0)))
+
+            if not all_finite(cx, cy, cz, r) or r <= 0:
+                raise ValueError(f"Radio o coordenadas inválidas en círculo {idx}.")
+
+            expr = (
+                f"(entmake (list '(0 . \"CIRCLE\") {layer_lisp} "
+                f"(list 10 {num(cx)} {num(cy)} {num(cz)}) (cons 40 {num(r)})))"
+            )
+            lisp_expressions.append(expr)
+            summary_counts["circulo"] = summary_counts.get("circulo", 0) + 1
+
+        elif tipo in ("arco", "arc"):
+            cx = float(item.get("centro_x", item.get("centroX", item.get("x", 0.0))))
+            cy = float(item.get("centro_y", item.get("centroY", item.get("y", 0.0))))
+            cz = float(item.get("centro_z", item.get("centroZ", item.get("z", 0.0))))
+            r = float(item.get("radio", item.get("r", 0.0)))
+            ang_ini = float(item.get("angulo_inicio", item.get("anguloInicio", 0.0)))
+            ang_fin = float(item.get("angulo_fin", item.get("anguloFin", 0.0)))
+
+            if not all_finite(cx, cy, cz, r, ang_ini, ang_fin) or r <= 0:
+                raise ValueError(f"Valores inválidos en arco {idx}.")
+
+            rad_ini = math.radians(ang_ini)
+            rad_fin = math.radians(ang_fin)
+
+            expr = (
+                f"(entmake (list '(0 . \"ARC\") {layer_lisp} "
+                f"(list 10 {num(cx)} {num(cy)} {num(cz)}) (cons 40 {num(r)}) "
+                f"(cons 50 {num(rad_ini)}) (cons 51 {num(rad_fin)})))"
+            )
+            lisp_expressions.append(expr)
+            summary_counts["arco"] = summary_counts.get("arco", 0) + 1
+
+        elif tipo in ("polilinea", "polyline"):
+            pts_raw = item.get("puntos")
+            cerrada = bool(item.get("cerrada", item.get("closed", False)))
+
+            if isinstance(pts_raw, str):
+                pts = parse_points(pts_raw, 2)
+            elif isinstance(pts_raw, list):
+                pts = []
+                for p in pts_raw:
+                    if isinstance(p, (list, tuple)) and len(p) >= 2:
+                        pts.append([float(p[0]), float(p[1])])
+                    elif isinstance(p, dict) and "x" in p and "y" in p:
+                        pts.append([float(p["x"]), float(p["y"])])
+            else:
+                pts = None
+
+            if not pts or len(pts) < 2:
+                raise ValueError(f"Polilínea {idx} requiere al menos 2 vértices válidos.")
+
+            flag = 1 if cerrada else 0
+            v_str = " ".join(f"(list 10 {num(p[0])} {num(p[1])})" for p in pts)
+            expr = (
+                f"(entmake (append (list '(0 . \"LWPOLYLINE\") '(100 . \"AcDbEntity\") '(100 . \"AcDbPolyline\") "
+                f"{layer_lisp} (cons 90 {len(pts)}) (cons 70 {flag})) (list {v_str})))"
+            )
+            lisp_expressions.append(expr)
+            summary_counts["polilinea"] = summary_counts.get("polilinea", 0) + 1
+
+        elif tipo in ("texto", "text"):
+            txt = str(item.get("texto", item.get("text", "")))
+            tx = float(item.get("x", 0.0))
+            ty = float(item.get("y", 0.0))
+            tz = float(item.get("z", 0.0))
+            h = float(item.get("altura", item.get("height", 0.25)))
+            rot = float(item.get("rotacion", item.get("rotation", 0.0)))
+
+            if not all_finite(tx, ty, tz, h, rot) or h <= 0:
+                raise ValueError(f"Valores inválidos en texto {idx}.")
+
+            rot_rad = math.radians(rot)
+            expr = (
+                f"(entmake (list '(0 . \"TEXT\") {layer_lisp} "
+                f"(list 10 {num(tx)} {num(ty)} {num(tz)}) "
+                f"(cons 40 {num(h)}) (cons 1 {lisp_string(txt)}) (cons 50 {num(rot_rad)})))"
+            )
+            lisp_expressions.append(expr)
+            summary_counts["texto"] = summary_counts.get("texto", 0) + 1
+
+        else:
+            raise ValueError(f"Tipo de entidad no soportado: '{tipo}' en índice {idx}.")
+
+    full_lisp = f"(progn {' '.join(lisp_expressions)} (princ))\n"
+    summary = {
+        "status": "success",
+        "total": len(lisp_expressions),
+        "desglose": summary_counts,
+    }
+    return full_lisp, summary

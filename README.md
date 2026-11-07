@@ -42,7 +42,7 @@ The ecosystem uses a decoupled, two-layer architecture ensuring thread safety, h
                                │  STDIO (JSON-RPC Protocol)
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              MCP Servers (43 Available Tools)               │
+│              MCP Servers (45 Available Tools)               │
 │  Option A: Python FastMCP (`uvx autocad-mcp`)               │
 │  Option B: AutoCAD.McpServer (.NET 10 Native)               │
 │  - DI Container & Tool Registry                             │
@@ -76,7 +76,7 @@ For an AI model (or autonomous assistant) to operate safely with AutoCAD, **both
 | Component | Ecosystem Role | If used in isolation... |
 |---|---|---|
 | **AutoCAD.Gateway** (.NET DLL in `acad.exe`) | **The Executor & Sensor:** Directly accesses the AutoCAD DWG database, queries entities/layers, and injects commands safely into the UI thread via `Application.Idle`. | Acts as a local REST API. While you can send raw commands via PowerShell or curl, the AI agent would have to write terminal scripts blindly and parse raw JSON responses, wasting context window and risking syntax errors. |
-| **MCP Servers** (`uvx autocad-mcp` or `.NET 10`) | **The AI Translator:** Implements the Model Context Protocol (MCP v2.2), exposing 43 typed tools (`dibujar_linea`, `crear_capa`, `medir_distancia`, `consultar_perfil_longitudinal`, etc.) with strict JSON schemas and validation. | **Cannot function alone.** Requires an active Gateway connection to interact with a live AutoCAD session. |
+| **MCP Servers** (`uvx autocad-mcp` or `.NET 10`) | **The AI Translator:** Implements the Model Context Protocol (MCP v2.2), exposing 45 typed tools (`dibujar_geometria_lote`, `dibujar_linea`, `crear_capa`, `medir_distancia`, `consultar_perfil_longitudinal`, etc.) with strict JSON schemas and validation. | **Cannot function alone.** Requires an active Gateway connection to interact with a live AutoCAD session. |
 
 > [!IMPORTANT]
 > **Integration Policy:** The complete AI copilot experience requires building the solution, loading `AutoCAD.Gateway.dll` into AutoCAD via `NETLOAD`, and registering the MCP Server in your AI client configuration (`mcp_config.json` or `claude_desktop_config.json`). This enables the AI to inspect context and draw cleanly, parametrically, and bidirectionally without manual PowerShell scripts.
@@ -87,12 +87,12 @@ For an AI model (or autonomous assistant) to operate safely with AutoCAD, **both
 
 1. **Thread-Safe UI Dispatcher:** Never blocks or corrupts the active AutoCAD document; all drawing operations synchronize with the `Application.Idle` event.
 2. **Command Lockout Immunity:** Automatically prepends double cancellation sequences `\x03\x03` (`ESC`/`Ctrl+C`) before commands to clear hung prompts.
-3. **43 Specialized MCP Tools:**
+3. **45 Specialized MCP Tools:**
    - **Inspection & Vision:** Query layers, blocks, entities, text strings, drawing extents, and capture PNG screenshots for multimodal AI analysis.
-   - **Parametric Geometry:** Draw lines, polylines, rectangles, circles, arcs, texts, and insert blocks via `entmake`.
+   - **Parametric Geometry:** Batch drawing (`dibujar_geometria_lote`), lines, polylines, rectangles, circles, arcs, texts, and block insertions via atomic `entmake`.
    - **Layer Management:** Create and update layers with ACI colors and linetypes; toggle visibility, freeze/thaw, and lock/unlock states without modal dialogs.
    - **Measurement & Audit:** Compute 2D/3D distances, $\Delta X$, $\Delta Y$, $\Delta Z$, azimuth, slope %, polygon area and perimeter (Gauss algorithm), audit DWG database, and purge unreferenced definitions.
-   - **Execution & AutoLISP:** Inject native CAD commands, evaluate in-memory AutoLISP expressions, and load external `.lsp` files.
+   - **Execution & AutoLISP:** Batch command dispatch (`ejecutar_comandos_lote`), native CAD commands, dynamic in-memory AutoLISP evaluation, and external `.lsp` loader.
    - **Layouts & PDF Export:** Create sheet layouts, configure sheet sizes (A0–A4), calibrate viewports to metric scale (`1000/Scale XP`), insert parametric title blocks, and plot to physical PDF files via `DWG To PDF.pc3`.
    - **Autodesk Civil 3D Native:** Query TIN surfaces, extract ground elevations (Z), list horizontal alignments, compute station and offset, sample longitudinal profiles, and create alignments or surfaces from point clouds.
 4. **Zero-Secret Token Security:** Protected by the `X-Gateway-Token` HTTP header, configurable through environment variables.
@@ -232,7 +232,7 @@ For environments where native compiled binary performance is preferred:
 
 ---
 
-## 🛠️ MCP Tools Catalog (43 Tools)
+## 🛠️ MCP Tools Catalog (45 Tools)
 
 ### 1. Inspection, Context & Vision Tools (8)
 | Tool | Description |
@@ -246,9 +246,10 @@ For environments where native compiled binary performance is preferred:
 | `leer_seleccion_autocad` | Returns count and summary of currently selected objects in AutoCAD. |
 | `capturar_pantalla_autocad` | **Eyes for AI:** Captures a PNG screenshot of the active AutoCAD viewport for visual reasoning. |
 
-### 2. Parametric Geometry & Drawing Tools (7)
+### 2. Parametric Geometry & Drawing Tools (8)
 | Tool | Description |
 |---|---|
+| `dibujar_geometria_lote` | ⚡ **Preferred batch tool:** Draws entire floor plans and multiple entities (lines, rects, circles, polylines, texts) in one atomic call, slashing tokens and latency by 95%. |
 | `dibujar_linea` | Draws a 3D straight line segment between two metric points (preserves active layer, independent of OSNAP). |
 | `dibujar_polilinea` | Draws a 2D polyline (`LWPOLYLINE`), open or closed, from an array of metric vertices. |
 | `dibujar_rectangulo` | Draws a closed polyline rectangle defined by two diagonal corner points. |
@@ -272,10 +273,11 @@ For environments where native compiled binary performance is preferred:
 | `limpiar_y_purgar_dibujo` | Purges unreferenced definitions in two passes (`_.-PURGE`) and audits/repairs DWG database (`_.AUDIT`). |
 | `regenerar_todo` | Forces complete regeneration across all viewports (`_.REGENALL`). |
 
-### 5. Execution, Control & AutoLISP (7)
+### 5. Execution, Control & AutoLISP (8)
 | Tool | Description |
 |---|---|
 | `ping_autocad_gateway` | Performs an HTTP connectivity check against port 5055. |
+| `ejecutar_comandos_lote` | ⚡ **Batch command runner:** Dispatches a sequential list of AutoCAD commands/macros in a single request. |
 | `ejecutar_comando_autocad` | Injects non-modal text commands (`_.-`) with guaranteed `\n` terminators. |
 | `ejecutar_lisp` | Evaluates dynamic in-memory AutoLISP expressions (e.g. `entmake`, variables, custom functions). |
 | `cargar_archivo_lisp` | Loads and executes an external `.lsp` file from disk via `(load ...)`. |

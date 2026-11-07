@@ -19,6 +19,7 @@ It answers in seconds:
 | **Measure distance, azimuth, or slope between points** | `medir_distancia` | `x1, y1, x2, y2, z1, z2` | ❌ No (Local) |
 | **Calculate polygon area or perimeter** | `calcular_area_poligono` | `puntos: "x1,y1;x2,y2;..."` | ❌ No (Local) |
 | **Configure metric standard (`INSUNITS=4`)** | `configurar_entorno_dibujo` | *(none)* | ✅ Yes |
+| **Draw multiple entities / complete floor plan in 1 call** | `dibujar_geometria_lote` | `elementos: [...]` | ✅ Yes |
 | **Draw a wall, grid axis, or straight line** | `dibujar_linea` | `x1, y1, x2, y2, capa` | ✅ Yes |
 | **Draw a polyline boundary or perimeter** | `dibujar_polilinea` | `puntos, cerrada: true, capa` | ✅ Yes |
 | **Draw a room, column, or footing rectangle** | `dibujar_rectangulo` | `x1, y1, x2, y2, capa` | ✅ Yes |
@@ -49,6 +50,7 @@ It answers in seconds:
 | **Compute (X, Y) coordinates from station/offset** | `obtener_coordenada_en_estacion` | `progresiva, desfase` | ✅ Yes (Civil 3D) |
 | **Create alignment from PIs with curves** | `crear_alineamiento_civil3d` | `nombre, puntos, radio` | ✅ Yes (Civil 3D) |
 | **Build topographic TIN surface from points** | `crear_superficie_civil3d` | `nombre, puntos` | ✅ Yes (Civil 3D) |
+| **Execute a batch sequence of CAD commands** | `ejecutar_comandos_lote` | `comandos: [...]` | ✅ Yes |
 | **Execute raw CAD commands or plugin macros** | `ejecutar_comando_autocad` | `command: "WW\n200\n"` | ✅ Yes |
 | **Evaluate dynamic in-memory AutoLISP expressions** | `ejecutar_lisp` | `codigoLisp: "(+ 1 2)"` | ✅ Yes |
 | **Load external `.lsp` file from disk** | `cargar_archivo_lisp` | `rutaArchivoLsp` | ✅ Yes |

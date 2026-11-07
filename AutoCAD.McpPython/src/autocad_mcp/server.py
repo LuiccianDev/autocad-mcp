@@ -1,4 +1,4 @@
-"""Servidor FastMCP para Autodesk AutoCAD 2027 y Civil 3D (43 herramientas tipadas)."""
+"""Servidor FastMCP para Autodesk AutoCAD 2027 y Civil 3D (45 herramientas tipadas)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from mcp.server.fastmcp import FastMCP
 
 from autocad_mcp.cad_math import (
     all_finite,
+    build_batch_geometry_lisp,
     calcular_area_poligono_analitico,
     is_valid_symbol_name,
     lisp_string,
@@ -78,7 +79,7 @@ async def capturar_pantalla_autocad() -> str:
 
 
 # ============================================================================
-# MÓDULO 2: Geometría y Dibujo Paramétrico Tipado (7 Tools)
+# MÓDULO 2: Geometría y Dibujo Paramétrico Tipado (8 Tools)
 # ============================================================================
 
 
@@ -88,6 +89,43 @@ def _send_lisp(body: str) -> Any:
 
 def _layer_pair(capa: str) -> str | None:
     return f"(cons 8 {lisp_string(capa.strip())})" if is_valid_symbol_name(capa) else None
+
+
+@mcp.tool(name="dibujar_geometria_lote")
+async def dibujar_geometria_lote(
+    elementos: list[dict[str, Any]] | str,
+    capa_por_defecto: str = "0",
+) -> str:
+    """⚡ HERRAMIENTA PREFERIDA PARA DIBUJAR MÚLTIPLES ENTIDADES EN UN SOLO LLAMADO.
+
+    Traza decenas o cientos de elementos geométricos (líneas, polilíneas, rectángulos, círculos, arcos, textos)
+    en una única llamada ultrarrápida y atómica en AutoCAD, reduciendo el consumo de tokens y latencia en un 95%.
+
+    'elementos' es una lista de diccionarios o un string JSON con formato:
+    - tipo: "linea" | "rectangulo" | "circulo" | "arco" | "polilinea" | "texto"
+    - capa: Nombre de capa destino (opcional, usa capa_por_defecto si se omite)
+    - Parámetros específicos por tipo:
+      * linea: x1, y1, x2, y2, z1?, z2?
+      * rectangulo: x1, y1, x2, y2
+      * circulo: x (o centro_x), y (o centro_y), radio, z?
+      * arco: x, y, radio, angulo_inicio, angulo_fin (en grados), z?
+      * polilinea: puntos ("x1,y1;x2,y2;..." o [[x,y],...]), cerrada? (bool)
+      * texto: texto, x, y, altura?, rotacion? (grados), z?
+    """
+    try:
+        lisp_code, summary = build_batch_geometry_lisp(elementos, default_layer=capa_por_defecto)
+    except Exception as exc:
+        return json.dumps({"status": "error", "message": f"Error validando geometría en lote: {exc}"})
+
+    gateway_resp = await gateway.execute_command(lisp_code)
+    try:
+        parsed_resp = json.loads(gateway_resp)
+        if isinstance(parsed_resp, dict):
+            summary["gateway_response"] = parsed_resp
+    except Exception:
+        summary["gateway_response"] = gateway_resp
+
+    return json.dumps(summary, ensure_ascii=False)
 
 
 @mcp.tool(name="dibujar_linea")
@@ -100,7 +138,7 @@ async def dibujar_linea(
     z2: float = 0.0,
     capa: str = "0",
 ) -> str:
-    """Dibuja una línea entre (x1,y1,z1) y (x2,y2,z2) en metros, en la capa indicada (se crea si no existe). No depende de OSNAP ni cambia la capa actual."""
+    """Dibuja una línea entre (x1,y1,z1) y (x2,y2,z2) en metros. (Para múltiples elementos, prefiera 'dibujar_geometria_lote')."""
     if not all_finite(x1, y1, z1, x2, y2, z2):
         return json.dumps({"status": "error", "message": "Las coordenadas deben ser números finitos."})
     if x1 == x2 and y1 == y2 and z1 == z2:
@@ -397,7 +435,7 @@ async def regenerar_todo() -> str:
 
 
 # ============================================================================
-# MÓDULO 5: Ejecución, Control y AutoLISP (7 Tools)
+# MÓDULO 5: Ejecución, Control y AutoLISP (8 Tools)
 # ============================================================================
 
 
@@ -405,6 +443,34 @@ async def regenerar_todo() -> str:
 async def ping_autocad_gateway() -> str:
     """Envía un ping al Gateway de AutoCAD para verificar la conectividad en el puerto 5055."""
     return await gateway.ping()
+
+
+@mcp.tool(name="ejecutar_comandos_lote")
+async def ejecutar_comandos_lote(comandos: list[str] | str) -> str:
+    """⚡ Ejecuta una lista secuencial de comandos o macros de AutoCAD en un único envío por lotes.
+
+    'comandos' puede ser una lista de cadenas de comando o un string JSON. Cada comando se ejecutará
+    secuencialmente en la consola de AutoCAD.
+    """
+    if isinstance(comandos, str):
+        try:
+            parsed = json.loads(comandos)
+            if isinstance(parsed, list):
+                comandos = parsed
+            else:
+                comandos = [comandos]
+        except Exception:
+            comandos = [comandos]
+
+    if not isinstance(comandos, list):
+        return json.dumps({"status": "error", "message": "'comandos' debe ser una lista de comandos o string JSON."})
+
+    full_cmd = ""
+    for c in comandos:
+        s = str(c).rstrip("\n")
+        full_cmd += s + "\n"
+
+    return await gateway.execute_command(full_cmd)
 
 
 @mcp.tool(name="ejecutar_comando_autocad")

@@ -9,15 +9,15 @@ EXPECTED_TOOLS = [
     # Módulo 1 (8)
     "obtener_info_dibujo", "leer_capas_autocad", "leer_objetos_autocad", "obtener_limites_dibujo",
     "leer_textos_autocad", "listar_bloques_disponibles", "leer_seleccion_autocad", "capturar_pantalla_autocad",
-    # Módulo 2 (7)
-    "dibujar_linea", "dibujar_polilinea", "dibujar_rectangulo", "dibujar_circulo",
+    # Módulo 2 (8)
+    "dibujar_geometria_lote", "dibujar_linea", "dibujar_polilinea", "dibujar_rectangulo", "dibujar_circulo",
     "dibujar_arco", "insertar_texto", "insertar_bloque",
     # Módulo 3 (3)
     "crear_capa", "establecer_capa_actual", "establecer_estado_capa",
     # Módulo 4 (4)
     "medir_distancia", "calcular_area_poligono", "limpiar_y_purgar_dibujo", "regenerar_todo",
-    # Módulo 5 (7)
-    "ping_autocad_gateway", "ejecutar_comando_autocad", "ejecutar_lisp", "cargar_archivo_lisp",
+    # Módulo 5 (8)
+    "ping_autocad_gateway", "ejecutar_comandos_lote", "ejecutar_comando_autocad", "ejecutar_lisp", "cargar_archivo_lisp",
     "configurar_entorno_dibujo", "zoom_extension", "guardar_dibujo",
     # Módulo 6 (5)
     "crear_layout", "configurar_hoja_layout", "crear_viewport", "insertar_cajetin_parametrico", "exportar_pdf",
@@ -33,7 +33,7 @@ async def test_tool_count_and_names():
     tools = await mcp.list_tools()
     tool_names = [t.name for t in tools]
 
-    assert len(tool_names) == 43, f"Se esperaban 43 herramientas pero se encontraron {len(tool_names)}: {tool_names}"
+    assert len(tool_names) == 45, f"Se esperaban 45 herramientas pero se encontraron {len(tool_names)}: {tool_names}"
 
     for expected in EXPECTED_TOOLS:
         assert expected in tool_names, f"Falta la herramienta esperada: {expected}"

@@ -1,6 +1,6 @@
-# MCP Tools Technical Reference Manual (43 Tools)
+# MCP Tools Technical Reference Manual (45 Tools)
 
-This document is the comprehensive technical specification for all **43 tools** implemented in **`AutoCAD.McpServer`** and **`AutoCAD.McpPython`** for consumption by Artificial Intelligence Models (Claude, Antigravity, Cursor, ChatGPT) and developers under the Model Context Protocol (v2.2) standard.
+This document is the comprehensive technical specification for all **45 tools** implemented in **`AutoCAD.McpServer`** and **`AutoCAD.McpPython`** for consumption by Artificial Intelligence Models (Claude, Antigravity, Cursor, ChatGPT) and developers under the Model Context Protocol (v2.2) standard.
 
 All coordinates, dimensions, and elevations are strictly interpreted in **meters** (`INSUNITS = 4`).
 
@@ -33,10 +33,10 @@ Each MCP tool utilizes one of four execution channels engineered for maximum spe
 ## 📑 Module Index
 
 - [Module 1: Inspection, Context & Vision (8 tools)](#module-1-inspection-context--vision)
-- [Module 2: Parametric Geometry & Drawing (7 tools)](#module-2-parametric-geometry--drawing)
+- [Module 2: Parametric Geometry & Drawing (8 tools)](#module-2-parametric-geometry--drawing)
 - [Module 3: Advanced Layer Management (3 tools)](#module-3-advanced-layer-management)
 - [Module 4: Measurement, Computational Geometry & Audit (4 tools)](#module-4-measurement-computational-geometry--audit)
-- [Module 5: Execution, Control & AutoLISP (7 tools)](#module-5-execution-control--autolisp)
+- [Module 5: Execution, Control & AutoLISP (8 tools)](#module-5-execution-control--autolisp)
 - [Module 6: Sheet Layouts, Title Blocks & PDF Plotting (5 tools)](#module-6-sheet-layouts-title-blocks--pdf-plotting)
 - [Module 7: Autodesk Civil 3D (9 tools)](#module-7-autodesk-civil-3d)
 
@@ -206,7 +206,46 @@ Mechanism: **AutoLISP `(entmake ...)` Injection**
 
 ---
 
-### 9. `dibujar_linea`
+### 9. `dibujar_geometria_lote`
+- **Purpose:** ⚡ **Preferred tool for multi-entity drafting.** Draws dozens or hundreds of geometric elements (lines, polylines, rectangles, circles, arcs, texts) in a single atomic AutoLISP call, reducing LLM token consumption and execution latency by ~95%.
+- **Parameters:**
+  | Parameter | C# Type | JSON Type | Required | Default | Description |
+  |---|---|---|---|---|---|
+  | `elementosJson` | `string` / `array` | `string` / `array` | Yes | - | Array or JSON string containing entity objects to draw. |
+  | `capaPorDefecto` | `string` | `string` | No | `"0"` | Fallback layer if an entity does not define `capa`. |
+- **Supported Entity Types:**
+  - `linea`: `x1`, `y1`, `x2`, `y2`, `z1?`, `z2?`, `capa?`
+  - `rectangulo`: `x1`, `y1`, `x2`, `y2`, `capa?`
+  - `circulo`: `centroX` (or `x`), `centroY` (or `y`), `radio`, `centroZ?`, `capa?`
+  - `arco`: `centroX`, `centroY`, `radio`, `anguloInicio`, `anguloFin` (degrees), `capa?`
+  - `polilinea`: `puntos` (`"x1,y1;x2,y2;..."` or `[[x,y],...]`), `cerrada?` (bool), `capa?`
+  - `texto`: `texto`, `x`, `y`, `altura?` (default 0.25), `rotacion?` (degrees), `capa?`
+- **Invocation Example:**
+  ```json
+  {
+    "name": "dibujar_geometria_lote",
+    "arguments": {
+      "elementosJson": [
+        { "tipo": "linea", "x1": 0, "y1": 0, "x2": 10, "y2": 0, "capa": "ARQ-MUROS" },
+        { "tipo": "rectangulo", "x1": 2, "y1": 2, "x2": 5, "y2": 5, "capa": "ARQ-VENTANAS" },
+        { "tipo": "circulo", "centroX": 8, "centroY": 8, "radio": 2.5, "capa": "ARQ-COLUMNAS" },
+        { "tipo": "texto", "texto": "SALA PRINCIPAL", "x": 5, "y": 5, "altura": 0.35, "capa": "ARQ-TEXTOS" }
+      ]
+    }
+  }
+  ```
+- **Success Response:**
+  ```json
+  {
+    "status": "success",
+    "total": 4,
+    "desglose": { "linea": 1, "rectangulo": 1, "circulo": 1, "texto": 1 }
+  }
+  ```
+
+---
+
+### 10. `dibujar_linea`
 - **Purpose:** Draw a 3D straight line segment between two metric points.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
@@ -508,7 +547,28 @@ Mechanism: **ConcurrentQueue (`Application.Idle`) with `\n` Terminators and `\x0
 
 ---
 
-### 24. `ejecutar_comando_autocad`
+### 24. `ejecutar_comandos_lote`
+- **Purpose:** ⚡ **Batch command runner.** Dispatches a sequential list of AutoCAD commands, scripts, or macros in a single execution payload without waiting for roundtrips.
+- **Parameters:**
+  | Parameter | C# Type | JSON Type | Required | Description |
+  |---|---|---|---|---|
+  | `comandosJson` / `comandos` | `string` / `array` | `string` / `array` | Yes | Array or JSON string of AutoCAD commands. |
+- **Invocation Example:**
+  ```json
+  {
+    "name": "ejecutar_comandos_lote",
+    "arguments": {
+      "comandos": [
+        "_.-LAYER\nM\nARQ-MUROS\nC\n1\n\n\n",
+        "_.ZOOM\nE\n"
+      ]
+    }
+  }
+  ```
+
+---
+
+### 25. `ejecutar_comando_autocad`
 - **Purpose:** Inject raw native CAD commands or plugin macros (e.g. YQArch) in non-modal text mode (`_.-`).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
