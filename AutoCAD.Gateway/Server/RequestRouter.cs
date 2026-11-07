@@ -63,9 +63,9 @@ public sealed class RequestRouter
                 {
                     cmdRequest = JsonSerializer.Deserialize<CommandRequest>(payload);
                 }
-                catch (JsonException ex)
+                catch (JsonException)
                 {
-                    return (400, $"{{\"status\": \"error\", \"message\": \"JSON invalido: {ex.Message}\"}}");
+                    return (400, "{\"status\": \"error\", \"message\": \"JSON invalido o malformado.\"}");
                 }
 
                 if (cmdRequest == null || string.IsNullOrEmpty(cmdRequest.Command))
@@ -102,7 +102,8 @@ public sealed class RequestRouter
         }
         catch (Exception ex)
         {
-            return (500, $"{{\"status\": \"error\", \"message\": \"Error interno en el Gateway: {ex.Message}\"}}");
+            System.Diagnostics.Trace.TraceError("AutoCAD Gateway route error: {0}", ex);
+            return (500, "{\"status\": \"error\", \"message\": \"Error interno en el Gateway al procesar la solicitud.\"}");
         }
     }
 
@@ -165,9 +166,9 @@ public sealed class RequestRouter
                 var sreq = JsonSerializer.Deserialize<CrearSuperficieRequest>(payload);
                 return sreq == null ? BadJson() : (200, await civil.CreateSurfaceAsync(sreq));
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                return (400, JsonSerializer.Serialize(new { status = "error", message = $"JSON invalido: {ex.Message}" }));
+                return (400, JsonSerializer.Serialize(new { status = "error", message = "JSON invalido o malformado." }));
             }
         }
 

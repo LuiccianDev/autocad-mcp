@@ -147,7 +147,8 @@ public sealed class HttpGatewayServer
         }
         catch (Exception ex)
         {
-            SendResponse(response, 500, $"{{\"status\": \"error\", \"message\": \"{ex.Message}\"}}");
+            System.Diagnostics.Trace.TraceError("AutoCAD Gateway internal error: {0}", ex);
+            SendResponse(response, 500, "{\"status\": \"error\", \"message\": \"An internal gateway error occurred while processing the request.\"}");
         }
     }
 

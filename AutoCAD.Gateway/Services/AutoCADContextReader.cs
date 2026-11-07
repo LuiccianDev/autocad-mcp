@@ -270,7 +270,8 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new { status = "error", message = $"Error al capturar pantalla: {ex.Message}" });
+                System.Diagnostics.Trace.TraceError("Screenshot capture error: {0}", ex);
+                return JsonSerializer.Serialize(new { status = "error", message = "Error al capturar pantalla de AutoCAD." });
             }
         });
     }
