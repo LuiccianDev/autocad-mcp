@@ -125,3 +125,12 @@ Para mantener estricta coherencia entre el repositorio, GitHub Releases y PyPI:
      - `CHANGELOG.md` (`## [X.Y.Z] - YYYY-MM-DD`)
      - Tag de Git (`vX.Y.Z`).
 
+4. **Redacción Concisa y Estructurada (Anti-Saturación):**
+   - Las entradas de cambios deben ser concisas y técnicas: viñetas atómicas destacando el componente modificado y el beneficio o impacto funcional directo (máximo 2 a 3 líneas por viñeta).
+   - Prohibido volcar logs en crudo, volcados JSON extensos, o párrafos narrativos informales en el changelog.
+
+5. **Orden Cronológico Inverso Estricto y Fechas ISO:**
+   - Las versiones se ordenan estrictamente de más reciente a más antigua (cronológico inverso: `[Unreleased]`, luego versión reciente con fecha, ej. `[2.4.0] - 2026-11-07`, `[2.3.0] - 2026-11-07`, etc.).
+   - Encabezado formal obligatorio: `## [X.Y.Z] - YYYY-MM-DD` indicando año, mes y día de la publicación del tag.
+
+
