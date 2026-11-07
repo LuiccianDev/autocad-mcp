@@ -1,6 +1,6 @@
 [project]
 name = "luiccian-autocad-mcp"
-version = "2.3.0"
+version = "2.4.0"
 description = "Model Context Protocol (MCP) server connecting Autodesk AutoCAD 2027 and Civil 3D with AI agents (Claude, Antigravity, Cursor) via AutoCAD AI Gateway."
 readme = "README.md"
 requires-python = ">=3.10"
