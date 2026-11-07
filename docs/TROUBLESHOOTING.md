@@ -65,7 +65,7 @@ Stop-Process -Id <OwningProcessId> -Force
 **Cause:** A prior command triggered a Windows modal popup dialog (e.g. `LAYER` or `INSERT` instead of text-mode equivalents `_.-LAYER` or `_.-INSERT`), blocking text input.
 **Solution:**
 1. Press `ESC` twice in AutoCAD to cancel any hanging input states.
-2. Ensure custom calls to `ejecutar_comando_autocad` strictly use non-modal prefix `_.-` and end each parameter with newline `\n`.
+2. Ensure custom calls to `execute_command` strictly use non-modal prefix `_.-` and end each parameter with newline `\n`.
 3. The Gateway automatically prepends `\x03\x03` (`ESC`/`Ctrl+C`), but cannot close Windows modal dialogs programmatically once opened.
 
 ---
@@ -82,7 +82,7 @@ Stop-Process -Id <OwningProcessId> -Force
 
 ## 5. Autodesk Civil 3D Detection
 
-### Problem: `verificar_estado_civil3d` returns `isCivil3DAvailable: false` despite Civil 3D being installed
+### Problem: `check_civil3d_status` returns `civil_available: false` despite Civil 3D being installed
 **Cause:** You launched AutoCAD using the *"Civil 3D 2027 as AutoCAD"* shortcut (vanilla AutoCAD profile without Civil 3D managed assemblies loaded) instead of the primary metric Civil 3D profile.
 **Solution:**
 Launch Civil 3D from the official shortcut: **Civil 3D 2027 Metric**. Open a drawing using a metric civil template (`_AutoCAD Civil 3D (Metric) NCS.dwt`) and run `NETLOAD` again.

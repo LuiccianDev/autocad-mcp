@@ -64,21 +64,21 @@ The server adheres to modern .NET 10 backend and MCP design patterns:
 2. **Dependency Injection (.NET DI):**  
    The HTTP gateway client (`IAutoCADGatewayClient`) is registered via `AddHttpClient` with resilience handlers and injected directly into tool class constructors.
 3. **Modular Tool Segregation:**  
-   The 43 tools are organized into 7 cohesive classes across `Tools/`, each with dedicated responsibilities.
+   The 45 tools are organized into 7 cohesive classes across `Tools/`, each with dedicated responsibilities.
 
 ---
 
-## 4. MCP Tools Summary (43 Tools)
+## 4. MCP Tools Summary (45 Tools)
 
 For full parameter schemas, type definitions, and JSON-RPC examples, refer to [docs/TOOLS_REFERENCE.md](../docs/TOOLS_REFERENCE.md).
 
-- **ContextTools (8 tools):** `obtener_info_dibujo`, `leer_capas_autocad`, `leer_objetos_autocad`, `obtener_limites_dibujo`, `leer_textos_autocad`, `listar_bloques_disponibles`, `leer_seleccion_autocad`, `capturar_pantalla_autocad`.
-- **DrawingTools (7 tools):** `dibujar_linea`, `dibujar_polilinea`, `dibujar_rectangulo`, `dibujar_circulo`, `dibujar_arco`, `insertar_texto`, `insertar_bloque`.
-- **LayerTools (3 tools):** `crear_capa`, `establecer_capa_actual`, `establecer_estado_capa`.
-- **MeasurementTools (4 tools):** `medir_distancia`, `calcular_area_poligono`, `limpiar_y_purgar_dibujo`, `regenerar_todo`.
-- **ExecutionTools (7 tools):** `ping_autocad_gateway`, `ejecutar_comando_autocad`, `ejecutar_lisp`, `cargar_archivo_lisp`, `configurar_entorno_dibujo`, `zoom_extension`, `guardar_dibujo`.
-- **PlottingTools (5 tools):** `crear_layout`, `configurar_hoja_layout`, `crear_viewport`, `insertar_cajetin_parametrico`, `exportar_pdf`.
-- **Civil3DTools (9 tools):** `verificar_estado_civil3d`, `listar_superficies_civil3d`, `consultar_elevacion_terreno`, `listar_alineamientos_civil3d`, `consultar_estacion_alineamiento`, `obtener_coordenada_en_estacion`, `consultar_perfil_longitudinal`, `crear_alineamiento_civil3d`, `crear_superficie_civil3d`.
+- **ContextTools (8 tools):** `get_drawing_info`, `read_layers`, `read_objects`, `get_drawing_extents`, `read_texts`, `list_available_blocks`, `read_selection`, `capture_screen`.
+- **DrawingTools (8 tools):** `draw_batch_geometry`, `draw_line`, `draw_polyline`, `draw_rectangle`, `draw_circle`, `draw_arc`, `insert_text`, `insert_block`.
+- **LayerTools (3 tools):** `create_layer`, `set_current_layer`, `set_layer_state`.
+- **MeasurementTools (4 tools):** `measure_distance`, `calculate_polygon_area`, `clean_and_purge_drawing`, `regen_all`.
+- **ExecutionTools (8 tools):** `ping_autocad_gateway`, `execute_batch_commands`, `execute_command`, `execute_lisp`, `load_lisp_file`, `configure_drawing_environment`, `zoom_extents`, `save_drawing`.
+- **PlottingTools (5 tools):** `create_layout`, `configure_layout_sheet`, `create_viewport`, `insert_parametric_titleblock`, `export_pdf`.
+- **Civil3DTools (9 tools):** `check_civil3d_status`, `list_civil3d_surfaces`, `get_surface_elevation`, `list_civil3d_alignments`, `get_alignment_station_offset`, `get_station_coordinate`, `get_longitudinal_profile`, `create_civil3d_alignment`, `create_civil3d_surface`.
 
 ---
 

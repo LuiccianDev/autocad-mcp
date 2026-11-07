@@ -6,31 +6,31 @@ All coordinates, dimensions, and elevations are strictly interpreted in **meters
 
 ---
 
-## 🧭 Internal Execution Mechanisms
+## Internal Execution Mechanisms
 
 Each MCP tool utilizes one of four execution channels engineered for maximum speed, predictability, and thread safety:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          EXECUTION MODALITIES                               │
-├──────────────────────────┬──────────────────────────────────────────────────┤
-│ 1. Local Analytical      │ Evaluated locally in server memory (.NET/Python).│
-│    Computation           │ Zero latency, does not require running CAD.      │
-├──────────────────────────┼──────────────────────────────────────────────────┤
-│ 2. Parametric AutoLISP   │ Generates atomic (entmake ...) expressions.      │
-│    Injection             │ Atomic, OSNAP-independent, active-layer neutral. │
-├──────────────────────────┼──────────────────────────────────────────────────┤
-│ 3. Non-Modal Command     │ Enqueues non-modal (_.-) command strings into    │
-│    (Application.Idle)    │ ConcurrentQueue drained into the main UI thread. │
-├──────────────────────────┼──────────────────────────────────────────────────┤
-│ 4. REST Gateway Endpoint │ Queries transactional Gateway endpoints          │
-│    (/civil, /context)    │ (ObjectARX / AeccDbMgd at http://localhost:5055).│
-└──────────────────────────┴──────────────────────────────────────────────────┘
++-----------------------------------------------------------------------------+
+|                          EXECUTION MODALITIES                               |
++--------------------------+--------------------------------------------------+
+| 1. Local Analytical      | Evaluated locally in server memory (.NET/Python).|
+|    Computation           | Zero latency, does not require running CAD.      |
++--------------------------+--------------------------------------------------+
+| 2. Parametric AutoLISP   | Generates atomic (entmake ...) expressions.      |
+|    Injection             | Atomic, OSNAP-independent, active-layer neutral. |
++--------------------------+--------------------------------------------------+
+| 3. Non-Modal Command     | Enqueues non-modal (_.-) command strings into    |
+|    (Application.Idle)    | ConcurrentQueue drained into the main UI thread. |
++--------------------------+--------------------------------------------------+
+| 4. REST Gateway Endpoint | Queries transactional Gateway endpoints          |
+|    (/civil, /context)    | (ObjectARX / AeccDbMgd at http://localhost:5055).|
++--------------------------+--------------------------------------------------+
 ```
 
 ---
 
-## 📑 Module Index
+## Module Index
 
 - [Module 1: Inspection, Context & Vision (8 tools)](#module-1-inspection-context--vision)
 - [Module 2: Parametric Geometry & Drawing (8 tools)](#module-2-parametric-geometry--drawing)
@@ -49,58 +49,58 @@ Mechanism: **REST Gateway Endpoints (`GET /context/*`)**
 
 ---
 
-### 1. `obtener_info_dibujo`
+### 1. `get_drawing_info`
 - **Purpose:** Inspect global metadata of the active DWG drawing in AutoCAD.
 - **Mechanism:** `GET /context/info`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "obtener_info_dibujo", "arguments": {} }
+  { "name": "get_drawing_info", "arguments": {} }
   ```
 - **Success Response:**
   ```json
   {
-    "DrawingName": "METRO_TUNNEL_SECTION1.dwg",
-    "Path": "C:\\Projects\\Metro\\METRO_TUNNEL_SECTION1.dwg",
-    "IsReadOnly": false,
-    "UnitsCode": 4,
-    "UnitsDescription": "Meters (INSUNITS = 4)"
+    "drawing_name": "METRO_TUNNEL_SECTION1.dwg",
+    "path": "C:\\Projects\\Metro\\METRO_TUNNEL_SECTION1.dwg",
+    "is_read_only": false,
+    "units_code": 4,
+    "units_description": "Meters (INSUNITS = 4)"
   }
   ```
 
 ---
 
-### 2. `leer_capas_autocad`
+### 2. `read_layers`
 - **Purpose:** Retrieve the full drawing layer catalog with colors, visibility, freeze, and lock states.
 - **Mechanism:** `GET /context/layers`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "leer_capas_autocad", "arguments": {} }
+  { "name": "read_layers", "arguments": {} }
   ```
 - **Success Response:**
   ```json
   [
-    { "Name": "0", "Color": 7, "IsOn": true, "IsFrozen": false, "IsLocked": false },
-    { "Name": "TUN-LINING", "Color": 4, "IsOn": true, "IsFrozen": false, "IsLocked": false }
+    { "name": "0", "color": 7, "is_on": true, "is_frozen": false, "is_locked": false },
+    { "name": "TUN-LINING", "color": 4, "is_on": true, "is_frozen": false, "is_locked": false }
   ]
   ```
 
 ---
 
-### 3. `leer_objetos_autocad`
+### 3. `read_objects`
 - **Purpose:** Count and summarize all geometric entities within `ModelSpace`.
 - **Mechanism:** `GET /context/entities`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "leer_objetos_autocad", "arguments": {} }
+  { "name": "read_objects", "arguments": {} }
   ```
 - **Success Response:**
   ```json
   {
-    "TotalEntities": 1420,
-    "CountsByType": {
+    "total_entities": 1420,
+    "counts_by_type": {
       "AcDbLine": 450,
       "AcDbPolyline": 320,
       "AcDbCircle": 180,
@@ -112,49 +112,52 @@ Mechanism: **REST Gateway Endpoints (`GET /context/*`)**
 
 ---
 
-### 4. `obtener_limites_dibujo`
+### 4. `get_drawing_extents`
 - **Purpose:** Query drawing bounding box extents (`ExtMin`, `ExtMax`) and metric deltas.
 - **Mechanism:** `GET /context/extents`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "obtener_limites_dibujo", "arguments": {} }
+  { "name": "get_drawing_extents", "arguments": {} }
   ```
 - **Success Response:**
   ```json
   {
-    "MinX": 500000.0, "MinY": 8000000.0, "MinZ": 0.0,
-    "MaxX": 501250.0, "MaxY": 8000850.0, "MaxZ": 45.2,
-    "DeltaX": 1250.0, "DeltaY": 850.0
+    "min_x": 500000.0, "min_y": 8000000.0, "min_z": 0.0,
+    "max_x": 501250.0, "max_y": 8000850.0, "max_z": 45.2,
+    "delta_x": 1250.0, "delta_y": 850.0
   }
   ```
 
 ---
 
-### 5. `leer_textos_autocad`
+### 5. `read_texts`
 - **Purpose:** Search and list text strings in `DBText` and `MText` entities with (X, Y) coordinates.
 - **Mechanism:** `GET /context/texts`.
-- **Parameters:** None.
+- **Parameters:**
+  | Parameter | Type | Required | Default | Description |
+  |---|---|---|---|---|
+  | `filter_text` | `string` | No | `""` | Substring filter for text search. |
 - **Invocation Example:**
   ```json
-  { "name": "leer_textos_autocad", "arguments": {} }
+  { "name": "read_texts", "arguments": { "filter_text": "STA." } }
   ```
 - **Success Response:**
   ```json
   [
-    { "Text": "STA. 0+250", "Layer": "TUN-ANNOT", "X": 500250.0, "Y": 8000120.0, "Z": 0.0, "Height": 0.5 }
+    { "text": "STA. 0+250", "layer": "TUN-ANNOT", "x": 500250.0, "y": 8000120.0, "z": 0.0, "height": 0.5 }
   ]
   ```
 
 ---
 
-### 6. `listar_bloques_disponibles`
+### 6. `list_available_blocks`
 - **Purpose:** List block definition names registered in the current drawing.
 - **Mechanism:** `GET /context/blocks`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "listar_bloques_disponibles", "arguments": {} }
+  { "name": "list_available_blocks", "arguments": {} }
   ```
 - **Success Response:**
   ```json
@@ -163,28 +166,31 @@ Mechanism: **REST Gateway Endpoints (`GET /context/*`)**
 
 ---
 
-### 7. `leer_seleccion_autocad`
+### 7. `read_selection`
 - **Purpose:** Inspect count and entity types of objects currently selected by the user.
 - **Mechanism:** `GET /context/selection`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "leer_seleccion_autocad", "arguments": {} }
+  { "name": "read_selection", "arguments": {} }
   ```
 - **Success Response:**
   ```json
-  { "Count": 3, "Types": [ "AcDbPolyline", "AcDbPolyline", "AcDbCircle" ] }
+  { "selection_count": 3, "selected_types": [ "AcDbPolyline", "AcDbPolyline", "AcDbCircle" ] }
   ```
 
 ---
 
-### 8. `capturar_pantalla_autocad`
+### 8. `capture_screen`
 - **Purpose:** Capture a PNG screenshot of the active AutoCAD viewport for multimodal AI visual inspection.
 - **Mechanism:** `GET /context/screenshot`.
-- **Parameters:** None.
+- **Parameters:**
+  | Parameter | Type | Required | Default | Description |
+  |---|---|---|---|---|
+  | `output_path` | `string` | No | `""` | Custom PNG destination path. |
 - **Invocation Example:**
   ```json
-  { "name": "capturar_pantalla_autocad", "arguments": {} }
+  { "name": "capture_screen", "arguments": {} }
   ```
 - **Success Response:**
   ```json
@@ -206,30 +212,30 @@ Mechanism: **AutoLISP `(entmake ...)` Injection**
 
 ---
 
-### 9. `dibujar_geometria_lote`
-- **Purpose:** ⚡ **Preferred tool for multi-entity drafting.** Draws dozens or hundreds of geometric elements (lines, polylines, rectangles, circles, arcs, texts) in a single atomic AutoLISP call, reducing LLM token consumption and execution latency by ~95%.
+### 9. `draw_batch_geometry`
+- **Purpose:** **Preferred tool for multi-entity drafting.** Draws dozens or hundreds of geometric elements (lines, polylines, rectangles, circles, arcs, texts) in a single atomic AutoLISP call, reducing LLM token consumption and execution latency by ~95%.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `elementosJson` | `string` / `array` | `string` / `array` | Yes | - | Array or JSON string containing entity objects to draw. |
-  | `capaPorDefecto` | `string` | `string` | No | `"0"` | Fallback layer if an entity does not define `capa`. |
+  | `elements` | `string` / `array` | `string` / `array` | Yes | - | Array or JSON string containing entity objects to draw. |
+  | `default_layer` | `string` | `string` | No | `"0"` | Fallback layer if an entity does not define `layer`. |
 - **Supported Entity Types:**
-  - `linea`: `x1`, `y1`, `x2`, `y2`, `z1?`, `z2?`, `capa?`
-  - `rectangulo`: `x1`, `y1`, `x2`, `y2`, `capa?`
-  - `circulo`: `centroX` (or `x`), `centroY` (or `y`), `radio`, `centroZ?`, `capa?`
-  - `arco`: `centroX`, `centroY`, `radio`, `anguloInicio`, `anguloFin` (degrees), `capa?`
-  - `polilinea`: `puntos` (`"x1,y1;x2,y2;..."` or `[[x,y],...]`), `cerrada?` (bool), `capa?`
-  - `texto`: `texto`, `x`, `y`, `altura?` (default 0.25), `rotacion?` (degrees), `capa?`
+  - `line`: `x1`, `y1`, `x2`, `y2`, `z1?`, `z2?`, `layer?`
+  - `rectangle`: `x1`, `y1`, `x2`, `y2`, `layer?`
+  - `circle`: `center_x` (or `x`), `center_y` (or `y`), `radius`, `center_z?`, `layer?`
+  - `arc`: `center_x`, `center_y`, `radius`, `start_angle`, `end_angle` (degrees), `layer?`
+  - `polyline`: `points` (`"x1,y1;x2,y2;..."` or `[[x,y],...]`), `closed?` (bool), `layer?`
+  - `text`: `text`, `x`, `y`, `height?` (default 0.25), `rotation?` (degrees), `layer?`
 - **Invocation Example:**
   ```json
   {
-    "name": "dibujar_geometria_lote",
+    "name": "draw_batch_geometry",
     "arguments": {
-      "elementosJson": [
-        { "tipo": "linea", "x1": 0, "y1": 0, "x2": 10, "y2": 0, "capa": "ARQ-MUROS" },
-        { "tipo": "rectangulo", "x1": 2, "y1": 2, "x2": 5, "y2": 5, "capa": "ARQ-VENTANAS" },
-        { "tipo": "circulo", "centroX": 8, "centroY": 8, "radio": 2.5, "capa": "ARQ-COLUMNAS" },
-        { "tipo": "texto", "texto": "SALA PRINCIPAL", "x": 5, "y": 5, "altura": 0.35, "capa": "ARQ-TEXTOS" }
+      "elements": [
+        { "type": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0, "layer": "ARQ-WALLS" },
+        { "type": "rectangle", "x1": 2, "y1": 2, "x2": 5, "y2": 5, "layer": "ARQ-WINDOWS" },
+        { "type": "circle", "center_x": 8, "center_y": 8, "radius": 2.5, "layer": "ARQ-COLUMNS" },
+        { "type": "text", "text": "MAIN HALL", "x": 5, "y": 5, "height": 0.35, "layer": "ARQ-TEXTS" }
       ]
     }
   }
@@ -239,13 +245,13 @@ Mechanism: **AutoLISP `(entmake ...)` Injection**
   {
     "status": "success",
     "total": 4,
-    "desglose": { "linea": 1, "rectangulo": 1, "circulo": 1, "texto": 1 }
+    "breakdown": { "line": 1, "rectangle": 1, "circle": 1, "text": 1 }
   }
   ```
 
 ---
 
-### 10. `dibujar_linea`
+### 10. `draw_line`
 - **Purpose:** Draw a 3D straight line segment between two metric points.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
@@ -256,133 +262,133 @@ Mechanism: **AutoLISP `(entmake ...)` Injection**
   | `y2` | `double` | `number` | Yes | - | End point Y (m). |
   | `z1` | `double` | `number` | No | `0.0` | Start point Z elevation (m). |
   | `z2` | `double` | `number` | No | `0.0` | End point Z elevation (m). |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "dibujar_linea",
-    "arguments": { "x1": 0.0, "y1": 0.0, "x2": 20.0, "y2": 0.0, "capa": "TUN-AXIS" }
+    "name": "draw_line",
+    "arguments": { "x1": 0.0, "y1": 0.0, "x2": 20.0, "y2": 0.0, "layer": "TUN-AXIS" }
   }
   ```
 
 ---
 
-### 10. `dibujar_polilinea`
+### 11. `draw_polyline`
 - **Purpose:** Draw a 2D lightweight polyline (`LWPOLYLINE`), open or closed, from coordinate vertices.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `puntos` | `string` | `string` | Yes | - | Vertices in format `"x1,y1;x2,y2;..."` (min. 2). |
-  | `cerrada` | `bool` | `boolean` | No | `false` | Closes polyline connecting last to first vertex. |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `points` | `string` | `string` | Yes | - | Vertices in format `"x1,y1;x2,y2;..."` (min. 2). |
+  | `closed` | `bool` | `boolean` | No | `false` | Closes polyline connecting last to first vertex. |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "dibujar_polilinea",
+    "name": "draw_polyline",
     "arguments": {
-      "puntos": "0,0;10,0;10,5;0,5",
-      "cerrada": true,
-      "capa": "TUN-LINING"
+      "points": "0,0;10,0;10,5;0,5",
+      "closed": true,
+      "layer": "TUN-LINING"
     }
   }
   ```
 
 ---
 
-### 11. `dibujar_rectangulo`
+### 12. `draw_rectangle`
 - **Purpose:** Draw a closed polyline rectangle defined by two opposite diagonal corner points.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
   | `x1`, `y1` | `double` | `number` | Yes | - | First corner point (m). |
   | `x2`, `y2` | `double` | `number` | Yes | - | Opposite diagonal corner point (m). |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "dibujar_rectangulo",
-    "arguments": { "x1": 5.0, "y1": 2.0, "x2": 15.0, "y2": 8.0, "capa": "ARQ-WALLS" }
+    "name": "draw_rectangle",
+    "arguments": { "x1": 5.0, "y1": 2.0, "x2": 15.0, "y2": 8.0, "layer": "ARQ-WALLS" }
   }
   ```
 
 ---
 
-### 12. `dibujar_circulo`
+### 13. `draw_circle`
 - **Purpose:** Draw a parametric circle given center point and radius.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `centroX`, `centroY` | `double` | `number` | Yes | - | Center coordinates (m). |
-  | `radio` | `double` | `number` | Yes | - | Radius in meters (> 0). |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `center_x`, `center_y` | `double` | `number` | Yes | - | Center coordinates (m). |
+  | `radius` | `double` | `number` | Yes | - | Radius in meters (> 0). |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "dibujar_circulo",
-    "arguments": { "centroX": 0.0, "centroY": 0.0, "radio": 4.50, "capa": "TUN-EXCAVATION" }
+    "name": "draw_circle",
+    "arguments": { "center_x": 0.0, "center_y": 0.0, "radius": 4.50, "layer": "TUN-EXCAVATION" }
   }
   ```
 
 ---
 
-### 13. `dibujar_arco`
+### 14. `draw_arc`
 - **Purpose:** Draw a counterclockwise circular arc.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `centroX`, `centroY` | `double` | `number` | Yes | - | Center coordinates (m). |
-  | `radio` | `double` | `number` | Yes | - | Radius in meters (> 0). |
-  | `anguloInicio` | `double` | `number` | Yes | - | Start angle in degrees (0 = East). |
-  | `anguloFin` | `double` | `number` | Yes | - | End angle in degrees. |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `center_x`, `center_y` | `double` | `number` | Yes | - | Center coordinates (m). |
+  | `radius` | `double` | `number` | Yes | - | Radius in meters (> 0). |
+  | `start_angle` | `double` | `number` | Yes | - | Start angle in degrees (0 = East). |
+  | `end_angle` | `double` | `number` | Yes | - | End angle in degrees. |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "dibujar_arco",
+    "name": "draw_arc",
     "arguments": {
-      "centroX": 0.0, "centroY": 0.0, "radio": 4.5,
-      "anguloInicio": 0.0, "anguloFin": 180.0, "capa": "TUN-VAULT"
+      "center_x": 0.0, "center_y": 0.0, "radius": 4.5,
+      "start_angle": 0.0, "end_angle": 180.0, "layer": "TUN-VAULT"
     }
   }
   ```
 
 ---
 
-### 14. `insertar_texto`
+### 15. `insert_text`
 - **Purpose:** Insert single-line text (`DBText`) in model space.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `texto` | `string` | `string` | Yes | - | Text string content. |
+  | `text` | `string` | `string` | Yes | - | Text string content. |
   | `x`, `y` | `double` | `number` | Yes | - | Insertion coordinates (m). |
-  | `altura` | `double` | `number` | No | `0.25` | Text height in meters (> 0). |
-  | `rotacion` | `double` | `number` | No | `0.0` | Rotation angle in degrees. |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `height` | `double` | `number` | No | `0.25` | Text height in meters (> 0). |
+  | `rotation` | `double` | `number` | No | `0.0` | Rotation angle in degrees. |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "insertar_texto",
-    "arguments": { "texto": "STANDARD SECTION STA 1+200", "x": 10.0, "y": 2.0, "altura": 0.35, "capa": "TUN-LABELS" }
+    "name": "insert_text",
+    "arguments": { "text": "STANDARD SECTION STA 1+200", "x": 10.0, "y": 2.0, "height": 0.35, "layer": "TUN-LABELS" }
   }
   ```
 
 ---
 
-### 15. `insertar_bloque`
+### 16. `insert_block`
 - **Purpose:** Insert a reference of an existing block definition.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombreBloque` | `string` | `string` | Yes | - | Existing block name. |
+  | `block_name` | `string` | `string` | Yes | - | Existing block name. |
   | `x`, `y` | `double` | `number` | Yes | - | Insertion coordinates (m). |
-  | `escala` | `double` | `number` | No | `1.0` | Uniform scale factor (> 0). |
-  | `rotacion` | `double` | `number` | No | `0.0` | Rotation angle in degrees. |
-  | `capa` | `string` | `string` | No | `"0"` | Target layer. |
+  | `scale` | `double` | `number` | No | `1.0` | Uniform scale factor (> 0). |
+  | `rotation` | `double` | `number` | No | `0.0` | Rotation angle in degrees. |
+  | `layer` | `string` | `string` | No | `"0"` | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "insertar_bloque",
-    "arguments": { "nombreBloque": "SEGMENT_TYPE_A", "x": 0.0, "y": 4.5, "escala": 1.0, "rotacion": 45.0 }
+    "name": "insert_block",
+    "arguments": { "block_name": "SEGMENT_TYPE_A", "x": 0.0, "y": 4.5, "scale": 1.0, "rotation": 45.0 }
   }
   ```
 
@@ -395,48 +401,48 @@ Mechanism: **ActiveX AutoLISP (`vla-*`) with Safe Error Handling**
 
 ---
 
-### 16. `crear_capa`
+### 17. `create_layer`
 - **Purpose:** Create or update a layer with ACI color, linetype, and description without modal dialogs.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombre` | `string` | `string` | Yes | - | Layer name (e.g. `STR-COLUMNS`). |
-  | `colorAci` | `int` | `integer` | No | `7` | ACI color code (1–255). |
-  | `tipoLinea` | `string` | `string` | No | `"Continuous"` | Linetype name (loads from `acadiso.lin`). |
-  | `descripcion`| `string` | `string` | No | `""` | Technical description or note. |
+  | `name` | `string` | `string` | Yes | - | Layer name (e.g. `STR-COLUMNS`). |
+  | `color_aci` | `int` | `integer` | No | `7` | ACI color code (1–255). |
+  | `linetype` | `string` | `string` | No | `"Continuous"` | Linetype name (loads from `acadiso.lin`). |
+  | `description`| `string` | `string` | No | `""` | Technical description or note. |
 - **Invocation Example:**
   ```json
   {
-    "name": "crear_capa",
-    "arguments": { "nombre": "STR-BEAMS", "colorAci": 1, "tipoLinea": "Continuous", "descripcion": "Reinforced concrete beams" }
+    "name": "create_layer",
+    "arguments": { "name": "STR-BEAMS", "color_aci": 1, "linetype": "Continuous", "description": "Reinforced concrete beams" }
   }
   ```
 
 ---
 
-### 17. `establecer_capa_actual`
+### 18. `set_current_layer`
 - **Purpose:** Set the active working layer (`CLAYER`).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombre` | `string` | `string` | Yes | - | Existing, un-frozen layer name. |
+  | `name` | `string` | `string` | Yes | - | Existing, un-frozen layer name. |
 - **Invocation Example:**
   ```json
-  { "name": "establecer_capa_actual", "arguments": { "nombre": "TUN-LINING" } }
+  { "name": "set_current_layer", "arguments": { "name": "TUN-LINING" } }
   ```
 
 ---
 
-### 18. `establecer_estado_capa`
+### 19. `set_layer_state`
 - **Purpose:** Control layer visibility, freeze, or lock status and regenerate viewports.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombre` | `string` | `string` | Yes | - | Layer name. |
-  | `accion` | `string` | `string` | Yes | - | `activar`, `desactivar`, `congelar`, `descongelar`, `bloquear`, `desbloquear`. |
+  | `name` | `string` | `string` | Yes | - | Layer name. |
+  | `action` | `string` | `string` | Yes | - | `on`, `off`, `freeze`, `thaw`, `lock`, `unlock`. |
 - **Invocation Example:**
   ```json
-  { "name": "establecer_estado_capa", "arguments": { "nombre": "TUN-AUXILIARY", "accion": "congelar" } }
+  { "name": "set_layer_state", "arguments": { "name": "TUN-AUXILIARY", "action": "freeze" } }
   ```
 
 ---
@@ -448,7 +454,7 @@ Mechanism: **Local Analytical Computation in .NET/Python** (for measurements and
 
 ---
 
-### 19. `medir_distancia`
+### 20. `measure_distance`
 - **Purpose:** Compute 2D/3D distance, metric deltas, azimuth, and slope between two points. Evaluated instantly without requiring CAD to be open.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
@@ -459,7 +465,7 @@ Mechanism: **Local Analytical Computation in .NET/Python** (for measurements and
 - **Invocation Example:**
   ```json
   {
-    "name": "medir_distancia",
+    "name": "measure_distance",
     "arguments": { "x1": 0.0, "y1": 0.0, "z1": 0.0, "x2": 3.0, "y2": 4.0, "z2": 12.0 }
   }
   ```
@@ -467,28 +473,28 @@ Mechanism: **Local Analytical Computation in .NET/Python** (for measurements and
   ```json
   {
     "status": "success",
-    "distancia_2d": 5.0,
-    "distancia_3d": 13.0,
+    "distance_2d": 5.0,
+    "distance_3d": 13.0,
     "delta_x": 3.0, "delta_y": 4.0, "delta_z": 12.0,
-    "angulo_grados": 53.1301,
-    "pendiente_porcentaje": 240.0,
-    "unidades": "metros"
+    "angle_degrees": 53.1301,
+    "slope_percent": 240.0,
+    "units": "meters"
   }
   ```
 
 ---
 
-### 20. `calcular_area_poligono`
+### 21. `calculate_polygon_area`
 - **Purpose:** Compute area in $m^2$, hectares, perimeter, centroid, and winding order of a closed polygon from vertices (Gauss algorithm with coordinate translation for large UTM values).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `puntos` | `string` | `string` | Yes | - | Vertices `"x1,y1;x2,y2;..."` (min. 3). |
+  | `points` | `string` | `string` | Yes | - | Vertices `"x1,y1;x2,y2;..."` (min. 3). |
 - **Invocation Example:**
   ```json
   {
-    "name": "calcular_area_poligono",
-    "arguments": { "puntos": "500000,8000000;500010,8000000;500010,8000005;500000,8000005" }
+    "name": "calculate_polygon_area",
+    "arguments": { "points": "500000,8000000;500010,8000000;500010,8000005;500000,8000005" }
   }
   ```
 - **Success Response:**
@@ -496,36 +502,36 @@ Mechanism: **Local Analytical Computation in .NET/Python** (for measurements and
   {
     "status": "success",
     "area_m2": 50.0,
-    "area_hectareas": 0.005,
-    "perimetro_m": 30.0,
-    "centroide": { "x": 500005.0, "y": 8000002.5 },
-    "sentido": "antihorario",
-    "vertices": 4
+    "area_hectares": 0.005,
+    "perimeter_m": 30.0,
+    "centroid": { "x": 500005.0, "y": 8000002.5 },
+    "orientation": "counterclockwise",
+    "vertex_count": 4
   }
   ```
 
 ---
 
-### 21. `limpiar_y_purgar_dibujo`
+### 22. `clean_and_purge_drawing`
 - **Purpose:** Purge unreferenced definitions in two consecutive passes via `_.-PURGE` and audit/repair the DWG database via `_.AUDIT`.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `tipo` | `string` | `string` | No | `"todo"` | `todo`, `bloques`, `capas`, `tipos_linea`, `estilos_texto`, `estilos_cota`. |
-  | `auditar` | `bool` | `boolean` | No | `true` | If `true`, executes `AUDIT` fixing detected errors. |
+  | `target` | `string` | `string` | No | `"all"` | `all`, `blocks`, `layers`, `linetypes`, `textstyles`, `dimensionstyles`. |
+  | `audit` | `bool` | `boolean` | No | `true` | If `true`, executes `AUDIT` fixing detected errors. |
 - **Invocation Example:**
   ```json
-  { "name": "limpiar_y_purgar_dibujo", "arguments": { "tipo": "todo", "auditar": true } }
+  { "name": "clean_and_purge_drawing", "arguments": { "target": "all", "audit": true } }
   ```
 
 ---
 
-### 22. `regenerar_todo`
+### 23. `regen_all`
 - **Purpose:** Force complete graphics regeneration across all viewports (`_.REGENALL`).
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "regenerar_todo", "arguments": {} }
+  { "name": "regen_all", "arguments": {} }
   ```
 
 ---
@@ -537,7 +543,7 @@ Mechanism: **ConcurrentQueue (`Application.Idle`) with `\n` Terminators and `\x0
 
 ---
 
-### 23. `ping_autocad_gateway`
+### 24. `ping_autocad_gateway`
 - **Purpose:** Check whether the AutoCAD Gateway is active and listening on `http://localhost:5055/`.
 - **Parameters:** None.
 - **Invocation Example:**
@@ -547,19 +553,19 @@ Mechanism: **ConcurrentQueue (`Application.Idle`) with `\n` Terminators and `\x0
 
 ---
 
-### 24. `ejecutar_comandos_lote`
-- **Purpose:** ⚡ **Batch command runner.** Dispatches a sequential list of AutoCAD commands, scripts, or macros in a single execution payload without waiting for roundtrips.
+### 25. `execute_batch_commands`
+- **Purpose:** **Batch command runner.** Dispatches a sequential list of AutoCAD commands, scripts, or macros in a single execution payload without waiting for roundtrips.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
-  | `comandosJson` / `comandos` | `string` / `array` | `string` / `array` | Yes | Array or JSON string of AutoCAD commands. |
+  | `commands` | `string` / `array` | `string` / `array` | Yes | Array or JSON string of AutoCAD commands. |
 - **Invocation Example:**
   ```json
   {
-    "name": "ejecutar_comandos_lote",
+    "name": "execute_batch_commands",
     "arguments": {
-      "comandos": [
-        "_.-LAYER\nM\nARQ-MUROS\nC\n1\n\n\n",
+      "commands": [
+        "_.-LAYER\nM\nARQ-WALLS\nC\n1\n\n\n",
         "_.ZOOM\nE\n"
       ]
     }
@@ -568,7 +574,7 @@ Mechanism: **ConcurrentQueue (`Application.Idle`) with `\n` Terminators and `\x0
 
 ---
 
-### 25. `ejecutar_comando_autocad`
+### 26. `execute_command`
 - **Purpose:** Inject raw native CAD commands or plugin macros (e.g. YQArch) in non-modal text mode (`_.-`).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
@@ -577,71 +583,71 @@ Mechanism: **ConcurrentQueue (`Application.Idle`) with `\n` Terminators and `\x0
 - **Invocation Example:**
   ```json
   {
-    "name": "ejecutar_comando_autocad",
+    "name": "execute_command",
     "arguments": { "command": "_.CIRCLE\n0,0\n5.0\n_.ZOOM\nE\n" }
   }
   ```
 
 ---
 
-### 25. `ejecutar_lisp`
+### 27. `execute_lisp`
 - **Purpose:** Evaluate dynamic AutoLISP code directly in AutoCAD memory.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
-  | `codigoLisp` | `string` | `string` | Yes | Complete AutoLISP expression. |
+  | `code` | `string` | `string` | Yes | Complete AutoLISP expression. |
 - **Invocation Example:**
   ```json
   {
-    "name": "ejecutar_lisp",
-    "arguments": { "codigoLisp": "(setvar \"OSMODE\" 0)" }
+    "name": "execute_lisp",
+    "arguments": { "code": "(setvar \"OSMODE\" 0)" }
   }
   ```
 
 ---
 
-### 26. `cargar_archivo_lisp`
+### 28. `load_lisp_file`
 - **Purpose:** Load and execute an external `.lsp` file from disk via `(load ...)`.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
-  | `rutaArchivoLsp`| `string`| `string` | Yes | Absolute Windows path to `.lsp` file. |
+  | `file_path`| `string`| `string` | Yes | Absolute Windows path to `.lsp` file. |
 - **Invocation Example:**
   ```json
   {
-    "name": "cargar_archivo_lisp",
-    "arguments": { "rutaArchivoLsp": "C:/scripts/sample_metro_tunnel.lsp" }
+    "name": "load_lisp_file",
+    "arguments": { "file_path": "C:/scripts/sample_metro_tunnel.lsp" }
   }
   ```
 
 ---
 
-### 27. `configurar_entorno_dibujo`
+### 29. `configure_drawing_environment`
 - **Purpose:** Standardize the metric drafting environment: `INSUNITS = 4` (meters), `MEASUREMENT = 1`, `LUNITS = 2`, `LUPREC = 3`.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "configurar_entorno_dibujo", "arguments": {} }
+  { "name": "configure_drawing_environment", "arguments": {} }
   ```
 
 ---
 
-### 28. `zoom_extension`
+### 30. `zoom_extents`
 - **Purpose:** Trigger a full extents zoom (`_.ZOOM E`) in the active viewport.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "zoom_extension", "arguments": {} }
+  { "name": "zoom_extents", "arguments": {} }
   ```
 
 ---
 
-### 29. `guardar_dibujo`
+### 31. `save_drawing`
 - **Purpose:** Save the active DWG file to disk (`_.QSAVE`).
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "guardar_dibujo", "arguments": {} }
+  { "name": "save_drawing", "arguments": {} }
   ```
 
 ---
@@ -653,103 +659,105 @@ Mechanism: **Paper Space (`PSPACE`), Scaled Viewports (`XP`), and Virtual Plotte
 
 ---
 
-### 30. `crear_layout`
+### 32. `create_layout`
 - **Purpose:** Create a new paper space layout tab and set it active.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
-  | `nombreLayout` | `string` | `string` | Yes | Unique layout tab name (e.g. `SHEET-TUNNEL-01`). |
+  | `layout_name` | `string` | `string` | Yes | Unique layout tab name (e.g. `SHEET-TUNNEL-01`). |
 - **Invocation Example:**
   ```json
-  { "name": "crear_layout", "arguments": { "nombreLayout": "SHEET-01" } }
+  { "name": "create_layout", "arguments": { "layout_name": "SHEET-01" } }
   ```
 
 ---
 
-### 31. `configurar_hoja_layout`
+### 33. `configure_layout_sheet`
 - **Purpose:** Configure sheet paper size (A0 to A4), virtual plotter `DWG To PDF.pc3`, and 1:1 scale in mm with `monochrome.ctb`.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombreLayout` | `string` | `string` | Yes | - | Layout name. |
-  | `tamanoHoja` | `string` | `string` | No | `"A1"` | `A0`, `A1`, `A2`, `A3`, `A4`. |
-  | `estiloTrazado`| `string`| `string` | No | `"monochrome.ctb"` | Plot style table. |
+  | `layout_name` | `string` | `string` | Yes | - | Layout name. |
+  | `sheet_size` | `string` | `string` | No | `"A1"` | `A0`, `A1`, `A2`, `A3`, `A4`. |
+  | `plot_style` | `string` | `string` | No | `"monochrome.ctb"` | Plot style table. |
 - **Invocation Example:**
   ```json
   {
-    "name": "configurar_hoja_layout",
-    "arguments": { "nombreLayout": "SHEET-01", "tamanoHoja": "A1" }
+    "name": "configure_layout_sheet",
+    "arguments": { "layout_name": "SHEET-01", "sheet_size": "A1" }
   }
   ```
 
 ---
 
-### 32. `crear_viewport`
+### 34. `create_viewport`
 - **Purpose:** Insert a paper space viewport (`MVIEW`) calibrated to exact metric scale (`1000/Scale XP`) centered on model coordinates (X, Y).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
-  | `xInferior`, `yInferior` | `double` | `number` | Yes | Bottom-left corner on paper sheet (mm). |
-  | `ancho`, `alto` | `double` | `number` | Yes | Viewport width and height on paper (mm). |
-  | `escala` | `double` | `number` | Yes | Metric scale denominator (e.g. `1000` for 1:1000, `500` for 1:500). |
-  | `xCentroModelo`, `yCentroModelo` | `double` | `number` | Yes | Center coordinates in model space (m). |
+  | `layout_name` | `string` | `string` | No | Active layout | Target layout tab name. |
+  | `x`, `y` | `double` | `number` | Yes | Bottom-left corner on paper sheet (mm). |
+  | `width`, `height` | `double` | `number` | Yes | Viewport width and height on paper (mm). |
+  | `scale` | `double` | `number` | Yes | Metric scale denominator (e.g. `1000` for 1:1000, `500` for 1:500). |
+  | `model_x`, `model_y` | `double` | `number` | Yes | Center coordinates in model space (m). |
 - **Invocation Example:**
   ```json
   {
-    "name": "crear_viewport",
+    "name": "create_viewport",
     "arguments": {
-      "xInferior": 25.0, "yInferior": 25.0, "ancho": 500.0, "alto": 350.0,
-      "escala": 500.0, "xCentroModelo": 500100.0, "yCentroModelo": 8000050.0
+      "layout_name": "SHEET-01",
+      "x": 25.0, "y": 25.0, "width": 500.0, "height": 350.0,
+      "scale": 500.0, "model_x": 500100.0, "model_y": 8000050.0
     }
   }
   ```
 
 ---
 
-### 33. `insertar_cajetin_parametrico`
+### 35. `insert_parametric_titleblock`
 - **Purpose:** Draw a formal standardized technical title block (180x45 mm) with metadata fields in paper space.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `xEsquina`, `yEsquina` | `double` | `number` | Yes | - | Bottom-right sheet margin coordinates (mm). |
-  | `tituloProyecto` | `string` | `string` | No | `"PROYECTO DE INGENIERÍA"` | Project name. |
-  | `nombrePlano` | `string` | `string` | No | `"PLANO GENERAL"` | Drawing sheet title. |
-  | `codigoLamina` | `string` | `string` | No | `"L-01"` | Drawing number / sheet code. |
-  | `escalaTexto` | `string` | `string` | No | `"1:1000"` | Scale label. |
-  | `autor` | `string` | `string` | No | `"INGENIERÍA"` | Designer / engineer. |
-  | `fecha` | `string` | `string` | No | Current Date | Issue date. |
+  | `layout_name` | `string` | `string` | No | Active layout | Target layout tab name. |
+  | `corner_x`, `corner_y` | `double` | `number` | Yes | - | Bottom-right sheet margin coordinates (mm). |
+  | `title` | `string` | `string` | No | `"ENGINEERING PROJECT"` | Project name. |
+  | `drawing_number` | `string` | `string` | No | `"L-01"` | Drawing number / sheet code. |
+  | `scale` | `string` | `string` | No | `"1:1000"` | Scale label. |
+  | `author` | `string` | `string` | No | `"ENGINEERING"` | Designer / engineer. |
+  | `date` | `string` | `string` | No | Current Date | Issue date. |
 - **Invocation Example:**
   ```json
   {
-    "name": "insertar_cajetin_parametrico",
+    "name": "insert_parametric_titleblock",
     "arguments": {
-      "xEsquina": 820.0, "yEsquina": 20.0,
-      "tituloProyecto": "METRO LINE 1",
-      "nombrePlano": "STANDARD SECTION & DETAILS",
-      "codigoLamina": "TUN-01",
-      "escalaTexto": "1:500",
-      "autor": "CIVIL ENGINEER"
+      "layout_name": "SHEET-01",
+      "corner_x": 820.0, "corner_y": 20.0,
+      "title": "METRO LINE 1",
+      "drawing_number": "TUN-01",
+      "scale": "1:500",
+      "author": "CIVIL ENGINEER"
     }
   }
   ```
 
 ---
 
-### 34. `exportar_pdf`
+### 36. `export_pdf`
 - **Purpose:** Plot layout to a physical PDF file on disk using `DWG To PDF.pc3`.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombreLayout` | `string` | `string` | Yes | - | Layout name to plot. |
-  | `rutaPdf` | `string` | `string` | Yes | - | Absolute output path for PDF. |
-  | `estiloCtb` | `string` | `string` | No | `"monochrome.ctb"` | Plot style table. |
+  | `layout_name` | `string` | `string` | Yes | - | Layout name to plot. |
+  | `pdf_path` | `string` | `string` | Yes | - | Absolute output path for PDF. |
+  | `plot_style` | `string` | `string` | No | `"monochrome.ctb"` | Plot style table. |
 - **Invocation Example:**
   ```json
   {
-    "name": "exportar_pdf",
+    "name": "export_pdf",
     "arguments": {
-      "nombreLayout": "SHEET-01",
-      "rutaPdf": "C:/Projects/Metro/Tunnel_Sheet_01.pdf"
+      "layout_name": "SHEET-01",
+      "pdf_path": "C:/Projects/Metro/Tunnel_Sheet_01.pdf"
     }
   }
   ```
@@ -763,26 +771,26 @@ Mechanism: **Dedicated REST Endpoints (`/civil/*`) and Dynamic Reflection over `
 
 ---
 
-### 35. `verificar_estado_civil3d`
+### 37. `check_civil3d_status`
 - **Purpose:** Verify if active session is running Civil 3D and report surface and alignment counts.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "verificar_estado_civil3d", "arguments": {} }
+  { "name": "check_civil3d_status", "arguments": {} }
   ```
 - **Response:**
   ```json
-  { "status": "success", "civil_available": true, "surfaces_count": 2, "alignments_count": 1 }
+  { "status": "success", "civil_available": true, "surfaces": 2, "alignments": 1 }
   ```
 
 ---
 
-### 36. `listar_superficies_civil3d`
+### 38. `list_civil3d_surfaces`
 - **Purpose:** Inventory TIN surfaces with min/max elevations and triangle counts.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "listar_superficies_civil3d", "arguments": {} }
+  { "name": "list_civil3d_surfaces", "arguments": {} }
   ```
 - **Response:**
   ```json
@@ -790,10 +798,11 @@ Mechanism: **Dedicated REST Endpoints (`/civil/*`) and Dynamic Reflection over `
     "status": "success",
     "data": [
       {
-        "nombre": "NATURAL_GROUND",
-        "cota_minima": 2450.2,
-        "cota_maxima": 2680.8,
-        "triangulos": 45200
+        "name": "NATURAL_GROUND",
+        "type": "TinSurface",
+        "min_elevation": 2450.2,
+        "max_elevation": 2680.8,
+        "triangles": 45200
       }
     ]
   }
@@ -801,33 +810,33 @@ Mechanism: **Dedicated REST Endpoints (`/civil/*`) and Dynamic Reflection over `
 
 ---
 
-### 37. `consultar_elevacion_terreno`
+### 39. `get_surface_elevation`
 - **Purpose:** Return exact ground surface elevation (Z) at coordinates (X, Y).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
+  | `surface_name` | `string?` | `string` | No | TIN surface name (defaults to first surface). |
   | `x`, `y` | `double` | `number` | Yes | Easting and Northing coordinates (m). |
-  | `superficie` | `string?` | `string` | No | TIN surface name (defaults to first surface). |
 - **Invocation Example:**
   ```json
   {
-    "name": "consultar_elevacion_terreno",
-    "arguments": { "x": 500250.0, "y": 8000100.0, "superficie": "NATURAL_GROUND" }
+    "name": "get_surface_elevation",
+    "arguments": { "surface_name": "NATURAL_GROUND", "x": 500250.0, "y": 8000100.0 }
   }
   ```
 - **Response:**
   ```json
-  { "status": "success", "superficie": "NATURAL_GROUND", "x": 500250.0, "y": 8000100.0, "elevacion": 2514.85 }
+  { "status": "success", "surface": "NATURAL_GROUND", "x": 500250.0, "y": 8000100.0, "elevation": 2514.85 }
   ```
 
 ---
 
-### 38. `listar_alineamientos_civil3d`
+### 40. `list_civil3d_alignments`
 - **Purpose:** List horizontal alignments with station ranges and lengths.
 - **Parameters:** None.
 - **Invocation Example:**
   ```json
-  { "name": "listar_alineamientos_civil3d", "arguments": {} }
+  { "name": "list_civil3d_alignments", "arguments": {} }
   ```
 - **Response:**
   ```json
@@ -835,12 +844,12 @@ Mechanism: **Dedicated REST Endpoints (`/civil/*`) and Dynamic Reflection over `
     "status": "success",
     "data": [
       {
-        "nombre": "MAIN_CORRIDOR_ALIGNMENT",
-        "progresiva_inicial": 0.0,
-        "progresiva_final": 2450.0,
-        "estaca_inicial": "0+000.00",
-        "estaca_final": "2+450.00",
-        "longitud": 2450.0
+        "name": "MAIN_CORRIDOR_ALIGNMENT",
+        "starting_station": 0.0,
+        "ending_station": 2450.0,
+        "initial_stake": "0+000.00",
+        "final_stake": "2+450.00",
+        "length": 2450.0
       }
     ]
   }
@@ -848,55 +857,55 @@ Mechanism: **Dedicated REST Endpoints (`/civil/*`) and Dynamic Reflection over `
 
 ---
 
-### 39. `consultar_estacion_alineamiento`
+### 41. `get_alignment_station_offset`
 - **Purpose:** Compute station (chainage) and lateral offset (+ right / - left) of a point relative to an alignment.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
+  | `alignment_name` | `string?` | `string` | No | Alignment name. |
   | `x`, `y` | `double` | `number` | Yes | Easting and Northing coordinates (m). |
-  | `alineamiento` | `string?` | `string` | No | Alignment name. |
 - **Invocation Example:**
   ```json
   {
-    "name": "consultar_estacion_alineamiento",
-    "arguments": { "x": 500248.0, "y": 8000105.0, "alineamiento": "MAIN_CORRIDOR_ALIGNMENT" }
+    "name": "get_alignment_station_offset",
+    "arguments": { "alignment_name": "MAIN_CORRIDOR_ALIGNMENT", "x": 500248.0, "y": 8000105.0 }
   }
   ```
 - **Response:**
   ```json
   {
     "status": "success",
-    "alineamiento": "MAIN_CORRIDOR_ALIGNMENT",
-    "progresiva": 250.0,
-    "estaca": "0+250.00",
-    "desfase": -3.5
+    "alignment": "MAIN_CORRIDOR_ALIGNMENT",
+    "station": 250.0,
+    "station_formatted": "0+250.00",
+    "offset": -3.5
   }
   ```
 
 ---
 
-### 40. `obtener_coordenada_en_estacion`
+### 42. `get_station_coordinate`
 - **Purpose:** Inverse operation: compute absolute coordinates (X, Y) given station and lateral offset.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `progresiva` | `double` | `number` | Yes | - | Station value (e.g. `1250.5`). |
-  | `desfase` | `double` | `number` | No | `0.0` | Lateral offset in meters (+ right / - left). |
-  | `alineamiento` | `string?`| `string` | No | null | Alignment name. |
+  | `alignment_name` | `string?`| `string` | No | null | Alignment name. |
+  | `station` | `double` | `number` | Yes | - | Station value in meters (e.g. `1250.5`). |
+  | `offset` | `double` | `number` | No | `0.0` | Lateral offset in meters (+ right / - left). |
 - **Invocation Example:**
   ```json
   {
-    "name": "obtener_coordenada_en_estacion",
-    "arguments": { "progresiva": 500.0, "desfase": 2.5, "alineamiento": "MAIN_CORRIDOR_ALIGNMENT" }
+    "name": "get_station_coordinate",
+    "arguments": { "alignment_name": "MAIN_CORRIDOR_ALIGNMENT", "station": 500.0, "offset": 2.5 }
   }
   ```
 - **Response:**
   ```json
   {
     "status": "success",
-    "alineamiento": "MAIN_CORRIDOR_ALIGNMENT",
-    "progresiva": 500.0,
-    "desfase": 2.5,
+    "alignment": "MAIN_CORRIDOR_ALIGNMENT",
+    "station": 500.0,
+    "offset": 2.5,
     "x": 500498.25,
     "y": 8000102.10
   }
@@ -904,84 +913,84 @@ Mechanism: **Dedicated REST Endpoints (`/civil/*`) and Dynamic Reflection over `
 
 ---
 
-### 41. `consultar_perfil_longitudinal`
-- **Purpose:** Sample ground elevation profile along an alignment every `intervalo` meters. Returns minimum/maximum elevation, average slope %, and station/elevation samples.
+### 43. `get_longitudinal_profile`
+- **Purpose:** Sample ground elevation profile along an alignment every `station_interval` meters. Returns minimum/maximum elevation, average slope %, and station/elevation samples.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `intervalo` | `double` | `number` | No | `20.0` | Sampling distance in meters (> 0). |
-  | `alineamiento` | `string?`| `string` | No | null | Alignment name. |
-  | `superficie` | `string?` | `string` | No | null | Surface name. |
+  | `alignment_name` | `string?`| `string` | No | null | Alignment name. |
+  | `surface_name` | `string?` | `string` | No | null | Surface name. |
+  | `station_interval`| `double`| `number` | No | `20.0` | Sampling distance in meters (> 0). |
 - **Invocation Example:**
   ```json
   {
-    "name": "consultar_perfil_longitudinal",
-    "arguments": { "intervalo": 50.0, "alineamiento": "MAIN_CORRIDOR_ALIGNMENT" }
+    "name": "get_longitudinal_profile",
+    "arguments": { "alignment_name": "MAIN_CORRIDOR_ALIGNMENT", "station_interval": 50.0 }
   }
   ```
 - **Success Response:**
   ```json
   {
     "status": "success",
-    "alineamiento": "MAIN_CORRIDOR_ALIGNMENT",
-    "superficie": "NATURAL_GROUND",
-    "intervalo": 50.0,
-    "progresiva_inicial": 0.0,
-    "progresiva_final": 250.0,
-    "muestras_total": 6,
-    "cota_minima": 2450.0,
-    "cota_maxima": 2465.5,
-    "pendiente_media_porcentaje": 6.2,
-    "muestras": [
-      { "progresiva": 0.0, "x": 500000.0, "y": 8000000.0, "cota": 2450.0 },
-      { "progresiva": 50.0, "x": 500050.0, "y": 8000000.0, "cota": 2453.2 },
-      { "progresiva": 100.0, "x": 500100.0, "y": 8000000.0, "cota": 2456.8 },
-      { "progresiva": 150.0, "x": 500150.0, "y": 8000000.0, "cota": 2460.1 },
-      { "progresiva": 200.0, "x": 500200.0, "y": 8000000.0, "cota": 2463.0 },
-      { "progresiva": 250.0, "x": 500250.0, "y": 8000000.0, "cota": 2465.5 }
+    "alignment": "MAIN_CORRIDOR_ALIGNMENT",
+    "surface": "NATURAL_GROUND",
+    "station_interval": 50.0,
+    "starting_station": 0.0,
+    "ending_station": 250.0,
+    "total_samples": 6,
+    "min_elevation": 2450.0,
+    "max_elevation": 2465.5,
+    "average_slope_percent": 6.2,
+    "samples": [
+      { "station": 0.0, "x": 500000.0, "y": 8000000.0, "elevation": 2450.0 },
+      { "station": 50.0, "x": 500050.0, "y": 8000000.0, "elevation": 2453.2 },
+      { "station": 100.0, "x": 500100.0, "y": 8000000.0, "elevation": 2456.8 },
+      { "station": 150.0, "x": 500150.0, "y": 8000000.0, "elevation": 2460.1 },
+      { "station": 200.0, "x": 500200.0, "y": 8000000.0, "elevation": 2463.0 },
+      { "station": 250.0, "x": 500250.0, "y": 8000000.0, "elevation": 2465.5 }
     ]
   }
   ```
 
 ---
 
-### 42. `crear_alineamiento_civil3d`
+### 44. `create_civil3d_alignment`
 - **Purpose:** Parametrically create a horizontal alignment from PIs with tangent circular curves of fixed radius.
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Default | Description |
   |---|---|---|---|---|---|
-  | `nombre` | `string` | `string` | Yes | - | Unique alignment name. |
-  | `puntos` | `string` | `string` | Yes | - | PIs format `"x1,y1;x2,y2;..."` (min. 2). |
-  | `radio` | `double` | `number` | No | `0.0` | Curve radius in meters (0 = no curves). |
-  | `capa` | `string?` | `string` | No | null | Target layer. |
+  | `name` | `string` | `string` | Yes | - | Unique alignment name. |
+  | `points` | `string` | `string` | Yes | - | PIs format `"x1,y1;x2,y2;..."` (min. 2). |
+  | `radius` | `double` | `number` | No | `0.0` | Curve radius in meters (0 = no curves). |
+  | `layer` | `string?` | `string` | No | null | Target layer. |
 - **Invocation Example:**
   ```json
   {
-    "name": "crear_alineamiento_civil3d",
+    "name": "create_civil3d_alignment",
     "arguments": {
-      "nombre": "NORTH_BYPASS",
-      "puntos": "500000,8000000;500500,8000200;501000,8000100",
-      "radio": 150.0
+      "name": "NORTH_BYPASS",
+      "points": "500000,8000000;500500,8000200;501000,8000100",
+      "radius": 150.0
     }
   }
   ```
 
 ---
 
-### 43. `crear_superficie_civil3d`
+### 45. `create_civil3d_surface`
 - **Purpose:** Build a new topographic TIN surface from a point cloud (X, Y, Z).
 - **Parameters:**
   | Parameter | C# Type | JSON Type | Required | Description |
   |---|---|---|---|---|
-  | `nombre` | `string` | `string` | Yes | Unique surface name. |
-  | `puntos` | `string` | `string` | Yes | Points format `"x1,y1,z1;x2,y2,z2;..."` (min. 3). |
+  | `name` | `string` | `string` | Yes | Unique surface name. |
+  | `points` | `string` | `string` | Yes | Points format `"x1,y1,z1;x2,y2,z2;..."` (min. 3). |
 - **Invocation Example:**
   ```json
   {
-    "name": "crear_superficie_civil3d",
+    "name": "create_civil3d_surface",
     "arguments": {
-      "nombre": "QUARRY_SURFACE",
-      "puntos": "500000,8000000,2450;500100,8000000,2455;500050,8000100,2462"
+      "name": "QUARRY_SURFACE",
+      "points": "500000,8000000,2450;500100,8000000,2455;500050,8000100,2462"
     }
   }
   ```

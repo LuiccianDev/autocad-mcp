@@ -161,10 +161,10 @@ Once your AI client is connected, ask it in chat:
 > *"Inspect my active AutoCAD drawing status and draw a 20x10 meter rectangle on the layer ARQ-WALLS."*
 
 The AI will sequentially execute:
-1. `configurar_entorno_dibujo`: Sets metric units (`INSUNITS = 4`).
-2. `obtener_info_dibujo`: Verifies active DWG name and read/write state.
-3. `crear_capa` & `dibujar_rectangulo`: Creates the layer and draws the geometry atomically without dialog blocks.
-4. `zoom_extension`: Frames the drafted elements on screen.
+1. `configure_drawing_environment`: Sets metric units (`INSUNITS = 4`).
+2. `get_drawing_info`: Verifies active DWG name and read/write state.
+3. `create_layer` & `draw_rectangle`: Creates the layer and draws the geometry atomically without dialog blocks.
+4. `zoom_extents`: Frames the drafted elements on screen.
 
 ---
 

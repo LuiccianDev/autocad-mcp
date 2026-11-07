@@ -30,7 +30,7 @@ Automated release $Tag for the AutoCAD AI Gateway and MCP Server ecosystem.
 
 ## Highlights
 - 45 typed MCP tools covering inspection, geometry, layers, calculations, layouts, and Civil 3D.
-- High-performance batch drafting engine (dibujar_geometria_lote).
+- High-performance batch drafting engine (draw_batch_geometry).
 - Thread-safe command dispatching with Application.Idle synchronization.
 - Zero-secret security with X-Gateway-Token authentication.
 "@

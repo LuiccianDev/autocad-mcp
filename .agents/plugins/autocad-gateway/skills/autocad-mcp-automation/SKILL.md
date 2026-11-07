@@ -15,10 +15,10 @@ Before attempting any CAD operations, the agent **MUST** verify communication wi
 
 1. **Ping the Gateway:** Call `ping_autocad_gateway`.
    - If it fails, verify that `AutoCAD.Gateway.dll` is loaded in AutoCAD via `NETLOAD` and listening on port `5055`.
-2. **Inspect Drawing Context:** Call `obtener_info_dibujo` to retrieve:
+2. **Inspect Drawing Context:** Call `get_drawing_info` to retrieve:
    - Drawing filename, DWG file path, read-only status, and configured drawing units.
 3. **Enforce Metric Standards (MANDATORY):**
-   - Call `configurar_entorno_dibujo` at the start of any drawing session.
+   - Call `configure_drawing_environment` at the start of any drawing session.
    - Ensures `INSUNITS = 4` (Meters), `MEASUREMENT = 1` (Metric ISO), `LUNITS = 2` (Decimal), `LUPREC = 3` (Millimeter precision).
    - Prohibited: Never work in imperial units (inches/feet) or assume unverified coordinate spaces.
 
@@ -28,26 +28,26 @@ Before attempting any CAD operations, the agent **MUST** verify communication wi
 
 To minimize network latency, avoid context window bloat, and prevent UI thread thrashing:
 
-### Priority 1: Atomic Batch Drawing (`dibujar_geometria_lote`)
-Whenever drawing multiple elements (e.g. walls, grids, structural elements, labels, or complete floor plans), **always prefer** `dibujar_geometria_lote`.
+### Priority 1: Atomic Batch Drawing (`draw_batch_geometry`)
+Whenever drawing multiple elements (e.g. walls, grids, structural elements, labels, or complete floor plans), **always prefer** `draw_batch_geometry`.
 - Dispatches all lines, rectangles, circles, polylines, and text annotations in a **single atomic call**.
 - Bypasses individual roundtrips, reducing execution time and token consumption by over 90%.
 
 ### Priority 2: Atomic Primitives via `entmake`
 For single, standalone adjustments:
-- `dibujar_linea`: 3D straight line between two metric points.
-- `dibujar_polilinea`: 2D lightweight polyline (`LWPOLYLINE`), open or closed.
-- `dibujar_rectangulo`: Closed rectangular boundary between two diagonal metric points.
-- `dibujar_circulo`: Parametric circle from center point and radius in meters.
-- `dibujar_arco`: Counterclockwise circular arc.
-- `insertar_texto`: Single-line `DBText` in model space with metric height and rotation.
-- `insertar_bloque`: Block reference insertion with uniform scale and rotation.
+- `draw_line`: 3D straight line between two metric points.
+- `draw_polyline`: 2D lightweight polyline (`LWPOLYLINE`), open or closed.
+- `draw_rectangle`: Closed rectangular boundary between two diagonal metric points.
+- `draw_circle`: Parametric circle from center point and radius in meters.
+- `draw_arc`: Counterclockwise circular arc.
+- `insert_text`: Single-line `DBText` in model space with metric height and rotation.
+- `insert_block`: Block reference insertion with uniform scale and rotation.
 
 ---
 
 ## 3. Safe Command Execution Rules
 
-When injecting native AutoCAD commands via `ejecutar_comando_autocad` or `ejecutar_comandos_lote`:
+When injecting native AutoCAD commands via `execute_command` or `execute_batch_commands`:
 
 1. **Strict Non-Modal Mode (`_.-` Prefix):**
    - Commands that open Windows dialog boxes **FREEZE** the background Gateway thread waiting for human mouse clicks.
@@ -67,8 +67,8 @@ When injecting native AutoCAD commands via `ejecutar_comando_autocad` or `ejecut
 ## 4. Visual Verification (Multimodal Feedback)
 
 Whenever you finish creating or modifying geometry:
-1. **Recenter Viewport:** Call `zoom_extension` (`_.ZOOM E`) to ensure all geometry is framed.
-2. **Visual Inspection:** Call `capturar_pantalla_autocad` to obtain a high-resolution PNG screenshot of the active AutoCAD viewport.
+1. **Recenter Viewport:** Call `zoom_extents` (`_.ZOOM E`) to ensure all geometry is framed.
+2. **Visual Inspection:** Call `capture_screen` to obtain a high-resolution PNG screenshot of the active AutoCAD viewport.
 3. Inspect the image to verify geometry alignment, text readability, layer visibility, and structural correctness before reporting completion to the user.
 
 ---
@@ -77,17 +77,17 @@ Whenever you finish creating or modifying geometry:
 
 When connected to an active Civil 3D 2027 session:
 
-1. **Runtime Verification:** Call `verificar_estado_civil3d` to confirm that the managed Civil 3D API (`AeccDbMgd.dll`) is loaded.
+1. **Runtime Verification:** Call `check_civil3d_status` to confirm that the managed Civil 3D API (`AeccDbMgd.dll`) is loaded.
 2. **Surface Analysis:**
-   - Call `listar_superficies_civil3d` to list TIN surfaces, bounds, and triangle counts.
-   - Call `consultar_elevacion_terreno` to query exact terrain elevation ($Z$) at any $(X, Y)$ coordinate.
+   - Call `list_civil3d_surfaces` to list TIN surfaces, bounds, and triangle counts.
+   - Call `get_surface_elevation` to query exact terrain elevation ($Z$) at any $(X, Y)$ coordinate.
 3. **Alignments & Profiles:**
-   - Call `listar_alineamientos_civil3d` to discover horizontal centerlines and station ranges.
-   - Call `consultar_estacion_alineamiento` to compute chainage station and lateral offset.
-   - Call `consultar_perfil_longitudinal` to sample ground elevation profiles along an alignment at custom station intervals.
+   - Call `list_civil3d_alignments` to discover horizontal centerlines and station ranges.
+   - Call `get_alignment_station_offset` to compute chainage station and lateral offset.
+   - Call `get_longitudinal_profile` to sample ground elevation profiles along an alignment at custom station intervals.
 4. **Parametric Civil Design:**
-   - Call `crear_alineamiento_civil3d` to generate horizontal alignments with tangent curves.
-   - Call `crear_superficie_civil3d` to build topographic TIN surfaces from coordinate clouds.
+   - Call `create_civil3d_alignment` to generate horizontal alignments with tangent curves.
+   - Call `create_civil3d_surface` to build topographic TIN surfaces from coordinate clouds.
 
 ---
 
@@ -95,15 +95,15 @@ When connected to an active Civil 3D 2027 session:
 
 To produce physical, print-ready engineering drawings:
 
-1. **Create Paper Space Layout:** Call `crear_layout` with desired tab name.
-2. **Configure Sheet & Plotter:** Call `configurar_hoja_layout` (Sheet sizes: `A0` to `A4`, virtual plotter: `DWG To PDF.pc3`, style: `monochrome.ctb`).
-3. **Scale Viewport:** Call `crear_viewport` centered on model geometry with exact metric scale (`1000 / Scale XP`, e.g. `Scale = 50` for $1:50$).
-4. **Parametric Title Block:** Call `insertar_cajetin_parametrico` to draw standard borders and fill title block attributes (Project, Sheet, Scale, Designer, Date).
-5. **Physical PDF Plot:** Call `exportar_pdf` to render the layout directly to disk.
+1. **Create Paper Space Layout:** Call `create_layout` with desired tab name.
+2. **Configure Sheet & Plotter:** Call `configure_layout_sheet` (Sheet sizes: `A0` to `A4`, virtual plotter: `DWG To PDF.pc3`, style: `monochrome.ctb`).
+3. **Scale Viewport:** Call `create_viewport` centered on model geometry with exact metric scale (`1000 / Scale XP`, e.g. `Scale = 50` for $1:50$).
+4. **Parametric Title Block:** Call `insert_parametric_titleblock` to draw standard borders and fill title block attributes (Project, Sheet, Scale, Designer, Date).
+5. **Physical PDF Plot:** Call `export_pdf` to render the layout directly to disk.
 
 ---
 
 ## 7. Reference Tool Decision Matrix
 
 For a complete decision matrix mapping user intents to the optimal tool sequence, see:
-👉 [tool_decision_matrix.md](./references/tool_decision_matrix.md)
+[tool_decision_matrix.md](./references/tool_decision_matrix.md)

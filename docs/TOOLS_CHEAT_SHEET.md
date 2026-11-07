@@ -7,66 +7,66 @@ It answers in seconds:
 
 ---
 
-## ⚡ Quick Decision Matrix: "Goal" $\rightarrow$ "Tool to Invoke"
+## Quick Decision Matrix: "Goal" -> "Tool to Invoke"
 
 | Design Goal / Intent in CAD | Recommended Tool | Key Arguments | Requires Running CAD? |
 |---|---|---|:---:|
-| **Check Gateway HTTP connectivity (port 5055)** | `ping_autocad_gateway` | *(none)* | ✅ Yes |
-| **Get drawing name, DWG path, and units** | `obtener_info_dibujo` | *(none)* | ✅ Yes |
-| **Query bounding box extents (ExtMin/ExtMax)** | `obtener_limites_dibujo` | *(none)* | ✅ Yes |
-| **Inspect user's currently selected objects** | `leer_seleccion_autocad` | *(none)* | ✅ Yes |
-| **List Civil 3D horizontal alignments** | `listar_alineamientos_civil3d` | *(none)* | ✅ Yes (Civil 3D) |
-| **Measure distance, azimuth, or slope between points** | `medir_distancia` | `x1, y1, x2, y2, z1, z2` | ❌ No (Local) |
-| **Calculate polygon area or perimeter** | `calcular_area_poligono` | `puntos: "x1,y1;x2,y2;..."` | ❌ No (Local) |
-| **Configure metric standard (`INSUNITS=4`)** | `configurar_entorno_dibujo` | *(none)* | ✅ Yes |
-| **Draw multiple entities / complete floor plan in 1 call** | `dibujar_geometria_lote` | `elementos: [...]` | ✅ Yes |
-| **Draw a wall, grid axis, or straight line** | `dibujar_linea` | `x1, y1, x2, y2, capa` | ✅ Yes |
-| **Draw a polyline boundary or perimeter** | `dibujar_polilinea` | `puntos, cerrada: true, capa` | ✅ Yes |
-| **Draw a room, column, or footing rectangle** | `dibujar_rectangulo` | `x1, y1, x2, y2, capa` | ✅ Yes |
-| **Draw a circular shaft, pillar, or tunnel arch** | `dibujar_circulo` | `centroX, centroY, radio, capa` | ✅ Yes |
-| **Draw a curved arch or vault** | `dibujar_arco` | `centroX, centroY, radio, a1, a2` | ✅ Yes |
-| **Place single-line technical text or labels** | `insertar_texto` | `texto, x, y, altura, capa` | ✅ Yes |
-| **Insert an existing block definition** | `insertar_bloque` | `nombreBloque, x, y, escala` | ✅ Yes |
-| **Create a layer with color and linetype** | `crear_capa` | `nombre, colorAci, tipoLinea` | ✅ Yes |
-| **Set the active working layer** | `establecer_capa_actual` | `nombre` | ✅ Yes |
-| **Toggle layer visibility, freeze, or lock** | `establecer_estado_capa` | `nombre, accion: "congelar"` | ✅ Yes |
-| **List all layers and their visibility/lock states** | `leer_capas_autocad` | *(none)* | ✅ Yes |
-| **Count and summarize drawing objects by type** | `leer_objetos_autocad` | *(none)* | ✅ Yes |
-| **List all loaded block definitions** | `listar_bloques_disponibles` | *(none)* | ✅ Yes |
-| **Search text strings across model space** | `leer_textos_autocad` | *(none)* | ✅ Yes |
-| **Capture drawing image ("eyes for AI")** | `capturar_pantalla_autocad` | *(none)* | ✅ Yes |
-| **Zoom to drawing extents** | `zoom_extension` | *(none)* | ✅ Yes |
-| **Save current drawing file** | `guardar_dibujo` | *(none)* | ✅ Yes |
-| **Purge unreferenced definitions and audit DWG** | `limpiar_y_purgar_dibujo` | `tipo: "todo", auditar: true` | ✅ Yes |
-| **Force complete graphics regeneration** | `regenerar_todo` | *(none)* | ✅ Yes |
-| **Create paper space layout tab** | `crear_layout` | `nombreLayout` | ✅ Yes |
-| **Configure sheet size (A0–A4) and PDF plotter** | `configurar_hoja_layout` | `nombreLayout, tamanoHoja` | ✅ Yes |
-| **Create calibrated viewport with metric scale** | `crear_viewport` | `x, y, w, h, escala, xMod, yMod` | ✅ Yes |
-| **Draw parametric title block / sheet border** | `insertar_cajetin_parametrico` | `xEsquina, yEsquina, titulo, plano`| ✅ Yes |
-| **Export layout to physical PDF file** | `exportar_pdf` | `nombreLayout, rutaPdf` | ✅ Yes |
-| **Query ground surface elevation (Z) at (X, Y)** | `consultar_elevacion_terreno` | `x, y, superficie` | ✅ Yes (Civil 3D) |
-| **Sample longitudinal profile along an alignment** | `consultar_perfil_longitudinal`| `intervalo, alineamiento` | ✅ Yes (Civil 3D) |
-| **Calculate station (chainage) and lateral offset** | `consultar_estacion_alineamiento` | `x, y, alineamiento` | ✅ Yes (Civil 3D) |
-| **Compute (X, Y) coordinates from station/offset** | `obtener_coordenada_en_estacion` | `progresiva, desfase` | ✅ Yes (Civil 3D) |
-| **Create alignment from PIs with curves** | `crear_alineamiento_civil3d` | `nombre, puntos, radio` | ✅ Yes (Civil 3D) |
-| **Build topographic TIN surface from points** | `crear_superficie_civil3d` | `nombre, puntos` | ✅ Yes (Civil 3D) |
-| **Execute a batch sequence of CAD commands** | `ejecutar_comandos_lote` | `comandos: [...]` | ✅ Yes |
-| **Execute raw CAD commands or plugin macros** | `ejecutar_comando_autocad` | `command: "WW\n200\n"` | ✅ Yes |
-| **Evaluate dynamic in-memory AutoLISP expressions** | `ejecutar_lisp` | `codigoLisp: "(+ 1 2)"` | ✅ Yes |
-| **Load external `.lsp` file from disk** | `cargar_archivo_lisp` | `rutaArchivoLsp` | ✅ Yes |
+| **Check Gateway HTTP connectivity (port 5055)** | `ping_autocad_gateway` | *(none)* | Yes |
+| **Get drawing name, DWG path, and units** | `get_drawing_info` | *(none)* | Yes |
+| **Query bounding box extents (ExtMin/ExtMax)** | `get_drawing_extents` | *(none)* | Yes |
+| **Inspect user's currently selected objects** | `read_selection` | *(none)* | Yes |
+| **List Civil 3D horizontal alignments** | `list_civil3d_alignments` | *(none)* | Yes (Civil 3D) |
+| **Measure distance, azimuth, or slope between points** | `measure_distance` | `x1, y1, x2, y2, z1, z2` | No (Local) |
+| **Calculate polygon area or perimeter** | `calculate_polygon_area` | `points: "x1,y1;x2,y2;..."` | No (Local) |
+| **Configure metric standard (`INSUNITS=4`)** | `configure_drawing_environment` | *(none)* | Yes |
+| **Draw multiple entities / complete floor plan in 1 call** | `draw_batch_geometry` | `elements: [...]` | Yes |
+| **Draw a wall, grid axis, or straight line** | `draw_line` | `x1, y1, x2, y2, layer` | Yes |
+| **Draw a polyline boundary or perimeter** | `draw_polyline` | `points, closed: true, layer` | Yes |
+| **Draw a room, column, or footing rectangle** | `draw_rectangle` | `x1, y1, x2, y2, layer` | Yes |
+| **Draw a circular shaft, pillar, or tunnel arch** | `draw_circle` | `center_x, center_y, radius, layer` | Yes |
+| **Draw a curved arch or vault** | `draw_arc` | `center_x, center_y, radius, start_angle, end_angle` | Yes |
+| **Place single-line technical text or labels** | `insert_text` | `text, x, y, height, layer` | Yes |
+| **Insert an existing block definition** | `insert_block` | `block_name, x, y, scale` | Yes |
+| **Create a layer with color and linetype** | `create_layer` | `name, color_aci, linetype` | Yes |
+| **Set the active working layer** | `set_current_layer` | `name` | Yes |
+| **Toggle layer visibility, freeze, or lock** | `set_layer_state` | `name, action: "freeze"` | Yes |
+| **List all layers and their visibility/lock states** | `read_layers` | *(none)* | Yes |
+| **Count and summarize drawing objects by type** | `read_objects` | *(none)* | Yes |
+| **List all loaded block definitions** | `list_available_blocks` | *(none)* | Yes |
+| **Search text strings across model space** | `read_texts` | *(none)* | Yes |
+| **Capture drawing image ("eyes for AI")** | `capture_screen` | *(none)* | Yes |
+| **Zoom to drawing extents** | `zoom_extents` | *(none)* | Yes |
+| **Save current drawing file** | `save_drawing` | *(none)* | Yes |
+| **Purge unreferenced definitions and audit DWG** | `clean_and_purge_drawing` | `target: "all", audit: true` | Yes |
+| **Force complete graphics regeneration** | `regen_all` | *(none)* | Yes |
+| **Create paper space layout tab** | `create_layout` | `layout_name` | Yes |
+| **Configure sheet size (A0–A4) and PDF plotter** | `configure_layout_sheet` | `layout_name, sheet_size` | Yes |
+| **Create calibrated viewport with metric scale** | `create_viewport` | `x, y, width, height, scale, model_x, model_y` | Yes |
+| **Draw parametric title block / sheet border** | `insert_parametric_titleblock` | `corner_x, corner_y, title, drawing_number`| Yes |
+| **Export layout to physical PDF file** | `export_pdf` | `layout_name, pdf_path` | Yes |
+| **Query ground surface elevation (Z) at (X, Y)** | `get_surface_elevation` | `surface_name, x, y` | Yes (Civil 3D) |
+| **Sample longitudinal profile along an alignment** | `get_longitudinal_profile`| `alignment_name, surface_name, station_interval` | Yes (Civil 3D) |
+| **Calculate station (chainage) and lateral offset** | `get_alignment_station_offset` | `alignment_name, x, y` | Yes (Civil 3D) |
+| **Compute (X, Y) coordinates from station/offset** | `get_station_coordinate` | `alignment_name, station, offset` | Yes (Civil 3D) |
+| **Create alignment from PIs with curves** | `create_civil3d_alignment` | `name, points, radius` | Yes (Civil 3D) |
+| **Build topographic TIN surface from points** | `create_civil3d_surface` | `name, points` | Yes (Civil 3D) |
+| **Execute a batch sequence of CAD commands** | `execute_batch_commands` | `commands: [...]` | Yes |
+| **Execute raw CAD commands or plugin macros** | `execute_command` | `command: "WW\n200\n"` | Yes |
+| **Evaluate dynamic in-memory AutoLISP expressions** | `execute_lisp` | `code: "(+ 1 2)"` | Yes |
+| **Load external `.lsp` file from disk** | `load_lisp_file` | `file_path` | Yes |
 
 ---
 
-## 🔄 Standard Chained Workflows
+## Standard Chained Workflows
 
 ### Workflow 1: Clean Drawing Initialization
 When starting a new architectural or structural drawing:
 ```mermaid
 flowchart LR
-    A["configurar_entorno_dibujo\n(INSUNITS=4 Meters)"] --> B["crear_capa\n(ARQ-WALLS, STR-GRID)"]
-    B --> C["establecer_capa_actual\n(ARQ-WALLS)"]
-    C --> D["dibujar_*\n(lines, rectangles, circles)"]
-    D --> E["zoom_extension\n(Full extents view)"]
+    A["configure_drawing_environment\n(INSUNITS=4 Meters)"] --> B["create_layer\n(ARQ-WALLS, STR-GRID)"]
+    B --> C["set_current_layer\n(ARQ-WALLS)"]
+    C --> D["draw_*\n(lines, rectangles, circles)"]
+    D --> E["zoom_extents\n(Full extents view)"]
 ```
 
 ---
@@ -75,10 +75,10 @@ flowchart LR
 Preparing a deliverable sheet directly from model space:
 ```mermaid
 flowchart TD
-    A["1. crear_layout\nnombreLayout: 'SHEET-01'"] --> B["2. configurar_hoja_layout\ntamanoHoja: 'A1', scale: 1:1 mm"]
-    B --> C["3. crear_viewport\nscale: 500 (1:500 XP), centered on model coords"]
-    C --> D["4. insertar_cajetin_parametrico\ntitle block 180x45 mm with project metadata"]
-    D --> E["5. exportar_pdf\ngenerates physical PDF on disk via DWG To PDF"]
+    A["1. create_layout\nlayout_name: 'SHEET-01'"] --> B["2. configure_layout_sheet\nsheet_size: 'A1', scale: 1:1 mm"]
+    B --> C["3. create_viewport\nscale: 500 (1:500 XP), centered on model coords"]
+    C --> D["4. insert_parametric_titleblock\ntitle block 180x45 mm with project metadata"]
+    D --> E["5. export_pdf\ngenerates physical PDF on disk via DWG To PDF"]
 ```
 
 ---
@@ -87,9 +87,9 @@ flowchart TD
 Topographic sampling and linear infrastructure analysis:
 ```mermaid
 flowchart TD
-    A["1. verificar_estado_civil3d\nConfirms Civil 3D 2027 runtime"] --> B["2. listar_superficies_civil3d\nInspects min/max ground elevations"]
-    B --> C["3. consultar_perfil_longitudinal\nSamples Z elevations every 20 m along axis"]
-    C --> D["4. obtener_coordenada_en_estacion\nCalculates exact coordinates for structures"]
+    A["1. check_civil3d_status\nConfirms Civil 3D 2027 runtime"] --> B["2. list_civil3d_surfaces\nInspects min/max ground elevations"]
+    B --> C["3. get_longitudinal_profile\nSamples Z elevations every 20 m along axis"]
+    C --> D["4. get_station_coordinate\nCalculates exact coordinates for structures"]
 ```
 
 ---
@@ -98,25 +98,25 @@ flowchart TD
 Empowering AI agents to autonomously verify what they draw:
 ```mermaid
 flowchart LR
-    A["1. dibujar_*\nInject geometry"] --> B["2. zoom_extension\nFrame geometry"]
-    B --> C["3. capturar_pantalla_autocad\nExport PNG"]
+    A["1. draw_*\nInject geometry"] --> B["2. zoom_extents\nFrame geometry"]
+    B --> C["3. capture_screen\nExport PNG"]
     C --> D["4. Multimodal Inspection\nAI verifies visual layout"]
 ```
 
 ---
 
-## 💡 Prompting Best Practices for AI Copilots
+## Prompting Best Practices for AI Copilots
 
 1. **Favor Typed Tools Over Raw Commands:**  
    Instead of *"Type _.LINE 0,0 10,0 in the console"*, ask:  
-   *"Draw a line from (0,0) to (10,0) in meters on layer WALLS"*. The AI will call `dibujar_linea`, avoiding line break syntax errors and accidental prompt cancellations.
+   *"Draw a line from (0,0) to (10,0) in meters on layer WALLS"*. The AI will call `draw_line`, avoiding line break syntax errors and accidental prompt cancellations.
 
 2. **Leverage Standalone Analytical Tools:**  
    Before drawing, verify geometric constraints without invoking CAD:  
-   *"Calculate the area of polygon X,Y..."*. The AI calls `calcular_area_poligono` instantaneously with zero latency.
+   *"Calculate the area of polygon X,Y..."*. The AI calls `calculate_polygon_area` instantaneously with zero latency.
 
 3. **Specify Standard Layer Names:**  
-   All `dibujar_*` tools automatically create layers if they do not exist. Always specify standard names (e.g. `ARQ-WALLS`, `STR-COLUMNS`, `TUN-AXIS`).
+   All `draw_*` tools automatically create layers if they do not exist. Always specify standard names (e.g. `ARQ-WALLS`, `STR-COLUMNS`, `TUN-AXIS`).
 
 4. **Verify Surfaces Before Civil Profile Queries:**  
-   Ask the AI: *"Check available Civil 3D surfaces and sample the profile for Alignment-1"*. The AI will chain `listar_superficies_civil3d` with `consultar_perfil_longitudinal` to prevent out-of-boundary elevation queries.
+   Ask the AI: *"Check available Civil 3D surfaces and sample the profile for Alignment-1"*. The AI will chain `list_civil3d_surfaces` with `get_longitudinal_profile` to prevent out-of-boundary elevation queries.
