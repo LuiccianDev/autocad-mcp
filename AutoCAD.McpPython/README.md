@@ -1,5 +1,9 @@
 # autocad-mcp (Python MCP Server)
 
+[![PyPI version](https://img.shields.io/pypi/v/autocad-mcp.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/autocad-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/autocad-mcp.svg?logo=python&logoColor=white)](https://pypi.org/project/autocad-mcp/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 Model Context Protocol (MCP) server connecting **Autodesk AutoCAD 2027** and **Autodesk Civil 3D 2027** with AI agents (Claude Desktop, Antigravity, Cursor, VS Code) via the **AutoCAD AI Gateway**.
 
 Exposes **43 strongly-typed tools** covering parametric drawing, layer control, geometric calculations, layout/PDF generation, and native Civil 3D design (surfaces, alignments, profiles).

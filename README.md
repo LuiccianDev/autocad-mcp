@@ -2,6 +2,7 @@
 
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![PyPI version](https://img.shields.io/pypi/v/autocad-mcp.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/autocad-mcp/)
 [![uv](https://img.shields.io/badge/managed%20by-uv-261230?style=flat&logo=uv&logoColor=white)](https://astral.sh/uv)
 [![AutoCAD 2027](https://img.shields.io/badge/AutoCAD-2027-E51937?style=flat&logo=autodesk&logoColor=white)](https://www.autodesk.com/autocad)
 [![MCP Protocol](https://img.shields.io/badge/MCP-v2.2-0052CC?style=flat)](https://modelcontextprotocol.io/)
@@ -21,6 +22,7 @@ To foster adoption, technical transparency, and open-source collaboration, explo
 |---|---|
 | 🚀 **[Getting Started Guide](docs/GETTING_STARTED.md)** | Step-by-step setup, compilation, and AI client configuration in under 5 minutes. |
 | 🐍 **[Python MCP Server (`AutoCAD.McpPython/`)](AutoCAD.McpPython/README.md)** | Instant runtime with `uvx autocad-mcp` without manual compilation. |
+| 📦 **[PyPI Publishing Guide](docs/PYPI_PUBLISHING_GUIDE.md)** | Official guide for publishing `autocad-mcp` via Trusted Publishing (OIDC). |
 | 🏗️ **[System Architecture](docs/ARCHITECTURE.md)** | Concurrency model, UI thread dispatcher, secure queue, and C4/Mermaid diagrams. |
 | 🛠️ **[MCP Tools Reference Manual](docs/TOOLS_REFERENCE.md)** | Comprehensive technical spec for all 43 tools (parameters, schemas, JSON-RPC, and returns). |
 | ⚡ **[Tools Quick Reference & Cheat Sheet](docs/TOOLS_CHEAT_SHEET.md)** | Decision matrix ("Goal -> Tool to call") and chained prompting recipes for LLMs. |
