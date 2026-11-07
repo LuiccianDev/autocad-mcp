@@ -6,24 +6,40 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - 'examples/**'
+      - '.agents/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/*.md'
       - 'LICENSE'
       - 'CODE_OF_CONDUCT.md'
       - 'SECURITY.md'
       - 'SUPPORT.md'
       - '.gitignore'
+      - '.gitattributes'
+      - '.editorconfig'
   pull_request:
     branches: [ main, master ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
+      - 'examples/**'
+      - '.agents/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/*.md'
       - 'LICENSE'
       - 'CODE_OF_CONDUCT.md'
       - 'SECURITY.md'
       - 'SUPPORT.md'
       - '.gitignore'
+      - '.gitattributes'
+      - '.editorconfig'
   schedule:
     - cron: '0 6 * * 1'
   workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

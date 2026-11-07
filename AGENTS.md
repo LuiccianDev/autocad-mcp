@@ -4,10 +4,11 @@ Project: **autocad-mcp** (AutoCAD 2027 & Civil 3D AI Gateway + MCP Server).
 
 ---
 
-## 0. Language & Documentation Policy
+## 0. Language, Aesthetics & Documentation Policy
 
 - **Repository Language:** All official repository documentation, code comments, pull requests, issue templates, workflows, and git commits **MUST** be written in **Technical English**.
 - **User Interaction:** When interacting with the user, the assistant should reply in **Spanish** (or the user's preferred language) while preserving technical names in English and maintaining the formal engineering tone.
+- **Strict Aesthetic Standard (Zero Informal Emojis):** Prohibit informal emojis (e.g., 📚, 🚀, ⚡, 📦, 📋, 🛠️, 🔌, 🤖, 🧪) in markdown documentation, section headers, release notes, issue templates, and commit messages. Maintain a sober engineering format utilizing markdown tables and GitHub alerts (`> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`).
 
 ---
 
@@ -46,7 +47,8 @@ El proyecto funciona mediante piezas complementarias diseñadas para operar **en
    - Abstrae y estructura el JSON para que la IA disponga de herramientas tipadas directas, eliminando la necesidad de interactuar a ciegas con scripts manuales de PowerShell y parseos crudos (RAW).
 
 ### Directiva Obligatoria para Asistentes y Agentes de IA:
-- **Uso Conjunto Indispensable:** Todo agente debe instruir o asegurar la configuración de **ambos componentes** (compilar ambos en `Release`, cargar `AutoCAD.Gateway.dll` vía `NETLOAD` en AutoCAD y registrar `AutoCAD.McpServer.dll` o `autocad-mcp` en la configuración MCP del cliente de IA).
+- **Uso Conjunto Indispensable:** Todo agente debe instruir o asegurar la configuración de **ambos componentes** (cargar `AutoCAD.Gateway.dll` vía `NETLOAD` en AutoCAD y registrar el MCP Server en la configuración del cliente de IA).
+- **Vía Primaria Recomendada (Tier 1 - Zero-Install con `uvx`):** Al asistir a usuarios o configurar el entorno, priorizar siempre el método rápido de 2 pasos con `uvx luiccian-autocad-mcp`. Las alternativas de binarios compilados en C# (.NET 10) y desarrollo local con `uv run` deben presentarse como opciones secundarias avanzadas.
 - **Prohibido trabajar a ciegas con PowerShell:** La IA no debe improvisar comandos de PowerShell contra el Gateway si el servidor MCP está disponible. El MCP garantiza tipado, validación y respuestas estructuradas sin saturar el contexto con respuestas HTTP en crudo.
 - **Asistencia al Contribuyente:** Si el usuario o un contribuyente solicita configurar o conectar el proyecto, el asistente debe guiar de inmediato la puesta en marcha de los **dos pasos** (Gateway cargado en CAD + MCP configurado en el cliente).
 
@@ -98,3 +100,19 @@ Para garantizar máxima limpieza, consistencia profesional y cero ambigüedad en
 - **Scripts de Shell / PowerShell:** `kebab-case.ps1` (`build.ps1`, `start-mcp.ps1`, `set-gateway-token.ps1`). Prohibido mezclar guiones bajos en nombres de scripts.
 - **Archivos de Configuración:** `snake_case.json` o `kebab-case.json` (`mcp_config.json`, `claude_desktop_config.json`).
 - **Documentación Markdown:** `UPPERCASE.md` en raíz (`README.md`, `AGENTS.md`, `CHANGELOG.md`) y en `docs/` (`ARCHITECTURE.md`, `GETTING_STARTED.md`).
+
+---
+
+## 5. Optimización de Minutos y Cuota en GitHub Actions
+
+Para proteger los minutos de cómputo y evitar ejecuciones innecesarias de runners en GitHub Actions:
+
+1. **Exclusión de Archivos No Ejecutables (`paths-ignore`):**
+   - Los workflows de CI (`ci.yml`) y CodeQL (`codeql.yml`) deben ignorar cualquier cambio que afecte exclusivamente a documentación (`**.md`, `docs/**`), ejemplos (`examples/**`), directivas de agentes (`.agents/**`), plantillas de issues/PR (`.github/ISSUE_TEMPLATE/**`, `.github/*.md`), y archivos de configuración git (`.gitignore`, `.gitattributes`, `.editorconfig`).
+
+2. **Uso Obligatorio de `[skip ci]`:**
+   - En commits puramente documentales, de notas de versión o de reglas que no requieran validación de compilación, incluir siempre la etiqueta `[skip ci]` o `[ci skip]` en el mensaje del commit para garantizar 0 consumo de minutos de GitHub Actions.
+
+3. **Cancelación Automática de Trabajos Obsoletos (`concurrency`):**
+   - Mantener siempre configurado `concurrency: cancel-in-progress: true` en todos los flujos de CI para que nuevos pushes a la misma rama cancelen de inmediato las ejecuciones en curso previas, evitando el consumo de minutos duplicados.
+
