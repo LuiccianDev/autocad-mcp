@@ -153,38 +153,51 @@ public sealed class MeasurementTools
     /// <param name="audit">If true, runs AUDIT with fix enabled after purging.</param>
     /// <returns>JSON response from Gateway or validation error.</returns>
     [McpServerTool(Name = "purge_and_audit_drawing")]
-    [Description("Purge unused definitions with -PURGE (two passes for nested items). 'target' accepts: all, blocks, layers, linetypes, text_styles, dim_styles. With 'audit'=true runs AUDIT correcting errors.")]
+    [Description("Purge unused definitions safely. 'target' accepts: all, blocks, layers, linetypes, text_styles, dim_styles. With 'audit'=true runs AUDIT correcting errors.")]
     public async Task<string> PurgeAndAuditDrawing(string target = "all", bool audit = true)
     {
-        string? code = target?.Trim().ToLowerInvariant() switch
-        {
-            "all" or "todo" => "_A",
-            "blocks" or "bloques" => "_B",
-            "layers" or "capas" => "_LA",
-            "linetypes" or "tipos_linea" => "_LT",
-            "text_styles" or "estilos_texto" => "_ST",
-            "dim_styles" or "estilos_cota" => "_D",
-            _ => null
-        };
+        string tp = target?.Trim().ToLowerInvariant() ?? "all";
+        string cmd;
 
-        if (code == null)
+        if (tp is "all" or "todo")
         {
-            return Error("Invalid target. Use: all, blocks, layers, linetypes, text_styles, or dim_styles.");
+            cmd = "(progn (vl-load-com) (vla-PurgeAll (vla-get-ActiveDocument (vlax-get-acad-object))) (princ))\n";
         }
-
-        var sb = new StringBuilder();
-        for (int pass = 0; pass < 2; pass++)
+        else
         {
-            sb.Append($"_.-PURGE\n{code}\n*\n_N\n");
+            string? code = tp switch
+            {
+                "blocks" or "bloques" => "_B",
+                "layers" or "capas" => "_LA",
+                "linetypes" or "tipos_linea" => "_LT",
+                "text_styles" or "estilos_texto" => "_ST",
+                "dim_styles" or "estilos_cota" => "_D",
+                _ => null
+            };
+
+            if (code == null)
+            {
+                return Error("Invalid target. Use: all, blocks, layers, linetypes, text_styles, or dim_styles.");
+            }
+
+            cmd = $"_.-PURGE\n{code}\n*\n_N\n";
         }
 
         if (audit)
         {
-            sb.Append("_.AUDIT\n_Y\n");
+            cmd += "_.AUDIT\n_Y\n";
         }
 
-        return await _gatewayClient.ExecuteCommandAsync(sb.ToString());
+        return await _gatewayClient.ExecuteCommandAsync(cmd);
     }
+
+    /// <summary>
+    /// Alias for purge_and_audit_drawing: purges unused definitions and optionally audits the drawing database.
+    /// </summary>
+    [McpServerTool(Name = "clean_and_purge_drawing")]
+    [Description("Alias for purge_and_audit_drawing: Purge unused definitions safely and audit errors.")]
+    public Task<string> CleanAndPurgeDrawing(string target = "all", bool audit = true) =>
+        PurgeAndAuditDrawing(target, audit);
 
     /// <summary>
     /// Regenerates all viewports in the current drawing (_.REGENALL).

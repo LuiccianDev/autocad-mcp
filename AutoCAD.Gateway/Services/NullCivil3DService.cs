@@ -38,4 +38,7 @@ public sealed class NullCivil3DService : ICivil3DService
 
     /// <inheritdoc/>
     public Task<string> CreateSurfaceAsync(CrearSuperficieRequest request) => Task.FromResult(NotAvailable);
+
+    /// <inheritdoc/>
+    public Task<string> GetProfileAsync(string? alignmentName, string? surfaceName, double interval) => Task.FromResult(NotAvailable);
 }

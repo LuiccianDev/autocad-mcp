@@ -86,4 +86,34 @@ public sealed class ContextTools
     [McpServerTool(Name = "capture_screenshot")]
     [Description("Capture a PNG screenshot of the active AutoCAD window ('eyes for AI') and save it to disk. Returns absolute file path.")]
     public async Task<string> CaptureScreenshot() => await _gatewayClient.GetContextAsync("context/screenshot");
+
+    /// <summary>Alias for get_layers.</summary>
+    [McpServerTool(Name = "read_layers")]
+    [Description("Alias for get_layers: Retrieve the complete list of drawing layers with their states.")]
+    public async Task<string> ReadLayers() => await GetLayers();
+
+    /// <summary>Alias for get_entities.</summary>
+    [McpServerTool(Name = "read_objects")]
+    [Description("Alias for get_entities: Read and return a summary of all entities in ModelSpace.")]
+    public async Task<string> ReadObjects() => await GetEntities();
+
+    /// <summary>Alias for get_texts.</summary>
+    [McpServerTool(Name = "read_texts")]
+    [Description("Alias for get_texts: List all text entities in the drawing with coordinates.")]
+    public async Task<string> ReadTexts() => await GetTexts();
+
+    /// <summary>Alias for get_selection_count.</summary>
+    [McpServerTool(Name = "read_selection")]
+    [Description("Alias for get_selection_count: Get the number of entities currently selected.")]
+    public async Task<string> ReadSelection() => await GetSelectionCount();
+
+    /// <summary>Alias for list_blocks.</summary>
+    [McpServerTool(Name = "list_available_blocks")]
+    [Description("Alias for list_blocks: Retrieve names of all block definitions loaded.")]
+    public async Task<string> ListAvailableBlocks() => await ListBlocks();
+
+    /// <summary>Alias for capture_screenshot.</summary>
+    [McpServerTool(Name = "capture_screen")]
+    [Description("Alias for capture_screenshot: Capture a screenshot of the active AutoCAD window.")]
+    public async Task<string> CaptureScreen() => await CaptureScreenshot();
 }

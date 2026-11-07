@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.4.0] - Unreleased
 
 ### Added
+- **Atomic Longitudinal Profile Endpoint (`GET /civil/profile`):**
+  - Added native Civil 3D profile extraction endpoint in `AutoCAD.Gateway` that samples station coordinates and terrain elevations across an entire alignment in a single atomic transaction, reducing profile sampling latency from 25 seconds down to ~5ms.
+  - Added transparent fast-path optimization in `sample_longitudinal_profile` (and alias `get_longitudinal_profile`) in both Python and C# MCP servers with graceful fallback.
+- **Bidirectional Tool Aliases (14 Aliases for Complete Parity):**
+  - Implemented 14 bidirectional tool aliases across Python and C# MCP servers (`clean_and_purge_drawing`, `get_longitudinal_profile`, `read_layers`, `read_objects`, `read_texts`, `read_selection`, `list_available_blocks`, `capture_screen`, `ping_autocad_gateway`, `execute_lisp`, `configure_drawing_environment`, `configure_layout_sheet`, `insert_parametric_titleblock`, `get_station_coordinate`), bringing total available tool entries to 59 and ensuring prompt synonyms resolve without friction.
 - **Atomic Batch Drafting Engine (45 Tools Parity):**
   - Added `draw_batch_geometry`: Atomic batch drafting tool consolidating lines, polylines, rectangles, circles, arcs, and text into a single AutoLISP evaluation `(progn (entmake ...) ...)`, reducing execution latency by ~99% and token usage by ~95%.
   - Added `execute_batch_commands`: Atomic command sequencing without intermediate client roundtrips.
@@ -17,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zero-Install Deployment via `uvx luiccian-autocad-mcp`:** Formalized as the primary Tier 1 setup for Claude Desktop, Antigravity, and Cursor.
 
 ### Fixed & Security
+- **Civil 3D & AutoCAD Crash Prevention on Purge/Audit:**
+  - Replaced fragile multi-pass console command sequences (`_.-PURGE\n_A\n*\n_N...`) with safe, non-modal ActiveX AutoLISP symbol table purge `(progn (vl-load-com) (vla-PurgeAll (vla-get-ActiveDocument (vlax-get-acad-object))) (princ))\n`.
+  - Guarded drawing database audit against `AccessViolationException` in Civil 3D `AeccDbMgd.dll`, eliminating `acad.exe` fatal errors and subsequent `WinError 1450` transport exhaustion crashes in `uvx`.
 - **Security Remediation (CWE-209):** Sanitized HTTP 500 error responses in `HttpGatewayServer.cs` to eliminate exception information exposure, verified and closed as `Fixed` in GitHub CodeQL scanning.
 - **GitHub Actions Quota Optimization:** Implemented comprehensive `paths-ignore` exclusions (`.agents/**`, `examples/**`, templates, git configs) and `concurrency: cancel-in-progress` in `ci.yml` and `codeql.yml` to prevent billable runner waste.
 - **YAML Workflow Validation:** Resolved multiline indentation syntax error in release notes generation by decoupling logic into `scripts/generate-release-notes.ps1`.

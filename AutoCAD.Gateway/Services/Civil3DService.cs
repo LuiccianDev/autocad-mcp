@@ -179,6 +179,107 @@ public sealed class Civil3DService : ICivil3DService
         });
 
     /// <inheritdoc/>
+    public Task<string> GetProfileAsync(string? alignmentName, string? surfaceName, double interval) =>
+        UiThreadInvoker.RunOnIdleAsync(doc =>
+        {
+            if (double.IsNaN(interval) || double.IsInfinity(interval) || interval <= 0)
+            {
+                return Error("The interval must be a number greater than zero.");
+            }
+
+            using var tr = doc.TransactionManager.StartTransaction();
+            var al = FindAlignment(tr, alignmentName);
+            if (al == null)
+            {
+                return Error("Alignment not found.");
+            }
+
+            var sf = FindSurface(tr, surfaceName);
+            if (sf == null)
+            {
+                return Error("Surface not found.");
+            }
+
+            double startStation = al.StartingStation;
+            double endStation = al.EndingStation;
+            double length = endStation - startStation;
+
+            if (length <= 0)
+            {
+                return Error("Alignment length must be greater than zero.");
+            }
+
+            var samples = new List<object>();
+            var elevations = new List<double>();
+            double currentStation = startStation;
+
+            while (currentStation <= endStation + 1e-6)
+            {
+                double targetStation = Math.Min(currentStation, endStation);
+                double x = 0, y = 0;
+                al.PointLocation(targetStation, 0, ref x, ref y);
+
+                double? z = null;
+                try
+                {
+                    z = sf.FindElevationAtXY(x, y);
+                    elevations.Add(z.Value);
+                }
+                catch (Autodesk.AutoCAD.Runtime.Exception)
+                {
+                    // Point lies outside the TIN surface convex boundary
+                }
+
+                samples.Add(new
+                {
+                    station = Math.Round(targetStation, 3),
+                    stake = AlignmentGeometry.FormatStation(targetStation),
+                    x = Math.Round(x, 4),
+                    y = Math.Round(y, 4),
+                    z = z.HasValue ? Math.Round(z.Value, 3) : (double?)null
+                });
+
+                if (Math.Abs(targetStation - endStation) < 1e-6)
+                {
+                    break;
+                }
+
+                currentStation += interval;
+                if (currentStation > endStation && currentStation - interval < endStation - 1e-6)
+                {
+                    currentStation = endStation;
+                }
+            }
+
+            tr.Commit();
+
+            double? minElev = elevations.Count > 0 ? elevations.Min() : null;
+            double? maxElev = elevations.Count > 0 ? elevations.Max() : null;
+            double? elevDelta = (minElev.HasValue && maxElev.HasValue) ? (maxElev.Value - minElev.Value) : null;
+            double? avgSlope = (elevations.Count >= 2 && length > 0) ? ((elevations[^1] - elevations[0]) / length * 100.0) : null;
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                alignment = al.Name,
+                surface = sf.Name,
+                start_station = Math.Round(startStation, 3),
+                end_station = Math.Round(endStation, 3),
+                length = Math.Round(length, 3),
+                interval,
+                sample_count = samples.Count,
+                summary = new
+                {
+                    min_elevation = minElev.HasValue ? Math.Round(minElev.Value, 3) : (double?)null,
+                    max_elevation = maxElev.HasValue ? Math.Round(maxElev.Value, 3) : (double?)null,
+                    elevation_delta = elevDelta.HasValue ? Math.Round(elevDelta.Value, 3) : (double?)null,
+                    average_slope_percent = avgSlope.HasValue ? Math.Round(avgSlope.Value, 4) : (double?)null
+                },
+                samples
+            });
+        });
+
+    /// <inheritdoc/>
     public Task<string> GetPointAtStationAsync(string? alignmentName, double station, double offset) =>
         UiThreadInvoker.RunOnIdleAsync(doc =>
         {

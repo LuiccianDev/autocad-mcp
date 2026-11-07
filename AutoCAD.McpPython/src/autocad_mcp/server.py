@@ -78,6 +78,42 @@ async def capture_screenshot() -> str:
     return await gateway.get_context("context/screenshot")
 
 
+@mcp.tool(name="read_layers")
+async def read_layers() -> str:
+    """Alias for get_layers: Retrieve the full list of AutoCAD drawing layers with their states."""
+    return await get_layers()
+
+
+@mcp.tool(name="read_objects")
+async def read_objects() -> str:
+    """Alias for get_entities: Read and return a summary of all entities existing in AutoCAD ModelSpace."""
+    return await get_entities()
+
+
+@mcp.tool(name="read_texts")
+async def read_texts() -> str:
+    """Alias for get_texts: List all text entities in the drawing with text contents and coordinates."""
+    return await get_texts()
+
+
+@mcp.tool(name="read_selection")
+async def read_selection() -> str:
+    """Alias for get_selection_count: Get the number of entities currently selected by the user."""
+    return await get_selection_count()
+
+
+@mcp.tool(name="list_available_blocks")
+async def list_available_blocks() -> str:
+    """Alias for list_blocks: Retrieve names of all block definitions loaded into current drawing."""
+    return await list_blocks()
+
+
+@mcp.tool(name="capture_screen")
+async def capture_screen() -> str:
+    """Alias for capture_screenshot: Capture a PNG screenshot of the active AutoCAD window."""
+    return await capture_screenshot()
+
+
 # ============================================================================
 # MODULE 2: Parametric Geometry & Drawing (8 Tools)
 # ============================================================================
@@ -412,33 +448,40 @@ def calculate_polygon_area(points: str) -> str:
 
 @mcp.tool(name="purge_and_audit_drawing")
 async def purge_and_audit_drawing(target: str = "all", audit: bool = True) -> str:
-    """Purge unused symbol table definitions with -PURGE in two passes and audit database errors with AUDIT."""
-    codes = {
-        "all": "_A",
-        "blocks": "_B",
-        "layers": "_LA",
-        "linetypes": "_LT",
-        "text_styles": "_ST",
-        "dim_styles": "_D",
-        # Legacy aliases
-        "todo": "_A",
-        "bloques": "_B",
-        "capas": "_LA",
-        "tipos_linea": "_LT",
-        "estilos_texto": "_ST",
-        "estilos_cota": "_D",
-    }
+    """Purge unused symbol table definitions safely and audit database errors."""
     tp = (target or "").strip().lower()
-    if tp not in codes:
-        return json.dumps(
-            {"status": "error", "message": "Invalid target. Use: all, blocks, layers, linetypes, text_styles, or dim_styles."}
-        )
+    if tp in ("all", "todo"):
+        cmd = "(progn (vl-load-com) (vla-PurgeAll (vla-get-ActiveDocument (vlax-get-acad-object))) (princ))\n"
+    else:
+        codes = {
+            "blocks": "_B",
+            "layers": "_LA",
+            "linetypes": "_LT",
+            "text_styles": "_ST",
+            "dim_styles": "_D",
+            # Legacy aliases
+            "bloques": "_B",
+            "capas": "_LA",
+            "tipos_linea": "_LT",
+            "estilos_texto": "_ST",
+            "estilos_cota": "_D",
+        }
+        if tp not in codes:
+            return json.dumps(
+                {"status": "error", "message": "Invalid target. Use: all, blocks, layers, linetypes, text_styles, or dim_styles."}
+            )
+        code = codes[tp]
+        cmd = f"_.-PURGE\n{code}\n*\n_N\n"
 
-    code = codes[tp]
-    cmd = f"_.-PURGE\n{code}\n*\n_N\n_.-PURGE\n{code}\n*\n_N\n"
     if audit:
         cmd += "_.AUDIT\n_Y\n"
     return await gateway.execute_command(cmd)
+
+
+@mcp.tool(name="clean_and_purge_drawing")
+async def clean_and_purge_drawing(target: str = "all", audit: bool = True) -> str:
+    """Alias for purge_and_audit_drawing: Purge unused definitions safely and audit errors."""
+    return await purge_and_audit_drawing(target=target, audit=audit)
 
 
 @mcp.tool(name="regen_all")
@@ -456,6 +499,12 @@ async def regen_all() -> str:
 async def ping_gateway() -> str:
     """Ping the native AutoCAD Gateway server to verify HTTP connectivity on port 5055."""
     return await gateway.ping()
+
+
+@mcp.tool(name="ping_autocad_gateway")
+async def ping_autocad_gateway() -> str:
+    """Alias for ping_gateway: Ping the native AutoCAD Gateway server to verify HTTP connectivity."""
+    return await ping_gateway()
 
 
 @mcp.tool(name="execute_batch_commands")
@@ -497,6 +546,12 @@ async def evaluate_lisp(code: str) -> str:
     if not cmd.endswith("\n"):
         cmd += "\n"
     return await gateway.execute_command(cmd)
+
+
+@mcp.tool(name="execute_lisp")
+async def execute_lisp(code: str) -> str:
+    """Alias for evaluate_lisp: Evaluate and inject dynamic AutoLISP expressions into AutoCAD."""
+    return await evaluate_lisp(code=code)
 
 
 @mcp.tool(name="load_lisp_file")
@@ -543,6 +598,12 @@ async def configure_drawing_units() -> str:
     return await gateway.execute_command(script)
 
 
+@mcp.tool(name="configure_drawing_environment")
+async def configure_drawing_environment() -> str:
+    """Alias for configure_drawing_units: Configure AutoCAD drawing environment to metric meters."""
+    return await configure_drawing_units()
+
+
 # ============================================================================
 # MODULE 6: Sheet Layouts, Title Blocks & PDF Plotting (5 Tools)
 # ============================================================================
@@ -582,6 +643,16 @@ async def configure_layout_page(
         f"_.-PLOT\nN\n{clean}\nDWG To PDF.pc3\n{media}\nM\nL\nN\nL\n1:1\n0.00,0.00\nY\n{plot_style}\nY\nN\nN\nY\nN\n"
     )
     return await gateway.execute_command(cmd)
+
+
+@mcp.tool(name="configure_layout_sheet")
+async def configure_layout_sheet(
+    layout_name: str,
+    paper_size: str = "A1",
+    plot_style: str = "monochrome.ctb",
+) -> str:
+    """Alias for configure_layout_page: Configure standardized sheet size (A0 to A4) of a Layout."""
+    return await configure_layout_page(layout_name=layout_name, paper_size=paper_size, plot_style=plot_style)
 
 
 @mcp.tool(name="create_viewport")
@@ -650,6 +721,30 @@ async def insert_title_block(
     return await gateway.execute_command(cmd)
 
 
+@mcp.tool(name="insert_parametric_titleblock")
+async def insert_parametric_titleblock(
+    corner_x: float,
+    corner_y: float,
+    project_title: str = "ENGINEERING PROJECT",
+    drawing_name: str = "GENERAL PLAN",
+    sheet_code: str = "L-01",
+    scale_text: str = "1:1000",
+    author: str = "ENGINEERING",
+    date: str | None = None,
+) -> str:
+    """Alias for insert_title_block: Insert and draw a parametric engineering title block in PaperSpace."""
+    return await insert_title_block(
+        corner_x=corner_x,
+        corner_y=corner_y,
+        project_title=project_title,
+        drawing_name=drawing_name,
+        sheet_code=sheet_code,
+        scale_text=scale_text,
+        author=author,
+        date=date,
+    )
+
+
 @mcp.tool(name="export_pdf")
 async def export_pdf(layout_name: str, pdf_path: str, plot_style: str = "monochrome.ctb") -> str:
     """Plot and export a layout directly to a physical PDF document using 'DWG To PDF.pc3'."""
@@ -715,6 +810,16 @@ async def get_point_at_station(
     )
 
 
+@mcp.tool(name="get_station_coordinate")
+async def get_station_coordinate(
+    station: float,
+    offset: float = 0.0,
+    alignment_name: str | None = None,
+) -> str:
+    """Alias for get_point_at_station: Calculate (X, Y) coordinate given a station and lateral offset."""
+    return await get_point_at_station(station=station, offset=offset, alignment_name=alignment_name)
+
+
 @mcp.tool(name="sample_longitudinal_profile")
 async def sample_longitudinal_profile(
     interval: float = 20.0,
@@ -724,6 +829,17 @@ async def sample_longitudinal_profile(
     """Sample terrain longitudinal profile along an alignment every 'interval' meters, returning station, X, Y, and elevation."""
     if not all_finite(interval) or interval <= 0:
         return json.dumps({"status": "error", "message": "Interval must be greater than zero."})
+
+    # Fast path: Attempt atomic profile query directly from Gateway (1 roundtrip)
+    q_al_fast = f"&alignment={alignment_name}" if alignment_name else ""
+    q_sf_fast = f"&surface={surface_name}" if surface_name else ""
+    try:
+        atomic_res = await gateway.get_context(f"civil/profile?interval={num(interval)}{q_al_fast}{q_sf_fast}")
+        parsed_atomic = json.loads(atomic_res)
+        if parsed_atomic.get("status") == "success":
+            return atomic_res
+    except Exception:
+        pass
 
     res_al = await gateway.get_context("civil/alignments")
     try:
@@ -825,6 +941,20 @@ async def sample_longitudinal_profile(
             "average_slope_percent": avg_slope,
             "samples": samples,
         }
+    )
+
+
+@mcp.tool(name="get_longitudinal_profile")
+async def get_longitudinal_profile(
+    interval: float = 20.0,
+    alignment_name: str | None = None,
+    surface_name: str | None = None,
+) -> str:
+    """Alias for sample_longitudinal_profile: Sample terrain longitudinal profile along an alignment."""
+    return await sample_longitudinal_profile(
+        interval=interval,
+        alignment_name=alignment_name,
+        surface_name=surface_name,
     )
 
 

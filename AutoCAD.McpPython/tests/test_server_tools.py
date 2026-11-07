@@ -61,15 +61,36 @@ EXPECTED_TOOLS = [
 ]
 
 
+EXPECTED_ALIASES = [
+    "read_layers",
+    "read_objects",
+    "read_texts",
+    "read_selection",
+    "list_available_blocks",
+    "capture_screen",
+    "clean_and_purge_drawing",
+    "ping_autocad_gateway",
+    "execute_lisp",
+    "configure_drawing_environment",
+    "configure_layout_sheet",
+    "insert_parametric_titleblock",
+    "get_station_coordinate",
+    "get_longitudinal_profile",
+]
+
+
 @pytest.mark.asyncio
 async def test_tool_count_and_names():
     tools = await mcp.list_tools()
     tool_names = [t.name for t in tools]
 
-    assert len(tool_names) == 45, f"Expected 45 tools, found {len(tool_names)}: {tool_names}"
+    assert len(tool_names) == 59, f"Expected 59 tools (45 base + 14 aliases), found {len(tool_names)}: {tool_names}"
 
     for expected in EXPECTED_TOOLS:
         assert expected in tool_names, f"Missing expected tool: {expected}"
+
+    for alias in EXPECTED_ALIASES:
+        assert alias in tool_names, f"Missing expected alias tool: {alias}"
 
 
 def test_gateway_client_default_configuration():
@@ -126,3 +147,30 @@ def test_gateway_client_environment_overrides():
                 os.environ[k] = v
             else:
                 os.environ.pop(k, None)
+
+
+@pytest.mark.asyncio
+async def test_purge_and_clean_alias_parity(monkeypatch):
+    from autocad_mcp.server import purge_and_audit_drawing, clean_and_purge_drawing
+    import autocad_mcp.server as srv
+
+    executed_commands = []
+
+    async def mock_execute(cmd: str):
+        executed_commands.append(cmd)
+        return '{"status": "success"}'
+
+    monkeypatch.setattr(srv.gateway, "execute_command", mock_execute)
+
+    # Test safe ActiveX AutoLISP purge
+    res1 = await purge_and_audit_drawing(target="all", audit=True)
+    assert len(executed_commands) == 1
+    assert "(vla-PurgeAll" in executed_commands[0]
+    assert "_.AUDIT\n_Y\n" in executed_commands[0]
+
+    # Test alias produces same result
+    executed_commands.clear()
+    res2 = await clean_and_purge_drawing(target="all", audit=True)
+    assert len(executed_commands) == 1
+    assert "(vla-PurgeAll" in executed_commands[0]
+    assert "_.AUDIT\n_Y\n" in executed_commands[0]
