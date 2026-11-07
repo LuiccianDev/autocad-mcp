@@ -116,3 +116,26 @@ Para proteger los minutos de cómputo y evitar ejecuciones innecesarias de runne
 3. **Cancelación Automática de Trabajos Obsoletos (`concurrency`):**
    - Mantener siempre configurado `concurrency: cancel-in-progress: true` en todos los flujos de CI para que nuevos pushes a la misma rama cancelen de inmediato las ejecuciones en curso previas, evitando el consumo de minutos duplicados.
 
+---
+
+## 6. Política de Versionado y Mantenimiento del CHANGELOG.md
+
+Para mantener estricta coherencia entre el repositorio, GitHub Releases y PyPI:
+
+1. **Estándar SemVer y Keep a Changelog:**
+   - Seguir rigurosamente [Keep a Changelog](https://keepachangelog.com/) y [Semantic Versioning 2.0.0](https://semver.org/).
+   - Secciones permitidas: `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+
+2. **Convención de Versión en Desarrollo (`[Unreleased]`):**
+   - Todos los cambios, optimizaciones y nuevas herramientas implementadas en la rama `master` que aún no hayan sido publicadas formalmente con un tag de git deben registrarse bajo el encabezado `## [X.Y.Z] - Unreleased`.
+   - Queda prohibido marcar una fecha definitiva en el Changelog hasta que se cree el tag oficial de la versión correspondiente.
+
+3. **Sincronización Atómica de Versiones:**
+   - La versión activa del proyecto debe estar 100% sincronizada entre:
+     - `AutoCAD.Gateway/AutoCAD.Gateway.csproj` (`<Version>`)
+     - `AutoCAD.McpServer/AutoCAD.McpServer.csproj` (`<Version>`)
+     - `AutoCAD.McpPython/pyproject.toml` (`version = "..."`)
+     - `CHANGELOG.md` (`## [X.Y.Z] - YYYY-MM-DD`)
+     - Tag de Git (`vX.Y.Z`).
+
+

@@ -7,12 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [2.4.0] - 2026-11-06
+## [2.4.0] - Unreleased
+
+### Added
+- **Atomic Batch Drafting Engine (45 Tools Parity):**
+  - Added `dibujar_geometria_lote`: Atomic batch drafting tool consolidating lines, polylines, rectangles, circles, arcs, and text into a single AutoLISP evaluation `(progn (entmake ...) ...)`, reducing execution latency by ~99% and token usage by ~95%.
+  - Added `ejecutar_comandos_lote`: Atomic command sequencing without intermediate client roundtrips.
+- **PyPI Trusted Publishing (OIDC):** Automated provenance and cryptographic attestations via GitHub Actions workflow `publish-pypi.yml`.
+- **Zero-Install Deployment via `uvx luiccian-autocad-mcp`:** Formalized as the primary Tier 1 setup for Claude Desktop, Antigravity, and Cursor.
+
+### Fixed & Security
+- **Security Remediation (CWE-209):** Sanitized HTTP 500 error responses in `HttpGatewayServer.cs` to eliminate exception information exposure, verified and closed as `Fixed` in GitHub CodeQL scanning.
+- **GitHub Actions Quota Optimization:** Implemented comprehensive `paths-ignore` exclusions (`.agents/**`, `examples/**`, templates, git configs) and `concurrency: cancel-in-progress` in `ci.yml` and `codeql.yml` to prevent billable runner waste.
+- **YAML Workflow Validation:** Resolved multiline indentation syntax error in release notes generation by decoupling logic into `scripts/generate-release-notes.ps1`.
+- **Release Asset Sanitation:** Fixed asset globbing to exclude unintended files (`.gitignore`) from GitHub Releases.
+
+### Changed
+- Standardized tool count to 45 across `README.md`, `docs/GETTING_STARTED.md`, `AutoCAD.McpPython/README.md`, and example configs.
+- Modernized root `README.md` with centered HTML hero section, badges, and quick navigation breadcrumbs.
+
+---
+
+## [2.3.0] - 2026-11-07
 
 ### Added
 - **Python MCP Server (`AutoCAD.McpPython/`) with Instant `uvx` Support:**
   - Complete implementation based on FastMCP providing 100% functional parity across all 43 tools.
-  - Packaged with Hatchling and `uv` for zero-install execution via `uvx autocad-mcp`.
+  - Packaged with Hatchling and `uv` for zero-install execution via `uvx luiccian-autocad-mcp`.
   - Modules `cad_math.py` (pure analytical geometry) and `client.py` (asynchronous HTTP client with `httpx`).
   - Automated test suite with `pytest` and `pytest-asyncio` (9 passing unit tests).
 - **Dynamic Network Support & Simplified Port Configuration:**
@@ -21,11 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dynamic Token Management in AutoCAD:**
   - New native AutoCAD commands: `AI_SHOW_CONFIG` (status & token inspection), `AI_SET_TOKEN` (hot-reloading token in memory), and `AI_GENERATE_TOKEN` (cryptographic random token generator with Windows environment variable persistence).
   - PowerShell utility script `scripts/set-gateway-token.ps1` for automatic synchronization between Windows user variables and AI client configs.
+- **MCP Catalog Expansion to 43 Specialized Tools:**
+  - **`DrawingTools` Module (7 tools):** Strongly-typed parametric geometry (`dibujar_linea`, `dibujar_polilinea`, `dibujar_rectangulo`, `dibujar_circulo`, `dibujar_arco`, `insertar_texto`, `insertar_bloque`) implemented with metric `entmake`, independent of OSNAP and preserving active layers.
+  - **`LayerTools` Module (3 tools):** Layer management and state control (`crear_capa`, `establecer_capa_actual`, `establecer_estado_capa` for visibility, freeze/thaw, and lock/unlock).
+  - **`MeasurementTools` Module (4 tools):** Local analytical computational geometry (`medir_distancia` 2D/3D with azimuth and slope, `calcular_area_poligono` using Gauss algorithm and centroid, `limpiar_y_purgar_dibujo` with `AUDIT`, and `regenerar_todo` with `REGENALL`).
+  - **`Civil3DTools` Module:** Added `consultar_perfil_longitudinal` for parametric ground profile sampling along alignments with slope and extreme elevation analysis.
 - **CI/CD Hardening & GitHub Governance:**
   - Headless CI compilation via fallback NuGet packages (`AutoCAD.NET 26.0.0` and `Speckle.Civil3D.API 2027.0.1`).
   - Node 24 runner opt-in (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`).
-  - CodeQL automated security analysis workflow (`codeql.yml`) and automated release pipeline (`release.yml`).
-  - Smart `paths-ignore` triggers preventing redundant CI executions on documentation and template changes.
+  - Automated release pipeline (`release.yml`) and PyPI publication chain.
 
 ### Changed
 - **Folder and Project Standard Re-architecture:**
@@ -37,19 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Official Branding & Attribution (Luiccian):**
   - Attribution and creator credits to **Luiccian** (`LuiccianDev`) across assemblies, packages, and AutoCAD welcome banners.
   - Standardized default security token to `luiccian-autocad-token-2027`.
-
----
-
-## [2.3.0] - 2026-11-06
-
-### Added
-- **MCP Catalog Expansion to 43 Specialized Tools:**
-  - **`DrawingTools` Module (7 tools):** Strongly-typed parametric geometry (`dibujar_linea`, `dibujar_polilinea`, `dibujar_rectangulo`, `dibujar_circulo`, `dibujar_arco`, `insertar_texto`, `insertar_bloque`) implemented with metric `entmake`, independent of OSNAP and preserving active layers.
-  - **`LayerTools` Module (3 tools):** Layer management and state control (`crear_capa`, `establecer_capa_actual`, `establecer_estado_capa` for visibility, freeze/thaw, and lock/unlock).
-  - **`MeasurementTools` Module (4 tools):** Local analytical computational geometry (`medir_distancia` 2D/3D with azimuth and slope, `calcular_area_poligono` using Gauss algorithm and centroid, `limpiar_y_purgar_dibujo` with `AUDIT`, and `regenerar_todo` with `REGENALL`).
-  - **`Civil3DTools` Module:** Added `consultar_perfil_longitudinal` for parametric ground profile sampling along alignments with slope and extreme elevation analysis.
-  - **`CadFormat` Utilities:** Invariant numeric formatting, AutoCAD symbol name validation, and safe point parsing.
-- **MCP Regex Compliance:** Sanitized tool names (`insertar_cajetin_parametrico`) to strictly match MCP specification `^[A-Za-z0-9_.-]{1,128}\z`.
 
 ---
 

@@ -1,14 +1,32 @@
+<div align="center">
+
 # AutoCAD MCP — AI Gateway & MCP Server Integration
 
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
-[![PyPI version](https://img.shields.io/pypi/v/luiccian-autocad-mcp.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/luiccian-autocad-mcp/)
-[![uv](https://img.shields.io/badge/managed%20by-uv-261230?style=flat&logo=uv&logoColor=white)](https://astral.sh/uv)
-[![AutoCAD 2027](https://img.shields.io/badge/AutoCAD-2027-E51937?style=flat&logo=autodesk&logoColor=white)](https://www.autodesk.com/autocad)
-[![MCP Protocol](https://img.shields.io/badge/MCP-v2.2-0052CC?style=flat)](https://modelcontextprotocol.io/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![CI Build](https://img.shields.io/badge/CI-GitHub_Actions-2ea44f?style=flat&logo=githubactions&logoColor=white)](.github/workflows/ci.yml)
-[![Changelog](https://img.shields.io/badge/Changelog-Keep_a_Changelog-orange?style=flat)](CHANGELOG.md)
+**High-Performance Bidirectional Bridge Connecting AI Agents with Autodesk AutoCAD 2027 & Civil 3D**
+
+<p align="center">
+  <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat&logo=dotnet&logoColor=white" alt=".NET 10" /></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python&logoColor=white" alt="Python 3.10+" /></a>
+  <a href="https://pypi.org/project/luiccian-autocad-mcp/"><img src="https://img.shields.io/pypi/v/luiccian-autocad-mcp.svg?logo=pypi&logoColor=FFE873" alt="PyPI version" /></a>
+  <a href="https://astral.sh/uv"><img src="https://img.shields.io/badge/managed%20by-uv-261230?style=flat&logo=uv&logoColor=white" alt="uv" /></a>
+  <a href="https://www.autodesk.com/autocad"><img src="https://img.shields.io/badge/AutoCAD-2027-E51937?style=flat&logo=autodesk&logoColor=white" alt="AutoCAD 2027" /></a>
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-v2.2-0052CC?style=flat" alt="MCP Protocol" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
+  <a href=".github/workflows/ci.yml"><img src="https://img.shields.io/badge/CI-GitHub_Actions-2ea44f?style=flat&logo=githubactions&logoColor=white" alt="CI Build" /></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/Changelog-Keep_a_Changelog-orange?style=flat" alt="Changelog" /></a>
+</p>
+
+<p align="center">
+  <a href="docs/GETTING_STARTED.md"><b>Getting Started</b></a> •
+  <a href="docs/ARCHITECTURE.md"><b>Architecture</b></a> •
+  <a href="docs/TOOLS_REFERENCE.md"><b>45 MCP Tools</b></a> •
+  <a href="https://pypi.org/project/luiccian-autocad-mcp/"><b>PyPI Package</b></a> •
+  <a href="docs/TROUBLESHOOTING.md"><b>Troubleshooting</b></a>
+</p>
+
+</div>
+
+---
 
 High-performance, bidirectional bridge connecting **Artificial Intelligence Models** (Claude, Antigravity, Cursor, ChatGPT, etc.) with **Autodesk AutoCAD 2027 & Civil 3D**. Features dual MCP client architectures (**Python with instant `uvx` support** or **native C# on .NET 10**) adhering to the **Model Context Protocol (MCP v2.2)** specification with 45 strongly-typed tools.
 
