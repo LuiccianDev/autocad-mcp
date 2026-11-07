@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (leave empty to auto-detect from pyproject.toml, e.g. v2.3.0)'
+        required: false
+        default: ''
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -15,10 +21,32 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Determine Release Tag and Version
+      id: tag_info
+      shell: pwsh
+      run: |
+        $tag = "${{ github.event.inputs.tag_name }}"
+        if (-not $tag) {
+          if ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+          } else {
+            $rawVer = (Get-Content "AutoCAD.McpPython\pyproject.toml" | Select-String 'version = "(.*?)"').Matches.Groups[1].Value
+            $tag = "v$rawVer"
+          }
+        }
+        $version = $tag.TrimStart('v')
+        Write-Host ">>> Resolved Release Tag: $tag"
+        Write-Host ">>> Resolved Version: $version"
+        Write-Output "tag=$tag" >> $env:GITHUB_OUTPUT
+        Write-Output "version=$version" >> $env:GITHUB_OUTPUT
 
     - name: Setup .NET 10 SDK
       uses: actions/setup-dotnet@v4
@@ -31,7 +59,7 @@ jobs:
     - name: Restore and Build .NET Solution
       run: |
         dotnet restore AutoCAD_Integration.slnx
-        dotnet build AutoCAD_Integration.slnx -c Release --no-restore
+        dotnet build AutoCAD_Integration.slnx -c Release --no-restore /p:Version=${{ steps.tag_info.outputs.version }}
 
     - name: Package AutoCAD Gateway (.zip)
       run: |
@@ -48,8 +76,19 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
+        tag_name: ${{ steps.tag_info.outputs.tag }}
+        name: Release ${{ steps.tag_info.outputs.tag }}
         files: |
           AutoCAD.Gateway-Release.zip
           AutoCAD.McpServer-Release.zip
           AutoCAD.McpPython/dist/*
         generate_release_notes: true
+        make_latest: true
+
+    - name: Trigger PyPI Publication Workflow
+      shell: pwsh
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        Write-Host ">>> Triggering chained PyPI publication workflow..."
+        gh workflow run publish-pypi.yml --ref master -f target_env=pypi
