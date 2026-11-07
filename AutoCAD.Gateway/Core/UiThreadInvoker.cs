@@ -5,15 +5,15 @@ using Autodesk.AutoCAD.ApplicationServices;
 namespace AutoCAD.Gateway.Core;
 
 /// <summary>
-/// Ejecuta delegados sobre el documento activo en el hilo principal de AutoCAD (evento Idle).
+/// Executes delegates on the active document in the AutoCAD main UI thread (Application.Idle event).
 /// </summary>
 public static class UiThreadInvoker
 {
     /// <summary>
-    /// Ejecuta una función sobre el documento activo en el hilo UI y devuelve su resultado serializado.
+    /// Executes a function on the active document on the UI thread and returns its serialized result.
     /// </summary>
-    /// <param name="query">Función que recibe el documento activo y retorna una cadena JSON.</param>
-    /// <returns>Tarea con el resultado; falla con la excepción original si la función lanza.</returns>
+    /// <param name="query">Function receiving active document and returning a JSON string.</param>
+    /// <returns>Task with result; fails if the function throws.</returns>
     public static Task<string> RunOnIdleAsync(Func<Document, string> query)
     {
         var tcs = new TaskCompletionSource<string>();
@@ -29,7 +29,7 @@ public static class UiThreadInvoker
                 Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
                 if (doc == null)
                 {
-                    tcs.SetResult("{\"status\": \"error\", \"message\": \"No hay documento abierto\"}");
+                    tcs.SetResult("{\"status\": \"error\", \"message\": \"No active drawing document open in AutoCAD.\"}");
                     return;
                 }
 

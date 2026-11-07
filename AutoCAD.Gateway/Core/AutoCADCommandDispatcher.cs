@@ -5,7 +5,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 namespace AutoCAD.Gateway.Core;
 
 /// <summary>
-/// Gestiona la cola concurrente y el despacho seguro de comandos en el hilo principal de AutoCAD mediante el evento Application.Idle.
+/// Manages concurrent queue and safe command dispatching onto the AutoCAD main UI thread via Application.Idle.
 /// </summary>
 public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
 {
@@ -13,7 +13,7 @@ public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
     private readonly EventHandler _idleHandler;
 
     /// <summary>
-    /// Inicializa una nueva instancia de la clase <see cref="AutoCADCommandDispatcher"/>.
+    /// Initializes a new instance of the <see cref="AutoCADCommandDispatcher"/> class.
     /// </summary>
     public AutoCADCommandDispatcher()
     {
@@ -30,13 +30,11 @@ public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
     }
 
     /// <summary>
-    /// Manejador del evento Idle de AutoCAD que procesa los comandos pendientes en el hilo principal.
+    /// Event handler for AutoCAD Application.Idle processing pending queued commands on the main thread.
     /// </summary>
-    /// <param name="sender">El origen del evento.</param>
-    /// <param name="e">Los argumentos del evento.</param>
     private void ExecuteCommandsOnIdle(object? sender, EventArgs e)
     {
-        // Desvincular inmediatamente para evitar ejecuciones fantasmas o bucles continuos
+        // Unbind immediately to avoid repeated invocation or tight loops on UI thread
         Autodesk.AutoCAD.ApplicationServices.Application.Idle -= _idleHandler;
 
         Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
@@ -46,8 +44,8 @@ public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
         {
             if (string.IsNullOrEmpty(cmd)) continue;
 
-            // DIRECTIVA DE SEGURIDAD:
-            // \x03\x03 al inicio para cancelar cualquier comando previo que haya quedado activo o pegado.
+            // SAFETY DIRECTIVE:
+            // \x03\x03 cancels any previous stuck command before injecting the new payload.
             string safeCommand = "\x03\x03" + cmd;
             doc.SendStringToExecute(safeCommand, true, false, false);
         }

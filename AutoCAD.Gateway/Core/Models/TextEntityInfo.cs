@@ -3,37 +3,49 @@ using System.Text.Json.Serialization;
 namespace AutoCAD.Gateway.Core.Models;
 
 /// <summary>
-/// Contiene datos de una entidad de texto (DBText o MText) en el dibujo.
+/// Represents text entity content and spatial position in AutoCAD (DBText / MText).
 /// </summary>
 public sealed class TextEntityInfo
 {
     /// <summary>
-    /// Obtiene o establece el tipo de texto ("DBText" o "MText").
+    /// Gets or sets the entity type ("DBText" or "MText").
     /// </summary>
-    [JsonPropertyName("tipo")]
-    public string Tipo { get; set; } = string.Empty;
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = string.Empty;
 
     /// <summary>
-    /// Obtiene o establece el contenido textual.
+    /// Gets or sets the text string content.
     /// </summary>
-    [JsonPropertyName("texto")]
-    public string Texto { get; set; } = string.Empty;
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
 
     /// <summary>
-    /// Obtiene o establece la posición X en coordenadas del dibujo.
+    /// Gets or sets the X insertion coordinate.
     /// </summary>
     [JsonPropertyName("x")]
     public double X { get; set; }
 
     /// <summary>
-    /// Obtiene o establece la posición Y en coordenadas del dibujo.
+    /// Gets or sets the Y insertion coordinate.
     /// </summary>
     [JsonPropertyName("y")]
     public double Y { get; set; }
 
     /// <summary>
-    /// Obtiene o establece la capa donde se ubica el texto.
+    /// Gets or sets the layer name.
     /// </summary>
+    [JsonPropertyName("layer")]
+    public string Layer { get; set; } = string.Empty;
+
+    /// <summary>Legacy alias for 'type'.</summary>
+    [JsonPropertyName("tipo")]
+    public string Tipo => Type;
+
+    /// <summary>Legacy alias for 'text'.</summary>
+    [JsonPropertyName("texto")]
+    public string Texto => Text;
+
+    /// <summary>Legacy alias for 'layer'.</summary>
     [JsonPropertyName("capa")]
-    public string Capa { get; set; } = string.Empty;
+    public string Capa => Layer;
 }

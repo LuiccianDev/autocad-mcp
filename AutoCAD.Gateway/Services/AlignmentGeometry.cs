@@ -5,22 +5,22 @@ using AutoCAD.Gateway.Core.Models;
 namespace AutoCAD.Gateway.Services;
 
 /// <summary>
-/// Geometría pura de ejes: convierte PIs y radio en vértices de polilínea con arcos tangentes (bulge).
-/// No depende de la API de AutoCAD ni de Civil 3D.
+/// Pure centerline geometry calculations: converts PIs and radius into polyline vertices with tangent arc bulges.
+/// Has no dependency on AutoCAD or Civil 3D runtime assemblies.
 /// </summary>
 public static class AlignmentGeometry
 {
     private const double Epsilon = 1e-9;
 
     /// <summary>
-    /// Genera vértices (x, y, bulge) con curvas circulares de radio fijo en cada PI interior.
+    /// Generates polyline vertices (x, y, bulge) with circular curves of fixed radius at each interior PI.
     /// </summary>
-    /// <param name="pis">Puntos de inflexión en orden (mínimo 2).</param>
-    /// <param name="radio">Radio en metros; 0 no inserta curvas.</param>
-    /// <param name="error">Motivo del rechazo si el trazo no es válido.</param>
-    /// <returns>Lista de vértices, o null si hay error.</returns>
+    /// <param name="pis">Points of intersection in station order (minimum 2).</param>
+    /// <param name="radius">Curve radius in meters; 0 inserts no curves.</param>
+    /// <param name="error">Output rejection reason if geometry is invalid.</param>
+    /// <returns>List of polyline vertices, or null if invalid.</returns>
     public static List<(double X, double Y, double Bulge)>? BuildVertices(
-        IReadOnlyList<PuntoXY> pis, double radio, out string? error)
+        IReadOnlyList<PointXY> pis, double radius, out string? error)
     {
         error = null;
         int n = pis.Count;
@@ -28,7 +28,7 @@ public static class AlignmentGeometry
         {
             if (Dist(pis[i], pis[i + 1]) < Epsilon)
             {
-                error = $"PI {i} y PI {i + 1} coinciden: segmento de longitud cero.";
+                error = $"PI {i} and PI {i + 1} coincide: zero-length segment.";
                 return null;
             }
         }
@@ -36,7 +36,7 @@ public static class AlignmentGeometry
         var tangentes = new double[n];
         var deflexiones = new double[n];
         var giro = new double[n];
-        if (radio > 0)
+        if (radius > 0)
         {
             for (int i = 1; i < n - 1; i++)
             {
@@ -49,20 +49,20 @@ public static class AlignmentGeometry
                 double defl = Math.Atan2(Math.Abs(cross), dot);
                 if (defl < Epsilon)
                 {
-                    continue; // PI colineal: no requiere curva
+                    continue; // Collinear PI: no curve required
                 }
 
                 deflexiones[i] = defl;
                 giro[i] = Math.Sign(cross);
-                tangentes[i] = radio * Math.Tan(defl / 2);
+                tangentes[i] = radius * Math.Tan(defl / 2);
             }
 
             for (int i = 0; i < n - 1; i++)
             {
                 if (tangentes[i] + tangentes[i + 1] > Dist(pis[i], pis[i + 1]) + Epsilon)
                 {
-                    error = $"Radio {radio} m demasiado grande: las tangentes de los PI {i} y {i + 1} " +
-                            "exceden la longitud del segmento. Reduce el radio.";
+                    error = $"Radius {radius} m is too large: tangents for PI {i} and {i + 1} " +
+                            "exceed the segment length. Reduce radius.";
                     return null;
                 }
             }
@@ -90,16 +90,16 @@ public static class AlignmentGeometry
         return vertices;
     }
 
-    /// <summary>Formatea una progresiva en notación de estaca, por ejemplo 1250.5 → "1+250.50".</summary>
-    /// <param name="progresiva">Progresiva en metros.</param>
-    public static string FormatStation(double progresiva)
+    /// <summary>Formats a station in standard stationing notation (e.g., 1250.5 -> "1+250.50").</summary>
+    /// <param name="station">Station in meters.</param>
+    public static string FormatStation(double station)
     {
-        int km = (int)Math.Floor(progresiva / 1000.0);
-        double resto = progresiva - km * 1000.0;
-        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{km}+{resto:000.00}");
+        int km = (int)Math.Floor(station / 1000.0);
+        double remainder = station - km * 1000.0;
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{km}+{remainder:000.00}");
     }
 
-    private static double Dist(PuntoXY a, PuntoXY b)
+    private static double Dist(PointXY a, PointXY b)
     {
         double dx = b.X - a.X, dy = b.Y - a.Y;
         return Math.Sqrt(dx * dx + dy * dy);

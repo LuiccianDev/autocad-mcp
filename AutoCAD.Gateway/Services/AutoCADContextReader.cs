@@ -13,15 +13,15 @@ using AutoCAD.Gateway.Core.Models;
 namespace AutoCAD.Gateway.Services;
 
 /// <summary>
-/// Implementación para la lectura segura de la base de datos de AutoCAD en el hilo principal.
+/// Implementation for thread-safe AutoCAD database inspection executed on the main UI thread.
 /// </summary>
 public sealed class AutoCADContextReader : IAutoCADContextReader
 {
     /// <summary>
-    /// Ejecuta una función de consulta sobre el documento activo en el hilo principal mediante el evento Idle.
+    /// Executes a query function on the active document on the main thread via the Application.Idle event.
     /// </summary>
-    /// <param name="query">La función delegada que recibe el documento activo y retorna una cadena serializada.</param>
-    /// <returns>Una tarea asíncrona con el resultado devuelto por la consulta.</returns>
+    /// <param name="query">Delegate function receiving active document and returning serialized JSON string.</param>
+    /// <returns>Asynchronous task returning serialized query result.</returns>
     private static Task<string> RunOnIdleAsync(Func<Document, string> query) =>
         AutoCAD.Gateway.Core.UiThreadInvoker.RunOnIdleAsync(query);
 
@@ -37,7 +37,12 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
                 ? selection.Value.GetObjectIds().Length
                 : 0;
 
-            return JsonSerializer.Serialize(new { status = "success", cantidad_seleccionada = count });
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                selection_count = count,
+                cantidad_seleccionada = count
+            });
         });
     }
 
@@ -57,8 +62,8 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
                 foreach (var objId in btr)
                 {
                     var ent = (Entity)tr.GetObject(objId, OpenMode.ForRead);
-                    string tipo = ent.GetType().Name;
-                    entityCounts[tipo] = entityCounts.TryGetValue(tipo, out int c) ? c + 1 : 1;
+                    string type = ent.GetType().Name;
+                    entityCounts[type] = entityCounts.TryGetValue(type, out int c) ? c + 1 : 1;
                 }
                 tr.Commit();
             }
@@ -75,9 +80,9 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
         {
             var info = new DrawingInfo
             {
-                Nombre = doc.Name,
-                SoloLectura = doc.IsReadOnly,
-                Unidades = doc.Database.Insunits.ToString()
+                Name = doc.Name,
+                IsReadOnly = doc.IsReadOnly,
+                Units = doc.Database.Insunits.ToString()
             };
             return JsonSerializer.Serialize(new { status = "success", data = info });
         });
@@ -88,25 +93,25 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
     {
         return RunOnIdleAsync(doc =>
         {
-            var lista = new List<LayerInfo>();
+            var list = new List<LayerInfo>();
             using (var tr = doc.TransactionManager.StartTransaction())
             {
                 var lt = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
                 foreach (ObjectId id in lt)
                 {
                     var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-                    lista.Add(new LayerInfo
+                    list.Add(new LayerInfo
                     {
-                        Nombre = ltr.Name,
-                        Bloqueada = ltr.IsLocked,
-                        Congelada = ltr.IsFrozen,
-                        Apagada = ltr.IsOff,
+                        Name = ltr.Name,
+                        IsLocked = ltr.IsLocked,
+                        IsFrozen = ltr.IsFrozen,
+                        IsOff = ltr.IsOff,
                         Color = ltr.Color.ColorIndex
                     });
                 }
                 tr.Commit();
             }
-            return JsonSerializer.Serialize(new { status = "success", data = lista });
+            return JsonSerializer.Serialize(new { status = "success", data = list });
         });
     }
 
@@ -135,7 +140,7 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
     {
         return RunOnIdleAsync(doc =>
         {
-            var lista = new List<TextEntityInfo>();
+            var list = new List<TextEntityInfo>();
             using (var tr = doc.TransactionManager.StartTransaction())
             {
                 var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
@@ -146,30 +151,30 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
                     var ent = tr.GetObject(objId, OpenMode.ForRead);
                     if (ent is DBText dbText)
                     {
-                        lista.Add(new TextEntityInfo
+                        list.Add(new TextEntityInfo
                         {
-                            Tipo = "DBText",
-                            Texto = dbText.TextString,
+                            Type = "DBText",
+                            Text = dbText.TextString,
                             X = dbText.Position.X,
                             Y = dbText.Position.Y,
-                            Capa = dbText.Layer
+                            Layer = dbText.Layer
                         });
                     }
                     else if (ent is MText mText)
                     {
-                        lista.Add(new TextEntityInfo
+                        list.Add(new TextEntityInfo
                         {
-                            Tipo = "MText",
-                            Texto = mText.Contents,
+                            Type = "MText",
+                            Text = mText.Contents,
                             X = mText.Location.X,
                             Y = mText.Location.Y,
-                            Capa = mText.Layer
+                            Layer = mText.Layer
                         });
                     }
                 }
                 tr.Commit();
             }
-            return JsonSerializer.Serialize(new { status = "success", data = lista });
+            return JsonSerializer.Serialize(new { status = "success", data = list });
         });
     }
 
@@ -178,7 +183,7 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
     {
         return RunOnIdleAsync(doc =>
         {
-            var lista = new List<string>();
+            var list = new List<string>();
             using (var tr = doc.TransactionManager.StartTransaction())
             {
                 var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
@@ -187,12 +192,12 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
                     var btr = (BlockTableRecord)tr.GetObject(objId, OpenMode.ForRead);
                     if (!btr.IsAnonymous && !btr.IsLayout)
                     {
-                        lista.Add(btr.Name);
+                        list.Add(btr.Name);
                     }
                 }
                 tr.Commit();
             }
-            return JsonSerializer.Serialize(new { status = "success", data = lista });
+            return JsonSerializer.Serialize(new { status = "success", data = list });
         });
     }
 
@@ -244,7 +249,7 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
 
                 if (width <= 0 || height <= 0)
                 {
-                    return JsonSerializer.Serialize(new { status = "error", message = "No se pudieron obtener las dimensiones de la ventana de AutoCAD." });
+                    return JsonSerializer.Serialize(new { status = "error", message = "Could not determine AutoCAD window dimensions." });
                 }
 
                 using var bitmap = new Bitmap(width, height);
@@ -271,7 +276,7 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
             catch (Exception ex)
             {
                 System.Diagnostics.Trace.TraceError("Screenshot capture error: {0}", ex);
-                return JsonSerializer.Serialize(new { status = "error", message = "Error al capturar pantalla de AutoCAD." });
+                return JsonSerializer.Serialize(new { status = "error", message = "An error occurred while capturing the AutoCAD window screenshot." });
             }
         });
     }

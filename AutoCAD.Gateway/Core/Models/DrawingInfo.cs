@@ -3,25 +3,37 @@ using System.Text.Json.Serialization;
 namespace AutoCAD.Gateway.Core.Models;
 
 /// <summary>
-/// Contiene metadatos e información básica sobre el documento activo de AutoCAD.
+/// Contains metadata and basic information about the active AutoCAD drawing document.
 /// </summary>
 public sealed class DrawingInfo
 {
     /// <summary>
-    /// Obtiene o establece el nombre o ruta del archivo de dibujo activo.
+    /// Gets or sets the file path or name of the active drawing.
     /// </summary>
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the document is in read-only mode.
+    /// </summary>
+    [JsonPropertyName("is_read_only")]
+    public bool IsReadOnly { get; set; }
+
+    /// <summary>
+    /// Gets or sets the drawing insertion units (INSUNITS).
+    /// </summary>
+    [JsonPropertyName("units")]
+    public string Units { get; set; } = string.Empty;
+
+    /// <summary>Legacy alias for 'name'.</summary>
     [JsonPropertyName("nombre")]
-    public string Nombre { get; set; } = string.Empty;
+    public string Nombre => Name;
 
-    /// <summary>
-    /// Obtiene o establece un valor que indica si el documento está en modo de solo lectura.
-    /// </summary>
+    /// <summary>Legacy alias for 'is_read_only'.</summary>
     [JsonPropertyName("soloLectura")]
-    public bool SoloLectura { get; set; }
+    public bool SoloLectura => IsReadOnly;
 
-    /// <summary>
-    /// Obtiene o establece las unidades de inserción configuradas en el dibujo (INSUNITS).
-    /// </summary>
+    /// <summary>Legacy alias for 'units'.</summary>
     [JsonPropertyName("unidades")]
-    public string Unidades { get; set; } = string.Empty;
+    public string Unidades => Units;
 }

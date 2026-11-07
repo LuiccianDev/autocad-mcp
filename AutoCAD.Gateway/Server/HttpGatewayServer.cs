@@ -9,20 +9,20 @@ using AutoCAD.Gateway.Services;
 namespace AutoCAD.Gateway.Server;
 
 /// <summary>
-/// Servidor HTTP basado en <see cref="HttpListener"/> que expone el API de comunicación con AutoCAD.
+/// HTTP server based on <see cref="HttpListener"/> exposing the communication API for AutoCAD.
 /// </summary>
 public sealed class HttpGatewayServer
 {
     private static readonly Lazy<HttpGatewayServer> _lazyInstance = new(() => new HttpGatewayServer());
 
     /// <summary>
-    /// Obtiene la instancia única compartida del servidor Gateway.
+    /// Gets the shared singleton instance of the Gateway server.
     /// </summary>
     public static HttpGatewayServer Instance => _lazyInstance.Value;
 
     /// <summary>
-    /// Obtiene o establece el token activo requerido en la cabecera 'X-Gateway-Token'.
-    /// Puede modificarse dinámicamente en tiempo de ejecución sin reiniciar AutoCAD.
+    /// Gets or sets the active token required in the 'X-Gateway-Token' header.
+    /// Can be dynamically updated at runtime without restarting AutoCAD.
     /// </summary>
     public static string ActiveToken { get; set; } =
         Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_TOKEN") ?? "luiccian-autocad-token-2027";
@@ -35,7 +35,7 @@ public sealed class HttpGatewayServer
     private CancellationTokenSource? _cts;
 
     /// <summary>
-    /// Inicializa una nueva instancia de la clase <see cref="HttpGatewayServer"/>.
+    /// Initializes a new instance of the <see cref="HttpGatewayServer"/> class.
     /// </summary>
     public HttpGatewayServer()
     {
@@ -45,15 +45,14 @@ public sealed class HttpGatewayServer
     }
 
     /// <summary>
-    /// Obtiene un valor que indica si el servidor HTTP se encuentra en ejecución y escuchando peticiones.
+    /// Gets a value indicating whether the HTTP server is currently running and listening for requests.
     /// </summary>
     public bool IsRunning => _listener != null && _listener.IsListening;
 
     /// <summary>
-    /// Inicia el servidor HTTP en el prefijo URL especificado.
+    /// Starts the HTTP server on the specified URL prefix.
     /// </summary>
-    /// <param name="urlPrefix">El prefijo URL de escucha (por ejemplo, "http://localhost:5055/").</param>
-    /// <exception cref="InvalidOperationException">El servidor ya se encuentra en ejecución.</exception>
+    /// <param name="urlPrefix">The listening URL prefix (e.g., "http://localhost:5055/").</param>
     public void Start(string urlPrefix)
     {
         if (IsRunning) return;
@@ -67,7 +66,7 @@ public sealed class HttpGatewayServer
     }
 
     /// <summary>
-    /// Detiene y libera el servidor HTTP.
+    /// Stops and releases the HTTP server.
     /// </summary>
     public void Stop()
     {
@@ -81,7 +80,7 @@ public sealed class HttpGatewayServer
         }
         catch (ObjectDisposedException)
         {
-            // Ignorar si ya fue cerrado previamente
+            // Ignore if already disposed
         }
         finally
         {
@@ -92,9 +91,9 @@ public sealed class HttpGatewayServer
     }
 
     /// <summary>
-    /// Ciclo asíncrono de escucha y despacho de solicitudes HTTP.
+    /// Asynchronous loop listening for incoming HTTP requests.
     /// </summary>
-    /// <param name="token">Token de cancelación para detener el ciclo.</param>
+    /// <param name="token">Cancellation token to terminate the loop.</param>
     private async Task ListenLoopAsync(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
@@ -116,15 +115,15 @@ public sealed class HttpGatewayServer
             }
             catch (Exception)
             {
-                // Manejar excepciones inesperadas en el ciclo para mantener la estabilidad del hilo
+                // Catch unexpected exceptions to keep loop stable
             }
         }
     }
 
     /// <summary>
-    /// Procesa una solicitud individual, aplica cabeceras CORS y envía la respuesta.
+    /// Handles an individual HTTP request, applies CORS headers, routes, and writes the response.
     /// </summary>
-    /// <param name="context">El contexto HTTP recibido.</param>
+    /// <param name="context">The received HTTP context.</param>
     private async Task HandleContextAsync(HttpListenerContext context)
     {
         HttpListenerRequest request = context.Request;
@@ -153,11 +152,8 @@ public sealed class HttpGatewayServer
     }
 
     /// <summary>
-    /// Serializa y escribe el búfer de respuesta hacia el cliente HTTP.
+    /// Serializes and writes the response payload to the HTTP response stream.
     /// </summary>
-    /// <param name="response">La respuesta HTTP.</param>
-    /// <param name="statusCode">El código de estado HTTP.</param>
-    /// <param name="content">El cuerpo de texto a emitir.</param>
     private static void SendResponse(HttpListenerResponse response, int statusCode, string content)
     {
         try
@@ -172,7 +168,7 @@ public sealed class HttpGatewayServer
         }
         catch
         {
-            // El cliente pudo haber cerrado la conexión prematuramente
+            // Client may have terminated connection early
         }
     }
 }

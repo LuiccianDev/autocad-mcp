@@ -4,45 +4,45 @@ using AutoCAD.Gateway.Core.Models;
 namespace AutoCAD.Gateway.Services;
 
 /// <summary>
-/// Contrato de acceso a Autodesk Civil 3D (superficies y alineamientos). Todas las respuestas son JSON.
+/// Contract for Autodesk Civil 3D access (surfaces and alignments). All responses are serialized JSON.
 /// </summary>
 public interface ICivil3DService
 {
-    /// <summary>Indica si la API de Civil 3D está disponible en la sesión actual.</summary>
+    /// <summary>Indicates whether Civil 3D API is available in the current session.</summary>
     bool IsAvailable { get; }
 
-    /// <summary>Devuelve el estado de disponibilidad de Civil 3D y del documento activo.</summary>
+    /// <summary>Returns availability status of Civil 3D and active document.</summary>
     Task<string> GetStatusAsync();
 
-    /// <summary>Lista las superficies del dibujo con cotas mínima y máxima.</summary>
+    /// <summary>Lists TIN surfaces in the drawing with minimum and maximum elevations.</summary>
     Task<string> ListSurfacesAsync();
 
-    /// <summary>Obtiene la cota del terreno en (x, y).</summary>
-    /// <param name="surfaceName">Nombre de la superficie; null usa la primera.</param>
-    /// <param name="x">Coordenada Este.</param>
-    /// <param name="y">Coordenada Norte.</param>
+    /// <summary>Queries ground elevation at point (x, y).</summary>
+    /// <param name="surfaceName">Surface name; null uses the first available.</param>
+    /// <param name="x">East coordinate.</param>
+    /// <param name="y">North coordinate.</param>
     Task<string> GetElevationAsync(string? surfaceName, double x, double y);
 
-    /// <summary>Lista los alineamientos con sus progresivas inicial y final.</summary>
+    /// <summary>Lists alignments with start and end stations.</summary>
     Task<string> ListAlignmentsAsync();
 
-    /// <summary>Calcula progresiva y desfase de un punto respecto a un alineamiento.</summary>
-    /// <param name="alignmentName">Nombre del alineamiento; null usa el primero.</param>
-    /// <param name="x">Coordenada Este.</param>
-    /// <param name="y">Coordenada Norte.</param>
+    /// <summary>Calculates station and offset of point (x, y) relative to an alignment.</summary>
+    /// <param name="alignmentName">Alignment name; null uses the first available.</param>
+    /// <param name="x">East coordinate.</param>
+    /// <param name="y">North coordinate.</param>
     Task<string> GetStationOffsetAsync(string? alignmentName, double x, double y);
 
-    /// <summary>Calcula la coordenada (x, y) de una progresiva y desfase dados.</summary>
-    /// <param name="alignmentName">Nombre del alineamiento; null usa el primero.</param>
-    /// <param name="station">Progresiva en metros.</param>
-    /// <param name="offset">Desfase lateral en metros (+ derecha).</param>
+    /// <summary>Calculates (x, y) coordinate of a given station and offset.</summary>
+    /// <param name="alignmentName">Alignment name; null uses the first available.</param>
+    /// <param name="station">Station in meters.</param>
+    /// <param name="offset">Lateral offset in meters (+ right).</param>
     Task<string> GetPointAtStationAsync(string? alignmentName, double station, double offset);
 
-    /// <summary>Crea un alineamiento horizontal desde PIs, con curvas circulares opcionales.</summary>
-    /// <param name="request">Datos de creación validados por el servicio.</param>
+    /// <summary>Creates a horizontal alignment from PIs with optional circular curves.</summary>
+    /// <param name="request">Validated creation request.</param>
     Task<string> CreateAlignmentAsync(CrearAlineamientoRequest request);
 
-    /// <summary>Crea una superficie TIN desde puntos topográficos.</summary>
-    /// <param name="request">Datos de creación validados por el servicio.</param>
+    /// <summary>Creates a TIN surface from survey points.</summary>
+    /// <param name="request">Validated creation request.</param>
     Task<string> CreateSurfaceAsync(CrearSuperficieRequest request);
 }
