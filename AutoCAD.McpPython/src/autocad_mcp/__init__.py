@@ -1,3 +1,3 @@
-"""autocad-mcp: Servidor MCP para Autodesk AutoCAD 2027 y Civil 3D."""
+"""autocad-mcp: MCP server for Autodesk AutoCAD 2027 and Civil 3D."""
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"

@@ -1,6 +1,6 @@
 # AutoCAD MCP Server — Model Context Protocol Server (.NET 10)
 
-**Version:** 2.4.0  
+**Version:** 2.5.0  
 **Target Framework:** .NET 10 (`net10.0`)  
 **Protocol:** Model Context Protocol (MCP v2.2)  
 **Transport:** STDIO (JSON-RPC)  

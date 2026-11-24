@@ -37,15 +37,15 @@ public sealed class TextEntityInfo
     [JsonPropertyName("layer")]
     public string Layer { get; set; } = string.Empty;
 
-    /// <summary>Legacy alias for 'type'.</summary>
-    [JsonPropertyName("tipo")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public string Tipo => Type;
 
-    /// <summary>Legacy alias for 'text'.</summary>
-    [JsonPropertyName("texto")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public string Texto => Text;
 
-    /// <summary>Legacy alias for 'layer'.</summary>
-    [JsonPropertyName("capa")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public string Capa => Layer;
 }

@@ -1,8 +1,10 @@
 using System;
 using System.ComponentModel;
 using System.Threading.Tasks;
-using ModelContextProtocol.Server;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.McpServer.Server;
 using AutoCAD.McpServer.Services;
+using ModelContextProtocol.Server;
 
 namespace AutoCAD.McpServer.Tools;
 
@@ -10,6 +12,7 @@ namespace AutoCAD.McpServer.Tools;
 /// Provides read-only MCP tools to inspect AutoCAD drawing state, entities, and context.
 /// </summary>
 [McpServerToolType]
+[ToolDomain("context", "autocad_context", "Inspect drawing metadata, layers, entities, texts, extents, selection, blocks, screenshots, and Gateway catalog/guide.")]
 public sealed class ContextTools
 {
     private readonly IAutoCADGatewayClient _gatewayClient;
@@ -28,6 +31,7 @@ public sealed class ContextTools
     /// </summary>
     /// <returns>Asynchronous task returning JSON with DWG document metadata.</returns>
     [McpServerTool(Name = "get_drawing_info")]
+    [ToolExposure(Core = true)]
     [Description("Retrieve metadata of the active AutoCAD drawing: DWG filename, read-only state, and configured units.")]
     public async Task<string> GetDrawingInfo() => await _gatewayClient.GetContextAsync("context/info");
 
@@ -44,6 +48,7 @@ public sealed class ContextTools
     /// </summary>
     /// <returns>Asynchronous task returning the layer list.</returns>
     [McpServerTool(Name = "get_layers")]
+    [ToolExposure(Core = true)]
     [Description("Retrieve the complete list of drawing layers with their states (locked, frozen, off) and ACI color code.")]
     public async Task<string> GetLayers() => await _gatewayClient.GetContextAsync("context/layers");
 
@@ -60,6 +65,7 @@ public sealed class ContextTools
     /// </summary>
     /// <returns>Asynchronous task returning drawing bounding coordinates.</returns>
     [McpServerTool(Name = "get_drawing_extents")]
+    [ToolExposure(Core = true)]
     [Description("Retrieve minimum (X, Y) and maximum (X, Y) coordinates of the active drawing (Extmin and Extmax).")]
     public async Task<string> GetDrawingExtents() => await _gatewayClient.GetContextAsync("context/extents");
 
@@ -80,40 +86,70 @@ public sealed class ContextTools
     public async Task<string> ListBlocks() => await _gatewayClient.GetContextAsync("context/blocks");
 
     /// <summary>
-    /// Captures a PNG screenshot of the active AutoCAD window and returns the generated file path.
+    /// Captures a PNG screenshot of the active AutoCAD window and returns the file path and optional inline base64 PNG data.
     /// </summary>
-    /// <returns>Asynchronous task returning JSON with screenshot path and dimensions.</returns>
+    /// <param name="inline">When true, includes base64-encoded PNG data in addition to the saved file path (when within size limits).</param>
+    /// <returns>Asynchronous task returning JSON with screenshot path, dimensions, and optional base64 payload.</returns>
     [McpServerTool(Name = "capture_screenshot")]
-    [Description("Capture a PNG screenshot of the active AutoCAD window ('eyes for AI') and save it to disk. Returns absolute file path.")]
-    public async Task<string> CaptureScreenshot() => await _gatewayClient.GetContextAsync("context/screenshot");
+    [ToolExposure(Core = true)]
+    [Description("Capture a PNG screenshot of the active AutoCAD window ('eyes for AI') and save it to disk. Set inline=true to include base64 PNG data.")]
+    public async Task<string> CaptureScreenshot(bool inline = false) =>
+        await _gatewayClient.GetContextAsync(inline ? "context/screenshot?inline=true" : "context/screenshot");
 
     /// <summary>Alias for get_layers.</summary>
+    /// <returns>Asynchronous task returning drawing layer JSON.</returns>
     [McpServerTool(Name = "read_layers")]
+    [ToolExposure(AliasOf = "get_layers")]
     [Description("Alias for get_layers: Retrieve the complete list of drawing layers with their states.")]
     public async Task<string> ReadLayers() => await GetLayers();
 
     /// <summary>Alias for get_entities.</summary>
+    /// <returns>Asynchronous task returning ModelSpace entity counts JSON.</returns>
     [McpServerTool(Name = "read_objects")]
+    [ToolExposure(AliasOf = "get_entities")]
     [Description("Alias for get_entities: Read and return a summary of all entities in ModelSpace.")]
     public async Task<string> ReadObjects() => await GetEntities();
 
     /// <summary>Alias for get_texts.</summary>
+    /// <returns>Asynchronous task returning extracted text entities JSON.</returns>
     [McpServerTool(Name = "read_texts")]
+    [ToolExposure(AliasOf = "get_texts")]
     [Description("Alias for get_texts: List all text entities in the drawing with coordinates.")]
     public async Task<string> ReadTexts() => await GetTexts();
 
     /// <summary>Alias for get_selection_count.</summary>
+    /// <returns>Asynchronous task returning selection count JSON.</returns>
     [McpServerTool(Name = "read_selection")]
+    [ToolExposure(AliasOf = "get_selection_count")]
     [Description("Alias for get_selection_count: Get the number of entities currently selected.")]
     public async Task<string> ReadSelection() => await GetSelectionCount();
 
     /// <summary>Alias for list_blocks.</summary>
+    /// <returns>Asynchronous task returning loaded block definition names JSON.</returns>
     [McpServerTool(Name = "list_available_blocks")]
+    [ToolExposure(AliasOf = "list_blocks")]
     [Description("Alias for list_blocks: Retrieve names of all block definitions loaded.")]
     public async Task<string> ListAvailableBlocks() => await ListBlocks();
 
     /// <summary>Alias for capture_screenshot.</summary>
+    /// <param name="inline">When true, includes base64-encoded PNG data in addition to the saved file path.</param>
+    /// <returns>Asynchronous task returning screenshot path and optional base64 payload.</returns>
     [McpServerTool(Name = "capture_screen")]
+    [ToolExposure(AliasOf = "capture_screenshot")]
     [Description("Alias for capture_screenshot: Capture a screenshot of the active AutoCAD window.")]
-    public async Task<string> CaptureScreen() => await CaptureScreenshot();
+    public async Task<string> CaptureScreen(bool inline = false) => await CaptureScreenshot(inline);
+
+    /// <summary>Retrieves the dynamic Gateway endpoint catalog with undo semantics and Edit Guard metadata.</summary>
+    /// <returns>Asynchronous task returning serialized JSON endpoint catalog.</returns>
+    [McpServerTool(Name = "get_gateway_tools")]
+    [Description("Query the live AutoCAD Gateway dynamic endpoint catalog (GET /_tools) with category, undo granularity, and Edit Guard flags.")]
+    public async Task<string> GetGatewayTools() =>
+        await _gatewayClient.GetContextAsync(GatewayProtocol.ToolsRoute);
+
+    /// <summary>Retrieves operational guidelines and safety invariants from the Gateway.</summary>
+    /// <returns>Asynchronous task returning serialized JSON agent guidelines.</returns>
+    [McpServerTool(Name = "get_gateway_guide")]
+    [Description("Retrieve AI agent operational rules, unit conventions, and undo/Edit Guard guidance from the Gateway (GET /_guide).")]
+    public async Task<string> GetGatewayGuide() =>
+        await _gatewayClient.GetContextAsync(GatewayProtocol.GuideRoute);
 }

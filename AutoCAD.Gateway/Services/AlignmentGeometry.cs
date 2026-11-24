@@ -40,13 +40,21 @@ public static class AlignmentGeometry
         {
             for (int i = 1; i < n - 1; i++)
             {
-                double d1x = pis[i].X - pis[i - 1].X, d1y = pis[i].Y - pis[i - 1].Y;
-                double d2x = pis[i + 1].X - pis[i].X, d2y = pis[i + 1].Y - pis[i].Y;
-                double l1 = Math.Sqrt(d1x * d1x + d1y * d1y);
-                double l2 = Math.Sqrt(d2x * d2x + d2y * d2y);
-                double cross = (d1x * d2y - d1y * d2x) / (l1 * l2);
-                double dot = (d1x * d2x + d1y * d2y) / (l1 * l2);
+                if (!NormalizeDelta(pis[i].X - pis[i - 1].X, pis[i].Y - pis[i - 1].Y, out double ux1, out double uy1, out _) ||
+                    !NormalizeDelta(pis[i + 1].X - pis[i].X, pis[i + 1].Y - pis[i].Y, out double ux2, out double uy2, out _))
+                {
+                    error = $"Invalid PI segment length around PI {i}.";
+                    return null;
+                }
+
+                double cross = ux1 * uy2 - uy1 * ux2;
+                double dot = ux1 * ux2 + uy1 * uy2;
                 double defl = Math.Atan2(Math.Abs(cross), dot);
+                if (!double.IsFinite(defl))
+                {
+                    error = $"Invalid deflection angle at PI {i}.";
+                    return null;
+                }
                 if (defl < Epsilon)
                 {
                     continue; // Collinear PI: no curve required
@@ -54,7 +62,14 @@ public static class AlignmentGeometry
 
                 deflexiones[i] = defl;
                 giro[i] = Math.Sign(cross);
-                tangentes[i] = radius * Math.Tan(defl / 2);
+                double tanHalf = Math.Tan(defl / 2);
+                double tangent = radius * tanHalf;
+                if (!double.IsFinite(tangent))
+                {
+                    error = $"Tangent length overflow at PI {i}.";
+                    return null;
+                }
+                tangentes[i] = tangent;
             }
 
             for (int i = 0; i < n - 1; i++)
@@ -77,13 +92,25 @@ public static class AlignmentGeometry
                 continue;
             }
 
-            double ax = pis[i - 1].X - pis[i].X, ay = pis[i - 1].Y - pis[i].Y;
-            double bx = pis[i + 1].X - pis[i].X, by = pis[i + 1].Y - pis[i].Y;
-            double la = Math.Sqrt(ax * ax + ay * ay), lb = Math.Sqrt(bx * bx + by * by);
+            if (!NormalizeDelta(pis[i - 1].X - pis[i].X, pis[i - 1].Y - pis[i].Y, out double uax, out double uay, out _) ||
+                !NormalizeDelta(pis[i + 1].X - pis[i].X, pis[i + 1].Y - pis[i].Y, out double ubx, out double uby, out _))
+            {
+                error = $"Invalid tangent direction at PI {i}.";
+                return null;
+            }
+
             double t = tangentes[i];
             double bulge = giro[i] * Math.Tan(deflexiones[i] / 4);
-            vertices.Add((pis[i].X + ax / la * t, pis[i].Y + ay / la * t, bulge));
-            vertices.Add((pis[i].X + bx / lb * t, pis[i].Y + by / lb * t, 0));
+            double x1 = pis[i].X + uax * t, y1 = pis[i].Y + uay * t;
+            double x2 = pis[i].X + ubx * t, y2 = pis[i].Y + uby * t;
+            if (!double.IsFinite(x1) || !double.IsFinite(y1) || !double.IsFinite(x2) || !double.IsFinite(y2) || !double.IsFinite(bulge))
+            {
+                error = $"Alignment vertex calculation overflow at PI {i}.";
+                return null;
+            }
+
+            vertices.Add((x1, y1, bulge));
+            vertices.Add((x2, y2, 0));
         }
 
         vertices.Add((pis[n - 1].X, pis[n - 1].Y, 0));
@@ -99,9 +126,36 @@ public static class AlignmentGeometry
         return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{km}+{remainder:000.00}");
     }
 
+    private static bool NormalizeDelta(double dx, double dy, out double ux, out double uy, out double length)
+    {
+        double ax = Math.Abs(dx), ay = Math.Abs(dy);
+        double scale = Math.Max(ax, ay);
+        if (scale < Epsilon || !double.IsFinite(scale))
+        {
+            ux = 0;
+            uy = 0;
+            length = 0;
+            return false;
+        }
+
+        double sx = dx / scale, sy = dy / scale;
+        double norm = Math.Sqrt(sx * sx + sy * sy);
+        ux = sx / norm;
+        uy = sy / norm;
+        length = scale * norm;
+        return double.IsFinite(ux) && double.IsFinite(uy) && length >= Epsilon;
+    }
+
     private static double Dist(PointXY a, PointXY b)
     {
         double dx = b.X - a.X, dy = b.Y - a.Y;
-        return Math.Sqrt(dx * dx + dy * dy);
+        double scale = Math.Max(Math.Abs(dx), Math.Abs(dy));
+        if (scale == 0.0 || !double.IsFinite(dx) || !double.IsFinite(dy))
+        {
+            return double.IsFinite(dx) && double.IsFinite(dy) ? 0.0 : double.PositiveInfinity;
+        }
+
+        double sx = dx / scale, sy = dy / scale;
+        return scale * Math.Sqrt(sx * sx + sy * sy);
     }
 }

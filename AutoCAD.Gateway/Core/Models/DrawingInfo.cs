@@ -25,15 +25,15 @@ public sealed class DrawingInfo
     [JsonPropertyName("units")]
     public string Units { get; set; } = string.Empty;
 
-    /// <summary>Legacy alias for 'name'.</summary>
-    [JsonPropertyName("nombre")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public string Nombre => Name;
 
-    /// <summary>Legacy alias for 'is_read_only'.</summary>
-    [JsonPropertyName("soloLectura")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public bool SoloLectura => IsReadOnly;
 
-    /// <summary>Legacy alias for 'units'.</summary>
-    [JsonPropertyName("unidades")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public string Unidades => Units;
 }

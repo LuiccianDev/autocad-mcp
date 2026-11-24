@@ -3,55 +3,40 @@ using System.Threading.Tasks;
 namespace AutoCAD.Gateway.Services;
 
 /// <summary>
-/// Define las operaciones de consulta e inspección sobre la base de datos de AutoCAD en el hilo principal.
+/// Defines query and inspection operations executed safely on AutoCAD's main thread.
 /// </summary>
 public interface IAutoCADContextReader
 {
-    /// <summary>
-    /// Obtiene la cantidad de entidades actualmente seleccionadas en el dibujo activo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con la cantidad seleccionada.</returns>
+    /// <summary>Gets the count of entities currently selected in the active drawing.</summary>
+    /// <returns>Asynchronous task returning serialized JSON selection count.</returns>
     Task<string> ReadSelectionCountAsync();
 
-    /// <summary>
-    /// Obtiene el conteo de entidades agrupadas por tipo en el espacio modelo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con el resumen de entidades.</returns>
+    /// <summary>Gets entity counts grouped by DXF/object type in ModelSpace.</summary>
+    /// <returns>Asynchronous task returning serialized JSON entity counts.</returns>
     Task<string> ReadEntityCountsAsync();
 
-    /// <summary>
-    /// Obtiene la información general y metadatos del dibujo activo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con los metadatos del dibujo.</returns>
+    /// <summary>Gets general metadata and unit configuration for the active drawing.</summary>
+    /// <returns>Asynchronous task returning serialized JSON drawing metadata.</returns>
     Task<string> ReadDrawingInfoAsync();
 
-    /// <summary>
-    /// Obtiene el listado completo de capas y sus propiedades en el dibujo activo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con el listado de capas.</returns>
+    /// <summary>Gets the complete layer table and properties for the active drawing.</summary>
+    /// <returns>Asynchronous task returning serialized JSON layer list.</returns>
     Task<string> ReadLayersAsync();
 
-    /// <summary>
-    /// Obtiene las coordenadas extremas mínimas y máximas del dibujo activo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con los límites espaciales.</returns>
+    /// <summary>Gets minimum and maximum world extents of the active drawing.</summary>
+    /// <returns>Asynchronous task returning serialized JSON extents.</returns>
     Task<string> ReadExtentsAsync();
 
-    /// <summary>
-    /// Obtiene las entidades de texto (DBText y MText) existentes en el espacio modelo del dibujo activo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con los textos extraídos.</returns>
+    /// <summary>Gets all DBText and MText entities present in ModelSpace.</summary>
+    /// <returns>Asynchronous task returning serialized JSON text entities.</returns>
     Task<string> ReadTextsAsync();
 
-    /// <summary>
-    /// Obtiene los nombres de las definiciones de bloques no anónimas y no espacio papel del dibujo activo.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con las definiciones de bloques.</returns>
+    /// <summary>Gets non-anonymous, non-layout block definition names in the active drawing.</summary>
+    /// <returns>Asynchronous task returning serialized JSON block definitions.</returns>
     Task<string> ReadBlocksAsync();
 
-    /// <summary>
-    /// Captura una imagen de la ventana gráfica o interfaz activa de AutoCAD y la almacena en un archivo PNG.
-    /// </summary>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON con la ruta del archivo PNG y sus dimensiones.</returns>
-    Task<string> CaptureScreenshotAsync();
+    /// <summary>Captures a PNG screenshot of AutoCAD's active viewport or main window.</summary>
+    /// <param name="inline">When true, includes base64-encoded PNG bytes if within the size cap.</param>
+    /// <returns>Asynchronous task returning serialized JSON path, dimensions, and optional base64 payload.</returns>
+    Task<string> CaptureScreenshotAsync(bool inline = false);
 }

@@ -11,14 +11,11 @@
     <Authors>Luiccian</Authors>
     <Company>LuiccianDev</Company>
     <Product>AutoCAD AI Gateway</Product>
-    <Version>2.4.0</Version>
-    <AssemblyVersion>2.3.0.0</AssemblyVersion>
-    <FileVersion>2.3.0.0</FileVersion>
-    <InformationalVersion>2.3.0</InformationalVersion>
+    <Version>2.5.0</Version>
     <Copyright>Copyright (c) 2026 Luiccian (LuiccianDev)</Copyright>
   </PropertyGroup>
 
-  <!-- Si existe AutoCAD instalado localmente en C:, usamos los ensamblados locales -->
+  <!-- Use local AutoCAD assemblies when AutoCAD 2027 is installed on C: -->
   <ItemGroup Condition="Exists('C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll')">
     <Reference Include="acdbmgd">
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll</HintPath>
@@ -32,7 +29,7 @@
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\accoremgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <!-- Civil 3D 2027: solo se resuelven en tiempo de ejecucion si Civil 3D esta cargado -->
+    <!-- Civil 3D 2027 assemblies are only resolved at runtime when Civil 3D is loaded -->
     <Reference Include="AeccDbMgd">
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\C3D\AeccDbMgd.dll</HintPath>
       <Private>False</Private>
@@ -43,10 +40,14 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Si NO existe AutoCAD instalado (ej. GitHub Actions CI/CD), usamos paquetes NuGet de referencia -->
+  <!-- Fall back to reference NuGet packages in headless CI environments -->
   <ItemGroup Condition="!Exists('C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll')">
     <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
     <PackageReference Include="Speckle.Civil3D.API" Version="2027.0.1" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AutoCAD.Gateway.Contracts\AutoCAD.Gateway.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

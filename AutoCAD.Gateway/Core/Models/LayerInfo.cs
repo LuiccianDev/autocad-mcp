@@ -37,19 +37,19 @@ public sealed class LayerInfo
     [JsonPropertyName("color")]
     public short Color { get; set; }
 
-    /// <summary>Legacy alias for 'name'.</summary>
-    [JsonPropertyName("nombre")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public string Nombre => Name;
 
-    /// <summary>Legacy alias for 'is_locked'.</summary>
-    [JsonPropertyName("bloqueada")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public bool Bloqueada => IsLocked;
 
-    /// <summary>Legacy alias for 'is_frozen'.</summary>
-    [JsonPropertyName("congelada")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public bool Congelada => IsFrozen;
 
-    /// <summary>Legacy alias for 'is_off'.</summary>
-    [JsonPropertyName("apagada")]
+    /// <summary>Backward-compatibility accessor.</summary>
+    [JsonIgnore]
     public bool Apagada => IsOff;
 }

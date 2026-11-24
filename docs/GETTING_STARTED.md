@@ -44,18 +44,26 @@ The output assembly is located at `AutoCAD.Gateway\bin\Release\net10.0-windows\A
    ```text
    NETLOAD
    ```
-4. Select `AutoCAD.Gateway.dll`.
-5. The command window will confirm:
+4. Select `AutoCAD.Gateway.dll`, then start the Gateway listener in the command window:
    ```text
-   >>> AutoCAD AI Gateway Plugin loaded successfully.
-   >>> Available commands:
-       - AI_START_SERVER   : Starts the HTTP Gateway server.
-       - AI_STOP_SERVER    : Stops the HTTP Gateway server.
-       - AI_SHOW_CONFIG    : Displays server status and active token.
-       - AI_SET_TOKEN      : Updates the active token in memory.
-       - AI_GENERATE_TOKEN : Generates a cryptographically secure token.
+   AI_START_SERVER
    ```
-   *(The server starts automatically listening on `http://localhost:5055/`).*
+   Available Gateway commands in AutoCAD:
+   ```text
+   - AI_START_SERVER   : Starts the loopback Gateway server.
+   - AI_STOP_SERVER    : Stops the loopback Gateway server.
+   - AI_SHOW_CONFIG    : Displays server status and masked token.
+   - AI_SET_TOKEN      : Sets security token dynamically in memory.
+   - AI_GENERATE_TOKEN : Generates a new cryptographic session token.
+   - AI_EDIT_GUARD     : Toggles Edit Guard protection on existing DWGs.
+   ```
+   *(When started, `HttpGatewayServer` listens on `http://127.0.0.1:<port>/` with an ephemeral cryptographic session token and writes `{pid}.json` for client auto-discovery).*
+6. Or stage an Autodesk Autoloader `.bundle` (verified via SHA-256) so AutoCAD loads the Gateway automatically:
+   ```powershell
+   .\scripts\install-bundle.ps1
+   # Uninstall cleanly when AutoCAD is closed:
+   .\scripts\install-bundle.ps1 -Uninstall
+   ```
 
 ---
 
@@ -73,8 +81,7 @@ Requires only [`uv`](https://astral.sh/uv). Runs the official PyPI distribution 
       "command": "uvx",
       "args": ["luiccian-autocad-mcp"],
       "env": {
-        "AUTOCAD_GATEWAY_PORT": "5055",
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+        "AUTOCAD_MCP_TOOL_MODE": "compound"
       }
     }
   }
@@ -89,13 +96,25 @@ Requires only [`uv`](https://astral.sh/uv). Runs the official PyPI distribution 
       "command": "uvx",
       "args": ["luiccian-autocad-mcp"],
       "env": {
-        "AUTOCAD_GATEWAY_PORT": "5055",
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+        "AUTOCAD_MCP_TOOL_MODE": "compound"
       }
     }
   }
 }
 ```
+
+> [!NOTE]
+> Leave `AUTOCAD_GATEWAY_TOKEN` and `AUTOCAD_GATEWAY_PORT` unset for zero-config auto-discovery via `{pid}.json`. Only set `AUTOCAD_GATEWAY_TOKEN` explicitly if you fixed a manual token inside AutoCAD via `AI_SET_TOKEN`.
+
+### Selective Tool Loading (`AUTOCAD_MCP_TOOL_MODE`)
+
+Set `AUTOCAD_MCP_TOOL_MODE` in the MCP client environment block to match your token budget:
+
+| Mode | Tools Exposed | Notes |
+| :--- | :--- | :--- |
+| `granular` | 89 | Default mode exposing all 75 canonical tools and 14 aliases. |
+| `compound` | 10 | Domain routers `autocad_context` through `autocad_execution` with `action="help"` schema lookup. |
+| `core` | 28 | Compact set of high-leverage tools with zero aliases. |
 
 ---
 
@@ -117,7 +136,7 @@ For environments where native compiled binary performance is preferred:
         "C:\\Path\\To\\AutoCAD.McpServer\\bin\\Release\\net10.0\\AutoCAD.McpServer.dll"
       ],
       "env": {
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+        "AUTOCAD_MCP_TOOL_MODE": "compound"
       }
     }
   }
@@ -145,8 +164,7 @@ uv run autocad-mcp
         "autocad-mcp"
       ],
       "env": {
-        "AUTOCAD_GATEWAY_PORT": "5055",
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+        "AUTOCAD_MCP_TOOL_MODE": "compound"
       }
     }
   }
@@ -161,16 +179,16 @@ Once your AI client is connected, ask it in chat:
 > *"Inspect my active AutoCAD drawing status and draw a 20x10 meter rectangle on the layer ARQ-WALLS."*
 
 The AI will sequentially execute:
-1. `configure_drawing_environment`: Sets metric units (`INSUNITS = 4`).
+1. `configure_drawing_units`: Sets metric units (`INSUNITS = 4`).
 2. `get_drawing_info`: Verifies active DWG name and read/write state.
 3. `create_layer` & `draw_rectangle`: Creates the layer and draws the geometry atomically without dialog blocks.
-4. `zoom_extents`: Frames the drafted elements on screen.
+4. `zoom_extents` & `capture_screenshot`: Frames and inspects the drafted elements on screen.
 
 ---
 
 ## References & Documentation
 
-- [MCP Tools Reference Manual (45 Tools)](TOOLS_REFERENCE.md): Complete catalog with parameter schemas, types, and JSON responses.
+- [MCP Tools Reference Manual (89 Tools)](TOOLS_REFERENCE.md): Complete catalog with parameter schemas, types, and JSON responses.
 - [Tools Quick Reference & Cheat Sheet](TOOLS_CHEAT_SHEET.md): Decision tree for selecting the right tool for each CAD design task.
 - [System Architecture](ARCHITECTURE.md): Deep dive into the concurrency model and UI thread dispatcher.
 - [Troubleshooting Guide](TROUBLESHOOTING.md): Resolving network, NETLOAD, and command execution issues.

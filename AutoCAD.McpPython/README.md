@@ -1,20 +1,19 @@
-# luiccian-autocad-mcp (Python MCP Server)
+<div align="center">
+<h1>luiccian-autocad-mcp</h1>
+<p><em>Model Context Protocol (MCP) server connecting Autodesk AutoCAD 2027 and Civil 3D with AI agents via AutoCAD AI Gateway.</em></p>
+</div>
 
 [![PyPI version](https://img.shields.io/pypi/v/luiccian-autocad-mcp.svg?logo=pypi&logoColor=FFE873)](https://pypi.org/project/luiccian-autocad-mcp/)
 [![Python versions](https://img.shields.io/pypi/pyversions/luiccian-autocad-mcp.svg?logo=python&logoColor=white)](https://pypi.org/project/luiccian-autocad-mcp/)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/LuiccianDev/autocad-mcp/blob/master/LICENSE)
 
-Model Context Protocol (MCP) server connecting **Autodesk AutoCAD 2027** and **Autodesk Civil 3D 2027** with AI agents (Claude Desktop, Antigravity, Cursor, VS Code) via the **AutoCAD AI Gateway**.
+Exposes **89 tools across 10 domains** (75 canonical actions and 14 legacy aliases) covering parametric batch drafting, layer control, entity inspection, layouts/PDF plotting, AutoLISP execution, and native Civil 3D surfaces and alignments.
 
-Exposes **45 strongly-typed tools** covering parametric drawing, layer control, geometric calculations, layout/PDF generation, and native Civil 3D design (surfaces, alignments, profiles).
+## Quick Start (`uvx`)
 
----
+1. In **AutoCAD 2027** or **Civil 3D 2027**, load `AutoCAD.Gateway.dll` (`NETLOAD` or Autoloader `.bundle`) and run `AI_START_SERVER`.
+2. Add the server to your MCP client (`claude_desktop_config.json` or `mcp_config.json`):
 
-## Quickstart with `uvx` (Zero-Config)
-
-To run this server in **Claude Desktop** or **Cursor**, add this block to your MCP settings:
-
-### Claude Desktop (`claude_desktop_config.json`)
 ```json
 {
   "mcpServers": {
@@ -22,22 +21,35 @@ To run this server in **Claude Desktop** or **Cursor**, add this block to your M
       "command": "uvx",
       "args": ["luiccian-autocad-mcp"],
       "env": {
-        "AUTOCAD_GATEWAY_PORT": "5055",
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+        "AUTOCAD_MCP_TOOL_MODE": "compound"
       }
     }
   }
 }
 ```
 
-### Local Development with `uv`
-During local development, you can execute directly without publishing to PyPI:
+> **Note:** Leave `AUTOCAD_GATEWAY_TOKEN` and `AUTOCAD_GATEWAY_PORT` unset for zero-config auto-discovery via the Gateway `{pid}.json` session file. Only set `AUTOCAD_GATEWAY_TOKEN` if you pinned a custom token in AutoCAD using `AI_SET_TOKEN`.
+
+## Tool Loading Modes (`AUTOCAD_MCP_TOOL_MODE`)
+
+| Mode | Tools Exposed | Behavior |
+| :--- | :--- | :--- |
+| `granular` (default) | 89 tools | Exposes all 75 canonical tools and 14 legacy aliases directly. |
+| `compound` | 10 domain routers | Exposes `autocad_context` through `autocad_execution` with `action="help"` schema introspection. |
+| `core` | 28 tools | Exposes high-leverage standalone tools with zero aliases. |
+
+<details>
+<summary>Local Development and Testing (`uv`)</summary>
+
+Run directly from a cloned repository without publishing to PyPI:
+
 ```powershell
 cd AutoCAD.McpPython
 uv run autocad-mcp
 ```
 
-Or configure your AI client to point directly to the local directory:
+Client configuration pointing to a local checkout:
+
 ```json
 {
   "mcpServers": {
@@ -50,21 +62,24 @@ Or configure your AI client to point directly to the local directory:
         "autocad-mcp"
       ],
       "env": {
-        "AUTOCAD_GATEWAY_PORT": "5055",
-        "AUTOCAD_GATEWAY_TOKEN": "luiccian-autocad-token-2027"
+        "AUTOCAD_MCP_TOOL_MODE": "compound"
       }
     }
   }
 }
 ```
 
-### Run Tests
+Run the test suite:
+
 ```powershell
 uv run --directory AutoCAD.McpPython --all-extras pytest
 ```
 
----
+</details>
 
-## Requirements
-- **Python 3.10+** (or the modern package manager [uv](https://astral.sh/uv)).
-- **AutoCAD 2027** or **Civil 3D 2027** with `AutoCAD.Gateway.dll` loaded and listening on port `5055`.
+## Requirements and Links
+
+- **Python:** 3.10+ (or [`uv`](https://astral.sh/uv) for `uvx` zero-install execution).
+- **CAD Host:** Autodesk AutoCAD 2027 or Civil 3D 2027 with `AutoCAD.Gateway.dll` loaded and started (`AI_START_SERVER`).
+- **Repository:** [GitHub (`LuiccianDev/autocad-mcp`)](https://github.com/LuiccianDev/autocad-mcp)
+- **Full Documentation:** [Getting Started](https://github.com/LuiccianDev/autocad-mcp/blob/master/docs/GETTING_STARTED.md) | [Tools Reference](https://github.com/LuiccianDev/autocad-mcp/blob/master/docs/TOOLS_REFERENCE.md) | [Changelog](https://github.com/LuiccianDev/autocad-mcp/blob/master/CHANGELOG.md)

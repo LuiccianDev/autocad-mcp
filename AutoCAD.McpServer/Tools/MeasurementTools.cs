@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using AutoCAD.McpServer.Server;
 using AutoCAD.McpServer.Services;
 using ModelContextProtocol.Server;
 using static AutoCAD.McpServer.Tools.CadFormat;
@@ -16,6 +17,7 @@ namespace AutoCAD.McpServer.Tools;
 /// Measurements are computed locally within the MCP server process: deterministic, zero latency, and requiring no active CAD instance.
 /// </remarks>
 [McpServerToolType]
+[ToolDomain("measurement", "autocad_measurement", "Compute deterministic distances and polygon areas, purge/audit drawings, and regenerate viewports.")]
 public sealed class MeasurementTools
 {
     private readonly IAutoCADGatewayClient _gatewayClient;
@@ -41,6 +43,7 @@ public sealed class MeasurementTools
     /// <param name="z2">End point Z (m), default 0.</param>
     /// <returns>JSON containing 2D/3D distances, coordinate deltas, angle, and slope.</returns>
     [McpServerTool(Name = "measure_distance")]
+    [ToolExposure(Core = true)]
     [Description("Calculate (without CAD) 2D horizontal distance, 3D distance, delta X/Y/Z, angle in degrees (0 = East, CCW), and slope % between two points in meters.")]
     public string MeasureDistance(double x1, double y1, double x2, double y2, double z1 = 0, double z2 = 0)
     {
@@ -153,6 +156,7 @@ public sealed class MeasurementTools
     /// <param name="audit">If true, runs AUDIT with fix enabled after purging.</param>
     /// <returns>JSON response from Gateway or validation error.</returns>
     [McpServerTool(Name = "purge_and_audit_drawing")]
+    [ToolExposure(Core = true)]
     [Description("Purge unused definitions safely. 'target' accepts: all, blocks, layers, linetypes, text_styles, dim_styles. With 'audit'=true runs AUDIT correcting errors.")]
     public async Task<string> PurgeAndAuditDrawing(string target = "all", bool audit = true)
     {
@@ -195,6 +199,7 @@ public sealed class MeasurementTools
     /// Alias for purge_and_audit_drawing: purges unused definitions and optionally audits the drawing database.
     /// </summary>
     [McpServerTool(Name = "clean_and_purge_drawing")]
+    [ToolExposure(AliasOf = "purge_and_audit_drawing")]
     [Description("Alias for purge_and_audit_drawing: Purge unused definitions safely and audit errors.")]
     public Task<string> CleanAndPurgeDrawing(string target = "all", bool audit = true) =>
         PurgeAndAuditDrawing(target, audit);

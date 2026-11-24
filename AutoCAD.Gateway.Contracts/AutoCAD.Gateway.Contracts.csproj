@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Authors>Luiccian</Authors>
+    <Company>LuiccianDev</Company>
+    <Product>AutoCAD AI Gateway Contracts</Product>
+    <Version>2.4.0</Version>
+    <Copyright>Copyright (c) 2026 Luiccian (LuiccianDev)</Copyright>
+  </PropertyGroup>
+
+</Project>

@@ -4,39 +4,36 @@ using System.Threading.Tasks;
 namespace AutoCAD.McpServer.Services;
 
 /// <summary>
-/// Contrato de cliente HTTP para interactuar con la API REST del AutoCAD AI Gateway.
+/// HTTP client contract for communicating with the AutoCAD AI Gateway REST API.
 /// </summary>
 public interface IAutoCADGatewayClient
 {
-    /// <summary>
-    /// Consulta un endpoint de lectura de contexto en el Gateway de AutoCAD.
-    /// </summary>
-    /// <param name="endpoint">La ruta relativa del endpoint (por ejemplo, "context/layers").</param>
-    /// <param name="cancellationToken">Token de cancelación opcional.</param>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta en formato JSON devuelta por el Gateway.</returns>
+    /// <summary>Queries a read-only GET endpoint on AutoCAD Gateway.</summary>
+    /// <param name="endpoint">Relative Gateway endpoint path (for example, "context/layers").</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>Serialized JSON response returned by the Gateway.</returns>
     Task<string> GetContextAsync(string endpoint, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Envía un comando o script CAD para su ejecución en AutoCAD a través del Gateway.
-    /// </summary>
-    /// <param name="command">La cadena del comando con sus respectivos saltos de línea (\n).</param>
-    /// <param name="cancellationToken">Token de cancelación opcional.</param>
-    /// <returns>Una tarea asíncrona cuyo resultado es el mensaje de confirmación o error de ejecución.</returns>
+    /// <summary>Enqueues an AutoCAD command string or macro through POST /execute.</summary>
+    /// <param name="command">Command string terminated with required newline characters.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>Confirmation message or serialized error JSON.</returns>
     Task<string> ExecuteCommandAsync(string command, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Envía una señal de prueba (ping) al Gateway para verificar conectividad activa en el puerto configurado.
-    /// </summary>
-    /// <param name="cancellationToken">Token de cancelación opcional.</param>
-    /// <returns>Una tarea asíncrona cuyo resultado es el diagnóstico de conectividad.</returns>
+    /// <summary>Pings the Gateway server on GET /_ping to check liveness and session state.</summary>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>Serialized JSON diagnostic status.</returns>
     Task<string> PingGatewayAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Envía un cuerpo JSON por POST a un endpoint del Gateway (por ejemplo, "civil/alignment/create").
-    /// </summary>
-    /// <param name="endpoint">La ruta relativa del endpoint.</param>
-    /// <param name="json">El cuerpo JSON ya serializado.</param>
-    /// <param name="cancellationToken">Token de cancelación opcional.</param>
-    /// <returns>Una tarea asíncrona cuyo resultado es la respuesta JSON del Gateway (o un JSON de error).</returns>
-    Task<string> PostJsonAsync(string endpoint, string json, CancellationToken cancellationToken = default);
+    /// <summary>Sends a JSON POST request to a Gateway endpoint.</summary>
+    /// <param name="endpoint">Relative Gateway endpoint path (for example, "lisp/eval").</param>
+    /// <param name="json">Pre-serialized JSON payload.</param>
+    /// <param name="timeoutMs">Optional server operation timeout in milliseconds to scale HTTP wait bounds.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>Serialized JSON response from the Gateway or error JSON.</returns>
+    Task<string> PostJsonAsync(
+        string endpoint,
+        string json,
+        int? timeoutMs = null,
+        CancellationToken cancellationToken = default);
 }

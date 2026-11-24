@@ -46,6 +46,8 @@ jobs:
   build-and-test:
     name: Build & Validate Solution
     runs-on: windows-latest
+    permissions:
+      contents: read
 
     steps:
     - name: Checkout repository
@@ -65,5 +67,8 @@ jobs:
     - name: Build solution (Release configuration)
       run: dotnet build AutoCAD_Integration.slnx -c Release --no-restore
 
+    - name: Run Gateway contract & wire tests
+      run: dotnet run --project AutoCAD.Gateway.Tests -c Release --no-build
+
     - name: Run Python test suite (pytest)
-      run: uv run --directory AutoCAD.McpPython --all-extras pytest
+      run: uv run --directory AutoCAD.McpPython --frozen --all-extras pytest
