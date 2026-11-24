@@ -102,9 +102,16 @@ ehthumbs.db
 $RECYCLE.BIN/
 
 # ====================================================================
-# Agent Session Plans & Superpowers Artifacts (Local Only)
+# Agent Session Plans, Release Artifacts & Local Keys
 # ====================================================================
 docs/superpowers/
 .superpowers/
-.agents/**/mcp_config.json
-.agents/**/mcp_plugins.json
+.agents/
+release_body.md
+SHA256SUMS.txt
+*.zip
+*.sha256
+*.pfx
+*.snk
+*.key
+*.pem
