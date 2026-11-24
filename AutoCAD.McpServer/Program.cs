@@ -1,59 +1,48 @@
 using System;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.McpServer.Server;
+using AutoCAD.McpServer.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using AutoCAD.McpServer.Services;
-using AutoCAD.McpServer.Tools;
+
+ToolMode toolMode;
+try
+{
+    toolMode = ToolModeParser.FromEnvironment();
+}
+catch (ArgumentException ex)
+{
+    Console.Error.WriteLine(ex.Message);
+    return 1;
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Configuración obligatoria para servidores MCP STDIO:
-// Se eliminan los proveedores de logging hacia Console.Out (salida estándar)
-// para proteger el flujo de tramas JSON-RPC del protocolo Model Context Protocol.
+// Required for STDIO MCP servers: clear console logging providers
+// to protect JSON-RPC framing on stdout.
 builder.Logging.ClearProviders();
 
-// Registro de servicios: Cliente HTTP tipado hacia el Gateway de AutoCAD (puerto 5055 por defecto)
 builder.Services.AddHttpClient<IAutoCADGatewayClient, AutoCADGatewayClient>(client =>
 {
-    string baseUrl;
-    string? envPort = Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_PORT");
-    if (!string.IsNullOrWhiteSpace(envPort))
-    {
-        baseUrl = $"http://localhost:{envPort.Trim()}/";
-    }
-    else
-    {
-        baseUrl = Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_URL") ?? "http://localhost:5055/";
-    }
-
-    if (!baseUrl.EndsWith("/"))
-    {
-        baseUrl += "/";
-    }
-
-    client.BaseAddress = new Uri(baseUrl);
-    client.Timeout = TimeSpan.FromSeconds(15);
-    string token = Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_TOKEN") ?? "luiccian-autocad-token-2027";
-    client.DefaultRequestHeaders.Add("X-Gateway-Token", token);
+    client.Timeout = System.Threading.Timeout.InfiniteTimeSpan;
+}).ConfigurePrimaryHttpMessageHandler(() => new System.Net.Http.HttpClientHandler
+{
+    UseProxy = false,
+    AllowAutoRedirect = false,
 });
 
-// Registro del servidor MCP con sus clases modulares de herramientas
 builder.Services.AddMcpServer(options =>
 {
     options.ServerInfo = new()
     {
         Name = "AutoCAD_AI_Context_Server",
-        Version = "1.0.0"
+        Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "2.5.0"
     };
 })
 .WithStdioServerTransport()
-.WithTools<ContextTools>()
-.WithTools<ExecutionTools>()
-.WithTools<DrawingTools>()
-.WithTools<LayerTools>()
-.WithTools<MeasurementTools>()
-.WithTools<Civil3DTools>()
-.WithTools<PlottingTools>();
+.WithConfiguredAutoCADTools(toolMode);
 
 var host = builder.Build();
 await host.RunAsync();
+return 0;

@@ -1,7 +1,10 @@
 using System;
-using Autodesk.AutoCAD.Runtime;
+using System.Security.Cryptography;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.EditorInput;
+using Autodesk.AutoCAD.Runtime;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.Gateway.Core;
 using AutoCAD.Gateway.Server;
 
 namespace AutoCAD.Gateway.Commands;
@@ -11,10 +14,8 @@ namespace AutoCAD.Gateway.Commands;
 /// </summary>
 public sealed class GatewayCommands
 {
-    private const string DefaultServerUrl = "http://localhost:5055/";
-
     /// <summary>
-    /// AutoCAD console command 'AI_START_SERVER' initializes the HTTP server on configured port (5055 by default).
+    /// AutoCAD console command 'AI_START_SERVER' starts the loopback Gateway server.
     /// </summary>
     [CommandMethod("AI_START_SERVER")]
     public void StartServerCommand()
@@ -22,27 +23,23 @@ public sealed class GatewayCommands
         Document? doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
         if (doc == null) return;
         Editor ed = doc.Editor;
+        DocumentSessionManager.ObserveActiveDocument(doc.Name);
 
         try
         {
-            string? envPort = Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_PORT");
-            string serverUrl = !string.IsNullOrWhiteSpace(envPort)
-                ? $"http://localhost:{envPort.Trim()}/"
-                : (Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_URL") ?? DefaultServerUrl);
-
-            if (!serverUrl.EndsWith("/"))
-            {
-                serverUrl += "/";
-            }
-
+            int requestedPort = GatewayProtocol.ResolveConfiguredPort();
             if (HttpGatewayServer.Instance.IsRunning)
             {
-                ed.WriteMessage($"\n>>> [NOTICE] AI Gateway Server is already running at {serverUrl}\n");
+                ed.WriteMessage($"\n>>> [NOTICE] AI Gateway Server is already running on 127.0.0.1:{HttpGatewayServer.Instance.BoundPort}\n");
                 return;
             }
 
-            HttpGatewayServer.Instance.Start(serverUrl);
-            ed.WriteMessage($"\n>>> [ON] AI Gateway Server successfully listening at {serverUrl}\n");
+            HttpGatewayServer.Instance.Start(requestedPort);
+            ed.WriteMessage($"\n>>> [ON] AI Gateway Server listening on http://127.0.0.1:{HttpGatewayServer.Instance.BoundPort}/\n");
+            if (!string.IsNullOrEmpty(HttpGatewayServer.Instance.InstanceFilePath))
+            {
+                ed.WriteMessage($">>> Instance descriptor: {HttpGatewayServer.Instance.InstanceFilePath}\n");
+            }
         }
         catch (System.Exception ex)
         {
@@ -51,7 +48,7 @@ public sealed class GatewayCommands
     }
 
     /// <summary>
-    /// AutoCAD console command 'AI_STOP_SERVER' shuts down the HTTP server.
+    /// AutoCAD console command 'AI_STOP_SERVER' shuts down the loopback Gateway server.
     /// </summary>
     [CommandMethod("AI_STOP_SERVER")]
     public void StopServerCommand()
@@ -72,7 +69,7 @@ public sealed class GatewayCommands
     }
 
     /// <summary>
-    /// AutoCAD console command 'AI_SHOW_CONFIG' displays server network status and active security token.
+    /// AutoCAD console command 'AI_SHOW_CONFIG' displays server network status and masked token.
     /// </summary>
     [CommandMethod("AI_SHOW_CONFIG")]
     public void ShowConfigCommand()
@@ -82,25 +79,46 @@ public sealed class GatewayCommands
         Editor ed = doc.Editor;
 
         string token = HttpGatewayServer.ActiveToken;
-        string maskedToken = token.Length > 8
-            ? $"{token[..4]}****{token[^4..]}"
-            : "****";
+        string maskedToken = MaskToken(token);
 
-        string port = Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_PORT") ?? "5055";
-        string serverUrl = Environment.GetEnvironmentVariable("AUTOCAD_GATEWAY_URL") ?? $"http://localhost:{port}/";
-        string status = HttpGatewayServer.Instance.IsRunning ? $"[ACTIVE on port {port}]" : $"[STOPPED (port {port})]";
+        int port = HttpGatewayServer.Instance.IsRunning
+            ? HttpGatewayServer.Instance.BoundPort
+            : GatewayProtocol.ResolveConfiguredPort();
+        string status = HttpGatewayServer.Instance.IsRunning
+            ? $"[ACTIVE on 127.0.0.1:{port}]"
+            : $"[STOPPED (configured port {port})]";
 
         ed.WriteMessage("\n=======================================================");
         ed.WriteMessage("\n>>> [AUTOCAD AI GATEWAY CONFIGURATION]");
         ed.WriteMessage($"\n>>> Server Status:   {status}");
-        ed.WriteMessage($"\n>>> Listening URL:   {serverUrl}");
+        ed.WriteMessage($"\n>>> Listening URL:   http://127.0.0.1:{port}/");
         ed.WriteMessage($"\n>>> Active Token (X-Gateway-Token): {maskedToken}");
-        ed.WriteMessage("\n>>> Useful commands: AI_START_SERVER, AI_STOP_SERVER, AI_SET_TOKEN, AI_GENERATE_TOKEN");
+        ed.WriteMessage($"\n>>> Edit Guard:      {(DocumentSessionManager.EditGuardEnabled ? "ENABLED (requires new_drawing or allow_edit_document)" : "DISABLED")}");
+        if (!string.IsNullOrEmpty(HttpGatewayServer.Instance.InstanceFilePath))
+        {
+            ed.WriteMessage($"\n>>> Instance File:   {HttpGatewayServer.Instance.InstanceFilePath}");
+        }
+        ed.WriteMessage("\n>>> Useful commands: AI_START_SERVER, AI_STOP_SERVER, AI_SET_TOKEN, AI_GENERATE_TOKEN, AI_EDIT_GUARD");
         ed.WriteMessage("\n=======================================================\n");
     }
 
     /// <summary>
-    /// AutoCAD console command 'AI_SET_TOKEN' allows dynamically changing the security token in memory.
+    /// AutoCAD console command 'AI_EDIT_GUARD' toggles Edit Guard protection on pre-existing drawings.
+    /// </summary>
+    [CommandMethod("AI_EDIT_GUARD")]
+    public void ToggleEditGuardCommand()
+    {
+        Document? doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
+        if (doc == null) return;
+        Editor ed = doc.Editor;
+
+        bool next = !DocumentSessionManager.EditGuardEnabled;
+        DocumentSessionManager.EditGuardEnabled = next;
+        ed.WriteMessage($"\n>>> [EDIT GUARD] Protection is now {(next ? "ENABLED" : "DISABLED")}.\n");
+    }
+
+    /// <summary>
+    /// AutoCAD console command 'AI_SET_TOKEN' sets the session token in memory and updates the instance file.
     /// </summary>
     [CommandMethod("AI_SET_TOKEN")]
     public void SetTokenCommand()
@@ -121,27 +139,11 @@ public sealed class GatewayCommands
             return;
         }
 
-        string newToken = result.StringResult.Trim();
-        HttpGatewayServer.ActiveToken = newToken;
-
-        try
-        {
-            Environment.SetEnvironmentVariable("AUTOCAD_GATEWAY_TOKEN", newToken, EnvironmentVariableTarget.User);
-        }
-        catch
-        {
-            // Ignore if user lacks permissions to modify Windows registry variables
-        }
-
-        ed.WriteMessage("\n=======================================================");
-        ed.WriteMessage("\n>>> [SUCCESS] Security token updated in memory in real time.");
-        ed.WriteMessage($"\n>>> New Token: {newToken}");
-        ed.WriteMessage("\n>>> Remember to update your MCP client configuration (claude_desktop_config / mcp_config).");
-        ed.WriteMessage("\n=======================================================\n");
+        ApplySessionToken(ed, result.StringResult.Trim(), "SECURITY TOKEN UPDATED IN MEMORY");
     }
 
     /// <summary>
-    /// AutoCAD console command 'AI_GENERATE_TOKEN' generates a new cryptographic token and applies it in memory.
+    /// AutoCAD console command 'AI_GENERATE_TOKEN' generates a new cryptographic session token.
     /// </summary>
     [CommandMethod("AI_GENERATE_TOKEN")]
     public void GenerateTokenCommand()
@@ -150,23 +152,36 @@ public sealed class GatewayCommands
         if (doc == null) return;
         Editor ed = doc.Editor;
 
-        string newToken = "luiccian-" + Guid.NewGuid().ToString("N");
-        HttpGatewayServer.ActiveToken = newToken;
+        string newToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        ApplySessionToken(ed, newToken, "NEW SESSION TOKEN GENERATED AND APPLIED");
+    }
 
-        try
-        {
-            Environment.SetEnvironmentVariable("AUTOCAD_GATEWAY_TOKEN", newToken, EnvironmentVariableTarget.User);
-        }
-        catch
-        {
-            // Ignore if user lacks permissions
-        }
+    private static void ApplySessionToken(Editor ed, string newToken, string heading)
+    {
+        HttpGatewayServer.ActiveToken = newToken;
+        HttpGatewayServer.Instance.RefreshInstanceDescriptor();
 
         ed.WriteMessage("\n=======================================================");
-        ed.WriteMessage("\n>>> [NEW SECURE TOKEN GENERATED AND APPLIED]");
-        ed.WriteMessage($"\n>>> Token: {newToken}");
-        ed.WriteMessage("\n>>> Saved to Windows user environment variable 'AUTOCAD_GATEWAY_TOKEN'.");
-        ed.WriteMessage("\n>>> Copy this token into your MCP client config (claude_desktop_config.json / mcp_config.json).");
+        ed.WriteMessage($"\n>>> [{heading}]");
+        ed.WriteMessage($"\n>>> Masked Token: {MaskToken(newToken)}");
+        if (!string.IsNullOrEmpty(HttpGatewayServer.Instance.InstanceFilePath))
+        {
+            ed.WriteMessage($"\n>>> Instance file refreshed: {HttpGatewayServer.Instance.InstanceFilePath}");
+        }
+        else
+        {
+            ed.WriteMessage("\n>>> Token active in memory for next AI_START_SERVER.");
+        }
         ed.WriteMessage("\n=======================================================\n");
+    }
+
+    private static string MaskToken(string token)
+    {
+        if (string.IsNullOrEmpty(token))
+        {
+            return "(minted on AI_START_SERVER)";
+        }
+
+        return token.Length > 8 ? $"{token[..4]}****{token[^4..]}" : "****";
     }
 }

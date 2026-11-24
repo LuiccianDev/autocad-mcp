@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using ModelContextProtocol.Server;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.McpServer.Server;
 using AutoCAD.McpServer.Services;
 
 namespace AutoCAD.McpServer.Tools;
@@ -12,6 +14,7 @@ namespace AutoCAD.McpServer.Tools;
 /// Provides MCP tools for command execution, AutoLISP evaluation, viewport navigation, and environment setup in AutoCAD.
 /// </summary>
 [McpServerToolType]
+[ToolDomain("execution", "autocad_execution", "Ping Gateway, run AutoCAD commands or batches, evaluate or load AutoLISP, zoom, save, and configure metric units.")]
 public sealed class ExecutionTools
 {
     private readonly IAutoCADGatewayClient _gatewayClient;
@@ -30,6 +33,7 @@ public sealed class ExecutionTools
     /// </summary>
     /// <returns>Asynchronous task returning connection status.</returns>
     [McpServerTool(Name = "ping_gateway")]
+    [ToolExposure(Core = true)]
     [Description("Ping the AutoCAD Gateway to verify connectivity.")]
     public async Task<string> PingGateway() => await _gatewayClient.PingGatewayAsync();
 
@@ -40,23 +44,35 @@ public sealed class ExecutionTools
     /// <returns>Asynchronous task returning result of batch injection.</returns>
     [McpServerTool(Name = "execute_batch_commands")]
     [Description("Execute a sequential list of AutoCAD commands or macros in a single batch delivery. 'commandsJson' is a JSON array of command strings.")]
-    public async Task<string> ExecuteBatchCommands(string commandsJson)
+    public async Task<string> ExecuteBatchCommands(
+        [CompoundParam("commands", StructuredJson = StructuredJsonKind.Array)] string commandsJson)
     {
         if (string.IsNullOrWhiteSpace(commandsJson))
         {
-            return "{\"status\": \"error\", \"message\": \"The 'commandsJson' parameter cannot be empty.\"}";
+            return CadFormat.Error("The 'commandsJson' parameter cannot be empty.");
         }
 
         var cmdSb = new StringBuilder();
+        string trimmed = commandsJson.Trim();
         try
         {
-            using var doc = JsonDocument.Parse(commandsJson);
+            using var doc = JsonDocument.Parse(trimmed);
             if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
+                    if (el.ValueKind != JsonValueKind.String)
+                    {
+                        return CadFormat.Error("All entries in 'commandsJson' array must be strings.");
+                    }
+
                     string s = el.GetString()?.TrimEnd('\r', '\n') ?? "";
-                    if (!string.IsNullOrEmpty(s))
+                    if (s.Contains('\0'))
+                    {
+                        return CadFormat.Error("Commands cannot contain NUL characters.");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(s))
                     {
                         cmdSb.Append(s).Append('\n');
                     }
@@ -64,16 +80,37 @@ public sealed class ExecutionTools
             }
             else if (doc.RootElement.ValueKind == JsonValueKind.String)
             {
-                cmdSb.Append(doc.RootElement.GetString()?.TrimEnd('\r', '\n')).Append('\n');
+                string single = doc.RootElement.GetString()?.TrimEnd('\r', '\n') ?? "";
+                if (single.Contains('\0'))
+                {
+                    return CadFormat.Error("Commands cannot contain NUL characters.");
+                }
+
+                cmdSb.Append(single).Append('\n');
             }
             else
             {
-                return "{\"status\": \"error\", \"message\": \"'commandsJson' must be a JSON array of command strings.\"}";
+                return CadFormat.Error("'commandsJson' must be a JSON array of command strings.");
             }
         }
         catch (JsonException)
         {
+            if (trimmed.StartsWith('[') || trimmed.StartsWith('{'))
+            {
+                return CadFormat.Error("Malformed JSON in 'commandsJson'. Expected a valid JSON array of command strings.");
+            }
+
+            if (commandsJson.Contains('\0'))
+            {
+                return CadFormat.Error("Commands cannot contain NUL characters.");
+            }
+
             cmdSb.Append(commandsJson.TrimEnd('\r', '\n')).Append('\n');
+        }
+
+        if (cmdSb.Length == 0 || string.IsNullOrWhiteSpace(cmdSb.ToString()))
+        {
+            return CadFormat.Error("'commandsJson' must contain at least one non-empty command.");
         }
 
         return await _gatewayClient.ExecuteCommandAsync(cmdSb.ToString());
@@ -85,30 +122,41 @@ public sealed class ExecutionTools
     /// <param name="command">Command strings to send (must include \\n where Enter is required).</param>
     /// <returns>Asynchronous task returning result of command injection.</returns>
     [McpServerTool(Name = "execute_command")]
+    [ToolExposure(Core = true)]
     [Description("Enqueue native non-modal AutoCAD commands, AutoLISP macros, or YQArch commands (e.g. WW, JJ, AD, WD, ZXW) directly to AutoCAD through the Gateway. Include newlines (\\n) where Enter is required.")]
-    public async Task<string> ExecuteCommand(string command) => await _gatewayClient.ExecuteCommandAsync(command);
+    public async Task<string> ExecuteCommand(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command) || command.Contains('\0'))
+        {
+            return CadFormat.Error("'command' cannot be empty or contain NUL characters.");
+        }
+
+        return await _gatewayClient.ExecuteCommandAsync(command);
+    }
 
     /// <summary>
-    /// Evaluates and injects dynamic AutoLISP expressions into AutoCAD.
+    /// Evaluates AutoLISP code synchronously inside AutoCAD and returns its converted JSON value.
     /// </summary>
     /// <param name="code">AutoLISP code to evaluate (e.g. '(entmake ...)', '(setq ...)' or full routines).</param>
-    /// <returns>Asynchronous task returning confirmation of LISP injection.</returns>
+    /// <param name="timeoutMs">Evaluation timeout in milliseconds (250 to 120000, default 15000).</param>
+    /// <returns>JSON containing evaluated value, document name, and command-line state.</returns>
     [McpServerTool(Name = "evaluate_lisp")]
-    [Description("Evaluate and inject dynamic AutoLISP expressions directly into AutoCAD (e.g. fast entity creation with entmake, variable or function definitions).")]
-    public async Task<string> EvaluateLisp(string code)
+    [ToolExposure(Core = true)]
+    [Description("Evaluate AutoLISP code synchronously inside AutoCAD and return its JSON result and post-execution command-line state.")]
+    public async Task<string> EvaluateLisp(string code, int timeoutMs = 15_000)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
-            return "{\"status\": \"error\", \"message\": \"AutoLISP code cannot be empty.\"}";
+            return CadFormat.Error("AutoLISP code cannot be empty.");
         }
 
-        string lispCommand = code.Trim();
-        if (!lispCommand.EndsWith('\n'))
+        int clampedTimeout = GatewayProtocol.ClampLispTimeoutMs(timeoutMs);
+        string payload = JsonSerializer.Serialize(new
         {
-            lispCommand += "\n";
-        }
-
-        return await _gatewayClient.ExecuteCommandAsync(lispCommand);
+            code = code.Trim(),
+            timeout_ms = clampedTimeout,
+        });
+        return await _gatewayClient.PostJsonAsync("lisp/eval", payload, timeoutMs: clampedTimeout);
     }
 
     /// <summary>
@@ -117,17 +165,16 @@ public sealed class ExecutionTools
     /// <param name="filePath">Full file path of the .lsp script (e.g. 'C:/scripts/routine.lsp').</param>
     /// <returns>Asynchronous task returning file load result.</returns>
     [McpServerTool(Name = "load_lisp_file")]
-    [Description("Load and evaluate an external AutoLISP script file (.lsp) from disk inside AutoCAD via the (load ...) function.")]
+    [Description("Load and evaluate an external AutoLISP script file (.lsp) from disk inside AutoCAD via synchronous LISP evaluation.")]
     public async Task<string> LoadLispFile(string filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath))
+        if (!SecurityPolicy.ValidateLocalFilePath(filePath, out string normPath, out string? pathErr, ".lsp"))
         {
-            return "{\"status\": \"error\", \"message\": \"File path cannot be empty.\"}";
+            return CadFormat.Error(pathErr ?? "Invalid AutoLISP script path.");
         }
 
-        string normalizedPath = filePath.Replace('\\', '/');
-        string command = $"(load \"{normalizedPath}\")\n";
-        return await _gatewayClient.ExecuteCommandAsync(command);
+        string fwd = normPath.Replace('\\', '/');
+        return await EvaluateLisp($"(load {CadFormat.LispString(fwd)})");
     }
 
     /// <summary>
@@ -143,6 +190,7 @@ public sealed class ExecutionTools
     /// </summary>
     /// <returns>Asynchronous task returning confirmation.</returns>
     [McpServerTool(Name = "save_drawing")]
+    [ToolExposure(Core = true)]
     [Description("Save the active AutoCAD drawing file ('_.QSAVE').")]
     public async Task<string> SaveDrawing() => await _gatewayClient.ExecuteCommandAsync("_.QSAVE\n");
 
@@ -176,16 +224,19 @@ public sealed class ExecutionTools
 
     /// <summary>Alias for ping_gateway.</summary>
     [McpServerTool(Name = "ping_autocad_gateway")]
+    [ToolExposure(AliasOf = "ping_gateway")]
     [Description("Alias for ping_gateway: Ping the AutoCAD Gateway to verify connectivity.")]
     public async Task<string> PingAutoCADGateway() => await PingGateway();
 
     /// <summary>Alias for evaluate_lisp.</summary>
     [McpServerTool(Name = "execute_lisp")]
-    [Description("Alias for evaluate_lisp: Evaluate and inject dynamic AutoLISP expressions into AutoCAD.")]
-    public async Task<string> ExecuteLisp(string code) => await EvaluateLisp(code);
+    [ToolExposure(AliasOf = "evaluate_lisp")]
+    [Description("Alias for evaluate_lisp: Evaluate AutoLISP code synchronously inside AutoCAD.")]
+    public async Task<string> ExecuteLisp(string code, int timeoutMs = 15_000) => await EvaluateLisp(code, timeoutMs);
 
     /// <summary>Alias for configure_drawing_units.</summary>
     [McpServerTool(Name = "configure_drawing_environment")]
+    [ToolExposure(AliasOf = "configure_drawing_units")]
     [Description("Alias for configure_drawing_units: Configure AutoCAD drawing environment to METRIC METERS.")]
     public async Task<string> ConfigureDrawingEnvironment() => await ConfigureDrawingUnits();
 }

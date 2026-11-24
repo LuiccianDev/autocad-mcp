@@ -29,6 +29,8 @@ def test_num_formatting():
     assert num(0.0) == "0.0"
     assert num(25.5) == "25.5"
     assert num(100.0) == "100.0"
+    assert num(4e-7) == "4e-07"
+    assert num(-4e-7) == "-4e-07"
 
 
 def test_parse_points():

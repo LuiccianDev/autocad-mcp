@@ -1,4 +1,7 @@
+using System.Text.Json;
 using System.Threading.Tasks;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.Gateway.Core;
 using AutoCAD.Gateway.Core.Models;
 
 namespace AutoCAD.Gateway.Services;
@@ -8,37 +11,55 @@ namespace AutoCAD.Gateway.Services;
 /// </summary>
 public sealed class NullCivil3DService : ICivil3DService
 {
-    private const string NotAvailable =
-        "{\"status\": \"error\", \"civil_available\": false, \"message\": \"This function requires Autodesk Civil 3D 2027.\"}";
+    private static AcadGatewayException Unavailable() =>
+        new("civil_unavailable", "This function requires Autodesk Civil 3D 2027.", "civil_available=false");
 
     /// <inheritdoc/>
     public bool IsAvailable => false;
 
     /// <inheritdoc/>
     public Task<string> GetStatusAsync() =>
-        Task.FromResult("{\"status\": \"success\", \"civil_available\": false, \"message\": \"Standard AutoCAD: Civil 3D is not loaded.\"}");
+        Task.FromResult(JsonSerializer.Serialize(new
+        {
+            status = "success",
+            ok = true,
+            civil_available = false,
+            message = "Standard AutoCAD: Civil 3D is not loaded.",
+        }, GatewayProtocol.WireJsonOptions));
 
     /// <inheritdoc/>
-    public Task<string> ListSurfacesAsync() => Task.FromResult(NotAvailable);
+    public Task<string> ListSurfacesAsync() => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> GetElevationAsync(string? surfaceName, double x, double y) => Task.FromResult(NotAvailable);
+    public Task<string> GetElevationAsync(string? surfaceName, double x, double y) => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> ListAlignmentsAsync() => Task.FromResult(NotAvailable);
+    public Task<string> ListAlignmentsAsync() => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> GetStationOffsetAsync(string? alignmentName, double x, double y) => Task.FromResult(NotAvailable);
+    public Task<string> GetStationOffsetAsync(string? alignmentName, double x, double y) => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> GetPointAtStationAsync(string? alignmentName, double station, double offset) => Task.FromResult(NotAvailable);
+    public Task<string> GetPointAtStationAsync(string? alignmentName, double station, double offset) => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> CreateAlignmentAsync(CrearAlineamientoRequest request) => Task.FromResult(NotAvailable);
+    public Task<string> CreateAlignmentAsync(CreateAlignmentRequest request) => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> CreateSurfaceAsync(CrearSuperficieRequest request) => Task.FromResult(NotAvailable);
+    public Task<string> CreateSurfaceAsync(CreateSurfaceRequest request) => throw Unavailable();
 
     /// <inheritdoc/>
-    public Task<string> GetProfileAsync(string? alignmentName, string? surfaceName, double interval) => Task.FromResult(NotAvailable);
+    public Task<string> GetProfileAsync(string? alignmentName, string? surfaceName, double interval) => throw Unavailable();
+
+    /// <inheritdoc/>
+    public Task<string> GetSurfaceStatsAsync(string? surfaceName) => throw Unavailable();
+
+    /// <inheritdoc/>
+    public Task<string> GetCrossSectionAsync(
+        string? alignmentName,
+        string? surfaceName,
+        double station,
+        double leftWidth,
+        double rightWidth,
+        double step) => throw Unavailable();
 }

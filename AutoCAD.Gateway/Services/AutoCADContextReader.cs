@@ -6,33 +6,23 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.Gateway.Core;
 using AutoCAD.Gateway.Core.Models;
 
 namespace AutoCAD.Gateway.Services;
 
 /// <summary>
-/// Implementation for thread-safe AutoCAD database inspection executed on the main UI thread.
+/// Thread-safe AutoCAD database and UI context inspection service running on AutoCAD's main thread.
 /// </summary>
 public sealed class AutoCADContextReader : IAutoCADContextReader
 {
-    /// <summary>
-    /// Executes a query function on the active document on the main thread via the Application.Idle event.
-    /// </summary>
-    /// <param name="query">Delegate function receiving active document and returning serialized JSON string.</param>
-    /// <returns>Asynchronous task returning serialized query result.</returns>
-    private static Task<string> RunOnIdleAsync(Func<Document, string> query) =>
-        AutoCAD.Gateway.Core.UiThreadInvoker.RunOnIdleAsync(query);
-
     /// <inheritdoc/>
-    public Task<string> ReadSelectionCountAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadSelectionCountAsync() =>
+        Acad.RunOnDocumentAsync((doc, _) =>
         {
-            var editor = doc.Editor;
-            var selection = editor.SelectImplied();
-
+            var selection = doc.Editor.SelectImplied();
             int count = selection.Status == Autodesk.AutoCAD.EditorInput.PromptStatus.OK
                 ? selection.Value.GetObjectIds().Length
                 : 0;
@@ -40,166 +30,194 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
             return JsonSerializer.Serialize(new
             {
                 status = "success",
+                ok = true,
                 selection_count = count,
-                cantidad_seleccionada = count
-            });
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     /// <inheritdoc/>
-    public Task<string> ReadEntityCountsAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadEntityCountsAsync() =>
+        Acad.Read(ctx =>
         {
-            var db = doc.Database;
             var entityCounts = new Dictionary<string, int>();
+            var bt = (BlockTable)ctx.Tr.GetObject(ctx.Db.BlockTableId, OpenMode.ForRead);
+            var btr = (BlockTableRecord)ctx.Tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
-            using (var tr = doc.TransactionManager.StartTransaction())
+            foreach (ObjectId objId in btr)
             {
-                var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-                var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-                foreach (var objId in btr)
+                if (objId.IsNull || objId.IsErased)
                 {
-                    var ent = (Entity)tr.GetObject(objId, OpenMode.ForRead);
+                    continue;
+                }
+
+                if (ctx.Tr.GetObject(objId, OpenMode.ForRead, false) is Entity ent)
+                {
                     string type = ent.GetType().Name;
                     entityCounts[type] = entityCounts.TryGetValue(type, out int c) ? c + 1 : 1;
                 }
-                tr.Commit();
             }
 
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            return JsonSerializer.Serialize(new { status = "success", data = entityCounts }, options);
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                data = entityCounts,
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     /// <inheritdoc/>
-    public Task<string> ReadDrawingInfoAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadDrawingInfoAsync() =>
+        Acad.RunOnDocumentAsync((doc, _) =>
         {
             var info = new DrawingInfo
             {
                 Name = doc.Name,
                 IsReadOnly = doc.IsReadOnly,
-                Units = doc.Database.Insunits.ToString()
+                Units = doc.Database.Insunits.ToString(),
             };
-            return JsonSerializer.Serialize(new { status = "success", data = info });
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                data = info,
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     /// <inheritdoc/>
-    public Task<string> ReadLayersAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadLayersAsync() =>
+        Acad.Read(ctx =>
         {
             var list = new List<LayerInfo>();
-            using (var tr = doc.TransactionManager.StartTransaction())
+            var lt = (LayerTable)ctx.Tr.GetObject(ctx.Db.LayerTableId, OpenMode.ForRead);
+            foreach (ObjectId id in lt)
             {
-                var lt = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
-                foreach (ObjectId id in lt)
+                if (id.IsNull || id.IsErased)
                 {
-                    var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
+                    continue;
+                }
+
+                if (ctx.Tr.GetObject(id, OpenMode.ForRead, false) is LayerTableRecord ltr)
+                {
                     list.Add(new LayerInfo
                     {
                         Name = ltr.Name,
                         IsLocked = ltr.IsLocked,
                         IsFrozen = ltr.IsFrozen,
                         IsOff = ltr.IsOff,
-                        Color = ltr.Color.ColorIndex
+                        Color = ltr.Color.ColorIndex,
                     });
                 }
-                tr.Commit();
             }
-            return JsonSerializer.Serialize(new { status = "success", data = list });
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                data = list,
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     /// <inheritdoc/>
-    public Task<string> ReadExtentsAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadExtentsAsync() =>
+        Acad.RunOnDocumentAsync((doc, _) =>
         {
             var extmin = doc.Database.Extmin;
             var extmax = doc.Database.Extmax;
             var extents = new DrawingExtentsInfo
             {
-                MinX = extmin.X,
-                MinY = extmin.Y,
-                MinZ = extmin.Z,
-                MaxX = extmax.X,
-                MaxY = extmax.Y,
-                MaxZ = extmax.Z
+                MinX = Math.Round(extmin.X, 4),
+                MinY = Math.Round(extmin.Y, 4),
+                MinZ = Math.Round(extmin.Z, 4),
+                MaxX = Math.Round(extmax.X, 4),
+                MaxY = Math.Round(extmax.Y, 4),
+                MaxZ = Math.Round(extmax.Z, 4),
             };
-            return JsonSerializer.Serialize(new { status = "success", data = extents });
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                data = extents,
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     /// <inheritdoc/>
-    public Task<string> ReadTextsAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadTextsAsync() =>
+        Acad.Read(ctx =>
         {
             var list = new List<TextEntityInfo>();
-            using (var tr = doc.TransactionManager.StartTransaction())
-            {
-                var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
-                var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
+            var bt = (BlockTable)ctx.Tr.GetObject(ctx.Db.BlockTableId, OpenMode.ForRead);
+            var btr = (BlockTableRecord)ctx.Tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
-                foreach (ObjectId objId in btr)
+            foreach (ObjectId objId in btr)
+            {
+                if (objId.IsNull || objId.IsErased)
                 {
-                    var ent = tr.GetObject(objId, OpenMode.ForRead);
-                    if (ent is DBText dbText)
-                    {
-                        list.Add(new TextEntityInfo
-                        {
-                            Type = "DBText",
-                            Text = dbText.TextString,
-                            X = dbText.Position.X,
-                            Y = dbText.Position.Y,
-                            Layer = dbText.Layer
-                        });
-                    }
-                    else if (ent is MText mText)
-                    {
-                        list.Add(new TextEntityInfo
-                        {
-                            Type = "MText",
-                            Text = mText.Contents,
-                            X = mText.Location.X,
-                            Y = mText.Location.Y,
-                            Layer = mText.Layer
-                        });
-                    }
+                    continue;
                 }
-                tr.Commit();
+
+                DBObject ent = ctx.Tr.GetObject(objId, OpenMode.ForRead, false);
+                if (ent is DBText dbText)
+                {
+                    list.Add(new TextEntityInfo
+                    {
+                        Type = "DBText",
+                        Text = dbText.TextString,
+                        X = Math.Round(dbText.Position.X, 4),
+                        Y = Math.Round(dbText.Position.Y, 4),
+                        Layer = dbText.Layer,
+                    });
+                }
+                else if (ent is MText mText)
+                {
+                    list.Add(new TextEntityInfo
+                    {
+                        Type = "MText",
+                        Text = mText.Contents,
+                        X = Math.Round(mText.Location.X, 4),
+                        Y = Math.Round(mText.Location.Y, 4),
+                        Layer = mText.Layer,
+                    });
+                }
             }
-            return JsonSerializer.Serialize(new { status = "success", data = list });
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                data = list,
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     /// <inheritdoc/>
-    public Task<string> ReadBlocksAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> ReadBlocksAsync() =>
+        Acad.Read(ctx =>
         {
             var list = new List<string>();
-            using (var tr = doc.TransactionManager.StartTransaction())
+            var bt = (BlockTable)ctx.Tr.GetObject(ctx.Db.BlockTableId, OpenMode.ForRead);
+            foreach (ObjectId objId in bt)
             {
-                var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
-                foreach (ObjectId objId in bt)
+                if (objId.IsNull || objId.IsErased)
                 {
-                    var btr = (BlockTableRecord)tr.GetObject(objId, OpenMode.ForRead);
-                    if (!btr.IsAnonymous && !btr.IsLayout)
-                    {
-                        list.Add(btr.Name);
-                    }
+                    continue;
                 }
-                tr.Commit();
+
+                if (ctx.Tr.GetObject(objId, OpenMode.ForRead, false) is BlockTableRecord btr &&
+                    !btr.IsAnonymous &&
+                    !btr.IsLayout)
+                {
+                    list.Add(btr.Name);
+                }
             }
-            return JsonSerializer.Serialize(new { status = "success", data = list });
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                data = list,
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -214,70 +232,91 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
     }
 
     /// <inheritdoc/>
-    public Task<string> CaptureScreenshotAsync()
-    {
-        return RunOnIdleAsync(doc =>
+    public Task<string> CaptureScreenshotAsync(bool inline = false) =>
+        Acad.RunOnDocumentAsync((doc, _) =>
         {
-            try
+            IntPtr hwnd = Autodesk.AutoCAD.ApplicationServices.Application.MainWindow?.Handle ?? IntPtr.Zero;
+            if (hwnd == IntPtr.Zero && doc.Window != null)
             {
-                IntPtr hwnd = Autodesk.AutoCAD.ApplicationServices.Application.MainWindow.Handle;
-                if (hwnd == IntPtr.Zero && doc.Window != null)
-                {
-                    hwnd = doc.Window.Handle;
-                }
+                hwnd = doc.Window.Handle;
+            }
 
-                int width = 0;
-                int height = 0;
-                int left = 0;
-                int top = 0;
+            int width;
+            int height;
+            int left;
+            int top;
 
-                if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out RECT rect))
+            if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out RECT rect))
+            {
+                width = rect.Right - rect.Left;
+                height = rect.Bottom - rect.Top;
+                left = rect.Left;
+                top = rect.Top;
+            }
+            else
+            {
+                var bounds = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);
+                width = bounds.Width;
+                height = bounds.Height;
+                left = bounds.Left;
+                top = bounds.Top;
+            }
+
+            if (width <= 0 || height <= 0)
+            {
+                throw new AcadGatewayException("autocad_error", "Could not determine AutoCAD window dimensions.");
+            }
+
+            using var bitmap = new Bitmap(width, height);
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.CopyFromScreen(left, top, 0, 0, new Size(width, height));
+            }
+
+            string outputDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "AutoCAD.Gateway",
+                "screenshots");
+            DatabaseHelpers.EnsureNoReparsePoints(outputDir);
+            Directory.CreateDirectory(outputDir);
+            DatabaseHelpers.EnsureNoReparsePoints(outputDir);
+            string suffix = Guid.NewGuid().ToString("N")[..4];
+            string fileName = $"autocad_capture_{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}_{suffix}.png";
+            string fullPath = Path.Combine(outputDir, fileName);
+            using (var fs = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read))
+            {
+                bitmap.Save(fs, ImageFormat.Png);
+            }
+
+            string? imageBase64 = null;
+            string? mimeType = null;
+            string? inlineOmittedReason = null;
+            if (inline)
+            {
+                long byteLength = new FileInfo(fullPath).Length;
+                if (byteLength <= SecurityPolicy.MaxScreenshotInlineBytes)
                 {
-                    width = rect.Right - rect.Left;
-                    height = rect.Bottom - rect.Top;
-                    left = rect.Left;
-                    top = rect.Top;
+                    byte[] pngBytes = File.ReadAllBytes(fullPath);
+                    imageBase64 = Convert.ToBase64String(pngBytes);
+                    mimeType = "image/png";
                 }
                 else
                 {
-                    var bounds = System.Windows.Forms.Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, 1920, 1080);
-                    width = bounds.Width;
-                    height = bounds.Height;
-                    left = bounds.Left;
-                    top = bounds.Top;
+                    inlineOmittedReason = $"Screenshot size ({byteLength} bytes) exceeds inline cap ({SecurityPolicy.MaxScreenshotInlineBytes} bytes).";
                 }
-
-                if (width <= 0 || height <= 0)
-                {
-                    return JsonSerializer.Serialize(new { status = "error", message = "Could not determine AutoCAD window dimensions." });
-                }
-
-                using var bitmap = new Bitmap(width, height);
-                using (var g = Graphics.FromImage(bitmap))
-                {
-                    g.CopyFromScreen(left, top, 0, 0, new Size(width, height));
-                }
-
-                string outputDir = Path.Combine(Path.GetTempPath(), "AutoCAD_Screenshots");
-                Directory.CreateDirectory(outputDir);
-                string fileName = $"autocad_capture_{DateTime.Now:yyyyMMdd_HHmmss}.png";
-                string fullPath = Path.Combine(outputDir, fileName);
-                bitmap.Save(fullPath, ImageFormat.Png);
-
-                return JsonSerializer.Serialize(new
-                {
-                    status = "success",
-                    file_path = fullPath.Replace('\\', '/'),
-                    width,
-                    height,
-                    timestamp = DateTime.UtcNow.ToString("o")
-                });
             }
-            catch (Exception ex)
+
+            return JsonSerializer.Serialize(new
             {
-                System.Diagnostics.Trace.TraceError("Screenshot capture error: {0}", ex);
-                return JsonSerializer.Serialize(new { status = "error", message = "An error occurred while capturing the AutoCAD window screenshot." });
-            }
+                status = "success",
+                ok = true,
+                file_path = fullPath.Replace('\\', '/'),
+                width,
+                height,
+                mime_type = mimeType,
+                image_base64 = imageBase64,
+                inline_omitted_reason = inlineOmittedReason,
+                timestamp = DateTime.UtcNow.ToString("o"),
+            }, GatewayProtocol.WireJsonOptions);
         });
-    }
 }

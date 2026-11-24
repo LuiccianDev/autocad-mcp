@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Threading.Tasks;
+using AutoCAD.Gateway.Contracts;
+using AutoCAD.McpServer.Server;
 using AutoCAD.McpServer.Services;
 using ModelContextProtocol.Server;
 using static AutoCAD.McpServer.Tools.CadFormat;
@@ -8,44 +12,29 @@ using static AutoCAD.McpServer.Tools.CadFormat;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// MCP tools for layer management: creation with ACI color, linetype, and description,
-/// setting active layer, and controlling layer states (on/off, frozen/thawed, locked/unlocked).
+/// Provides MCP tools for native layer creation, state modification, activation, and deletion in AutoCAD.
 /// </summary>
 [McpServerToolType]
+[ToolDomain("layers", "autocad_layers", "Create, activate, toggle visibility/lock/freeze states, and delete AutoCAD layers.")]
 public sealed class LayerTools
 {
-    private const string LispPrelude =
-        "(vl-load-com) (setq *mcp-doc* (vla-get-ActiveDocument (vlax-get-acad-object))) ";
-
     private readonly IAutoCADGatewayClient _gatewayClient;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="LayerTools"/> class.
-    /// </summary>
-    /// <param name="gatewayClient">The client for communicating with the AutoCAD Gateway.</param>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="gatewayClient"/> is null.</exception>
+    /// <summary>Initializes a new instance of the <see cref="LayerTools"/> class.</summary>
+    /// <param name="gatewayClient">Client for communicating with AutoCAD Gateway.</param>
     public LayerTools(IAutoCADGatewayClient gatewayClient)
     {
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
     }
 
-    private Task<string> SendLispAsync(string body) =>
-        _gatewayClient.ExecuteCommandAsync($"(progn {LispPrelude}{body} (princ))\n");
-
-    /// <summary>
-    /// Creates a layer (or updates existing) with ACI color, linetype, and description.
-    /// </summary>
-    /// <param name="name">Layer name (e.g. <c>ARCH-WALLS</c>).</param>
-    /// <param name="colorAci">ACI color index between 1 and 255 (7 = white/black).</param>
-    /// <param name="linetype">Linetype name; loaded automatically from <c>acadiso.lin</c> if not loaded.</param>
-    /// <param name="description">Optional layer description.</param>
-    /// <returns>JSON response from Gateway or validation error.</returns>
+    /// <summary>Creates or updates a layer with standard color and linetype, making it current.</summary>
     [McpServerTool(Name = "create_layer")]
-    [Description("Create a layer or update an existing one with ACI color (1-255), linetype, and description. Does not change current layer.")]
+    [ToolExposure(Core = true)]
+    [Description("Create a new layer (or update it if existing) with ACI color (1-255) and linetype, and activate it as current layer.")]
     public async Task<string> CreateLayer(
         string name, int colorAci = 7, string linetype = "Continuous", string description = "")
     {
-        if (!IsValidSymbolName(name))
+        if (!SecurityPolicy.IsValidSymbolName(name))
         {
             return Error($"Invalid layer name: '{name}'.");
         }
@@ -55,87 +44,92 @@ public sealed class LayerTools
             return Error("ACI color must be between 1 and 255.");
         }
 
-        if (!IsValidSymbolName(linetype))
+        if (!SecurityPolicy.IsValidSymbolName(linetype))
         {
             return Error($"Invalid linetype name: '{linetype}'.");
         }
 
-        string lt = LispString(linetype.Trim());
-        string body =
-            $"(if (not (tblsearch \"LTYPE\" {lt})) " +
-            $"(vl-catch-all-apply 'vla-load (list (vla-get-Linetypes *mcp-doc*) {lt} \"acadiso.lin\"))) " +
-            $"(setq *mcp-lay* (vla-add (vla-get-Layers *mcp-doc*) {LispString(name.Trim())})) " +
-            $"(vla-put-Color *mcp-lay* {colorAci}) " +
-            $"(if (tblsearch \"LTYPE\" {lt}) (vla-put-Linetype *mcp-lay* {lt})) " +
-            $"(vla-put-Description *mcp-lay* {LispString(description ?? string.Empty)})";
+        string payload = JsonSerializer.Serialize(new
+        {
+            name = name.Trim(),
+            color_index = colorAci,
+            linetype = linetype.Trim(),
+            description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            set_current = true,
+        });
 
-        return await SendLispAsync(body);
+        return await _gatewayClient.PostJsonAsync("layers/create", payload);
     }
 
-    /// <summary>
-    /// Sets the active drawing layer (CLAYER variable).
-    /// </summary>
-    /// <param name="name">Name of an existing, non-frozen layer.</param>
-    /// <returns>JSON response from Gateway or validation error.</returns>
+    /// <summary>Sets an existing layer as the current active layer (CLAYER).</summary>
     [McpServerTool(Name = "set_current_layer")]
-    [Description("Set the active drawing layer (CLAYER). Layer must exist and not be frozen.")]
+    [Description("Set an existing layer as the current active layer (CLAYER).")]
     public async Task<string> SetCurrentLayer(string name)
     {
-        if (!IsValidSymbolName(name))
+        if (!SecurityPolicy.IsValidSymbolName(name))
         {
             return Error($"Invalid layer name: '{name}'.");
         }
 
-        string nm = LispString(name.Trim());
-        string body =
-            $"(if (tblsearch \"LAYER\" {nm}) " +
-            $"(if (vl-catch-all-error-p (vl-catch-all-apply 'setvar (list \"CLAYER\" {nm}))) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] Could not activate layer (frozen?): \" {nm}))) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] Layer does not exist: \" {nm})))";
+        string payload = JsonSerializer.Serialize(new
+        {
+            name = name.Trim(),
+            set_current = true,
+        });
 
-        return await SendLispAsync(body);
+        return await _gatewayClient.PostJsonAsync("layers/state", payload);
     }
 
-    /// <summary>
-    /// Modifies the visibility, frozen state, or lock state of a layer.
-    /// </summary>
-    /// <param name="name">Name of an existing layer.</param>
-    /// <param name="action">One of: <c>on</c>, <c>off</c>, <c>freeze</c>, <c>thaw</c>, <c>lock</c>, <c>unlock</c>.</param>
-    /// <returns>JSON response from Gateway or validation error.</returns>
+    /// <summary>Modifies the visibility/editability state (on, off, freeze, thaw, lock, unlock) of an existing layer.</summary>
     [McpServerTool(Name = "set_layer_state")]
-    [Description("Modify the state of a layer: on, off, freeze, thaw, lock, or unlock.")]
+    [ToolExposure(Core = true)]
+    [Description("Modify visibility/editability state of an existing layer: 'on', 'off', 'freeze', 'thaw', 'lock', 'unlock'.")]
     public async Task<string> SetLayerState(string name, string action)
     {
-        if (!IsValidSymbolName(name))
+        if (!SecurityPolicy.IsValidSymbolName(name))
         {
             return Error($"Invalid layer name: '{name}'.");
         }
 
-        (string Property, string Value)? op = action?.Trim().ToLowerInvariant() switch
+        var body = new Dictionary<string, object?> { ["name"] = name.Trim() };
+        switch (action?.Trim().ToLowerInvariant())
         {
-            "on" or "activar" => ("LayerOn", ":vlax-true"),
-            "off" or "desactivar" => ("LayerOn", ":vlax-false"),
-            "freeze" or "congelar" => ("Freeze", ":vlax-true"),
-            "thaw" or "descongelar" => ("Freeze", ":vlax-false"),
-            "lock" or "bloquear" => ("Lock", ":vlax-true"),
-            "unlock" or "desbloquear" => ("Lock", ":vlax-false"),
-            _ => null
-        };
-
-        if (op is not { } o)
-        {
-            return Error("Invalid action. Use: on, off, freeze, thaw, lock, or unlock.");
+            case "on" or "activar":
+                body["on"] = true;
+                break;
+            case "off" or "desactivar":
+                body["on"] = false;
+                break;
+            case "freeze" or "congelar":
+                body["frozen"] = true;
+                break;
+            case "thaw" or "descongelar":
+                body["frozen"] = false;
+                break;
+            case "lock" or "bloquear":
+                body["locked"] = true;
+                break;
+            case "unlock" or "desbloquear":
+                body["locked"] = false;
+                break;
+            default:
+                return Error($"Invalid action '{action}'. Use: on, off, freeze, thaw, lock, unlock.");
         }
 
-        string nm = LispString(name.Trim());
-        string body =
-            $"(if (tblsearch \"LAYER\" {nm}) " +
-            $"(if (vl-catch-all-error-p (vl-catch-all-apply 'vlax-put-property " +
-            $"(list (vla-item (vla-get-Layers *mcp-doc*) {nm}) \"{o.Property}\" {o.Value}))) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] Could not change layer state: \" {nm})) " +
-            $"(vla-regen *mcp-doc* acActiveViewport)) " +
-            $"(princ (strcat \"\\n[AutoCAD MCP] Layer does not exist: \" {nm})))";
+        return await _gatewayClient.PostJsonAsync("layers/state", JsonSerializer.Serialize(body));
+    }
 
-        return await SendLispAsync(body);
+    /// <summary>Deletes an unused non-system, non-current layer via ObjectARX Purge check.</summary>
+    [McpServerTool(Name = "delete_layer")]
+    [Description("Delete an unused AutoCAD layer (refuses protected layers '0'/'Defpoints', the active layer, or layers referenced by objects).")]
+    public async Task<string> DeleteLayer(string name, string? document = null)
+    {
+        if (!SecurityPolicy.IsValidSymbolName(name))
+        {
+            return Error($"Invalid layer name: '{name}'.");
+        }
+
+        string payload = JsonSerializer.Serialize(new { name = name.Trim(), document });
+        return await _gatewayClient.PostJsonAsync("layers/delete", payload);
     }
 }

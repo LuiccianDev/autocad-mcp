@@ -9,7 +9,9 @@ namespace AutoCAD.Gateway.Core;
 /// </summary>
 public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
 {
-    private readonly ConcurrentQueue<string> _commandQueue = new();
+    private readonly record struct QueuedCommand(Document? ExpectedDocument, string Command);
+
+    private readonly ConcurrentQueue<QueuedCommand> _commandQueue = new();
     private readonly EventHandler _idleHandler;
 
     /// <summary>
@@ -21,11 +23,18 @@ public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
     }
 
     /// <inheritdoc/>
-    public void EnqueueCommand(string command)
+    public void EnqueueCommand(string command) =>
+        EnqueueInternal(expectedDocument: null, command);
+
+    /// <inheritdoc/>
+    public void EnqueueCommand(Document expectedDocument, string command) =>
+        EnqueueInternal(expectedDocument, command);
+
+    private void EnqueueInternal(Document? expectedDocument, string command)
     {
         if (string.IsNullOrWhiteSpace(command)) return;
 
-        _commandQueue.Enqueue(command);
+        _commandQueue.Enqueue(new QueuedCommand(expectedDocument, command));
         Autodesk.AutoCAD.ApplicationServices.Application.Idle += _idleHandler;
     }
 
@@ -40,13 +49,30 @@ public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
         Document doc = Autodesk.AutoCAD.ApplicationServices.Application.DocumentManager.MdiActiveDocument;
         if (doc == null) return;
 
-        while (_commandQueue.TryDequeue(out string? cmd))
+        while (_commandQueue.TryDequeue(out QueuedCommand item))
         {
-            if (string.IsNullOrEmpty(cmd)) continue;
+            if (string.IsNullOrEmpty(item.Command)) continue;
 
-            // SAFETY DIRECTIVE:
-            // \x03\x03 cancels any previous stuck command before injecting the new payload.
-            string safeCommand = "\x03\x03" + cmd;
+            if (item.ExpectedDocument is not null && !ReferenceEquals(doc, item.ExpectedDocument))
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "Dropped queued /execute command because MdiActiveDocument switched before idle dispatch.");
+                continue;
+            }
+
+            try
+            {
+                Acad.ValidateWritable(doc, DocumentSessionManager.GetOrCreate(doc), requireIdle: false);
+            }
+            catch (AcadGatewayException ex)
+            {
+                System.Diagnostics.Trace.TraceWarning(
+                    "Dropped queued /execute command at idle time due to write guard ({0}): {1}", ex.Code, ex.Message);
+                continue;
+            }
+
+            // \x03\x03 cancels any previous stuck command before injecting the payload.
+            string safeCommand = "\x03\x03" + item.Command;
             doc.SendStringToExecute(safeCommand, true, false, false);
         }
     }

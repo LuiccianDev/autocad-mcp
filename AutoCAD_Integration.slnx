@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="AutoCAD.Gateway.Contracts/AutoCAD.Gateway.Contracts.csproj" />
+  <Project Path="AutoCAD.Gateway.Tests/AutoCAD.Gateway.Tests.csproj" />
   <Project Path="AutoCAD.Gateway/AutoCAD.Gateway.csproj" />
   <Project Path="AutoCAD.McpServer/AutoCAD.McpServer.csproj" />
 </Solution>
