@@ -11,16 +11,28 @@ Use this skill whenever an AI agent, contributor, or developer needs to interact
 
 ## 1. Pre-Flight Gateway Handshake & Verification
 
-Before attempting any CAD operations, the agent **MUST** verify communication with AutoCAD:
+Before attempting any CAD operations, the agent **MUST** verify communication with AutoCAD using canonical tool names (compatible with `granular`, `compound`, and `core` modes):
 
-1. **Ping the Gateway:** Call `ping_autocad_gateway`.
-   - If it fails, verify that `AutoCAD.Gateway.dll` is loaded in AutoCAD via `NETLOAD` and listening on port `5055`.
+1. **Ping the Gateway:** Call `ping_gateway`.
+   - If it fails, verify that `AutoCAD.Gateway.dll` is loaded in AutoCAD via `NETLOAD` (or Autoloader `.bundle`) and started via `AI_START_SERVER`.
 2. **Inspect Drawing Context:** Call `get_drawing_info` to retrieve:
    - Drawing filename, DWG file path, read-only status, and configured drawing units.
-3. **Enforce Metric Standards (MANDATORY):**
-   - Call `configure_drawing_environment` at the start of any drawing session.
+3. **Edit Guard Authorization (Existing DWGs):**
+   - If a write operation returns `403 edit_guard` on a pre-existing drawing, ask before modifying existing client files or call `allow_edit_document` (or create a fresh drawing with `new_drawing` / toggle via `AI_EDIT_GUARD`).
+4. **Enforce Metric Standards (MANDATORY):**
+   - Call `configure_drawing_units` (`execute_command` is available when using custom unit scripts, or `configure_drawing_units` directly in `granular`/`compound`) at the start of any drawing session.
    - Ensures `INSUNITS = 4` (Meters), `MEASUREMENT = 1` (Metric ISO), `LUNITS = 2` (Decimal), `LUPREC = 3` (Millimeter precision).
    - Prohibited: Never work in imperial units (inches/feet) or assume unverified coordinate spaces.
+
+## 1.1 Tool Loading Modes (`AUTOCAD_MCP_TOOL_MODE`)
+
+The MCP server exposes the same underlying Gateway capabilities across three modes:
+
+- **`granular` (default, 89 tools):** Calls canonical tool names directly (75 canonical + 14 legacy aliases).
+- **`compound` (10 domain routers):** Calls `autocad_context`, `autocad_entities`, `autocad_drafting`, `autocad_drawing`, `autocad_layers`, `autocad_documents`, `autocad_measurement`, `autocad_plotting`, `autocad_civil3d`, or `autocad_execution`. Inspect schemas in 2 steps when needed:
+  1. `autocad_<domain>(action="help")` or `autocad_<domain>(action="help", params={"action": "<name>"})`.
+  2. `autocad_<domain>(action="<name>", params={...})`.
+- **`core` (28 tools):** Minimal direct set with zero aliases (always use canonical names such as `ping_gateway`, `capture_screenshot`, `sample_longitudinal_profile`, `allow_edit_document`).
 
 ---
 
@@ -32,6 +44,9 @@ To minimize network latency, avoid context window bloat, and prevent UI thread t
 Whenever drawing multiple elements (e.g. walls, grids, structural elements, labels, or complete floor plans), **always prefer** `draw_batch_geometry`.
 - Dispatches all lines, rectangles, circles, polylines, and text annotations in a **single atomic call**.
 - Bypasses individual roundtrips, reducing execution time and token consumption by over 90%.
+- **Architectural Door Openings & Metric Dimensioning:**
+  - When drawing doors inside walls or partitions, split the wall/partition line segments around every door opening (`vano`) and add short jamb caps rather than drawing door arcs across continuous wall lines.
+  - When calling `create_dimension` in metric drawings (`INSUNITS = 4`), pass `text_height` (e.g. `0.25` to `0.28`), `arrow_size` (e.g. `0.18` to `0.20`), or `dim_scale` (`1.0`), or rely on the Gateway's automatic metric calibration, then verify readability with `zoom_extents` + `capture_screenshot`.
 
 ### Priority 2: Atomic Primitives via `entmake`
 For single, standalone adjustments:
@@ -68,7 +83,7 @@ When injecting native AutoCAD commands via `execute_command` or `execute_batch_c
 
 Whenever you finish creating or modifying geometry:
 1. **Recenter Viewport:** Call `zoom_extents` (`_.ZOOM E`) to ensure all geometry is framed.
-2. **Visual Inspection:** Call `capture_screen` to obtain a high-resolution PNG screenshot of the active AutoCAD viewport.
+2. **Visual Inspection:** Call `capture_screenshot` to obtain a high-resolution PNG screenshot of the active AutoCAD viewport.
 3. Inspect the image to verify geometry alignment, text readability, layer visibility, and structural correctness before reporting completion to the user.
 
 ---
@@ -84,7 +99,7 @@ When connected to an active Civil 3D 2027 session:
 3. **Alignments & Profiles:**
    - Call `list_civil3d_alignments` to discover horizontal centerlines and station ranges.
    - Call `get_alignment_station_offset` to compute chainage station and lateral offset.
-   - Call `get_longitudinal_profile` to sample ground elevation profiles along an alignment at custom station intervals.
+   - Call `sample_longitudinal_profile` to sample ground elevation profiles along an alignment at custom station intervals.
 4. **Parametric Civil Design:**
    - Call `create_civil3d_alignment` to generate horizontal alignments with tangent curves.
    - Call `create_civil3d_surface` to build topographic TIN surfaces from coordinate clouds.
@@ -96,9 +111,9 @@ When connected to an active Civil 3D 2027 session:
 To produce physical, print-ready engineering drawings:
 
 1. **Create Paper Space Layout:** Call `create_layout` with desired tab name.
-2. **Configure Sheet & Plotter:** Call `configure_layout_sheet` (Sheet sizes: `A0` to `A4`, virtual plotter: `DWG To PDF.pc3`, style: `monochrome.ctb`).
+2. **Configure Sheet & Plotter:** Call `configure_layout_page` (Sheet sizes: `A0` to `A4`, virtual plotter: `DWG To PDF.pc3`, plot style: `monochrome.ctb`).
 3. **Scale Viewport:** Call `create_viewport` centered on model geometry with exact metric scale (`1000 / Scale XP`, e.g. `Scale = 50` for $1:50$).
-4. **Parametric Title Block:** Call `insert_parametric_titleblock` to draw standard borders and fill title block attributes (Project, Sheet, Scale, Designer, Date).
+4. **Parametric Title Block:** Call `insert_title_block` to draw standard borders and fill title block attributes (Project, Sheet, Scale, Designer, Date).
 5. **Physical PDF Plot:** Call `export_pdf` to render the layout directly to disk.
 
 ---

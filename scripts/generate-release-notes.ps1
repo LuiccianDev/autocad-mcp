@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    Genera el archivo markdown de notas de lanzamiento (sin emojis) para el GitHub Release.
+    Generates a Markdown release notes file (without emojis) for GitHub Releases.
 .EXAMPLE
-    .\scripts\generate-release-notes.ps1 -Version "2.3.0" -Tag "v2.3.0" -OutputPath "release_body.md"
+    .\scripts\generate-release-notes.ps1 -Version "2.5.0" -Tag "v2.5.0" -OutputPath "release_body.md"
 #>
 [CmdletBinding()]
 param(
@@ -24,15 +24,15 @@ $content = @"
 Automated release $Tag for the AutoCAD AI Gateway and MCP Server ecosystem.
 
 ## Artifacts Included
-- AutoCAD.Gateway-Release.zip: Native .NET 10 AutoCAD extension plugin (acad.exe NETLOAD).
+- AutoCAD.Gateway-Release.zip: Native .NET 10 AutoCAD extension plugin (acad.exe NETLOAD / Autoloader bundle).
 - AutoCAD.McpServer-Release.zip: Standalone C# .NET 10 MCP server (STDIO).
-- Python Distributions: Python FastMCP wheel and sdist packages.
+- Python Distributions: Python FastMCP wheel and sdist packages (PyPI: luiccian-autocad-mcp).
+- SHA256SUMS.txt: SHA-256 verification digests for all release assets.
 
 ## Highlights
-- 45 typed MCP tools covering inspection, geometry, layers, calculations, layouts, and Civil 3D.
-- High-performance batch drafting engine (draw_batch_geometry).
-- Thread-safe command dispatching with Application.Idle synchronization.
-- Zero-secret security with X-Gateway-Token authentication.
+- 89 typed MCP tools (75 canonical + 14 aliases) with selective exposure via AUTOCAD_MCP_TOOL_MODE (granular, compound, core).
+- Native ObjectARX entity, layer, drafting, block, viewport, PDF plotting, screenshot, and Civil 3D transactions.
+- Hardened loopback TcpListener server with constant-time X-Gateway-Token auth, Host/Origin guards, and optional AUTOCAD_GATEWAY_RESTRICTED_MODE=1.
 "@
 
 Set-Content -Path $OutputPath -Value $content -Encoding utf8

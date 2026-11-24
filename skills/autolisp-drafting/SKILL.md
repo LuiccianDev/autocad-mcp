@@ -1,46 +1,34 @@
 ---
 name: autolisp-drafting
-description: "Estándar de diseño y dibujo técnico en AutoLISP para túneles y campamentos en AutoCAD: entidades entmake, unidades métricas estrictas y capas PA14."
+description: "Technical AutoLISP drafting standards for metric infrastructure and architectural drawings in AutoCAD using OSNAP-independent entmake entities and strict meter units."
 ---
 
-# Dibujante Técnico AutoLISP (PA14)
+# AutoLISP Technical Drafting Standards
 
-Esta habilidad gobierna la generación automatizada de planos en **AutoLISP** dentro del proyecto **Túnel Casmas Huaraz PA14**, garantizando compatibilidad total con AutoCAD y Civil 3D sin depender de versiones de idioma ni configuraciones locales.
+This skill governs automated **AutoLISP** script generation, ensuring full compatibility across localized AutoCAD and Civil 3D installations without relying on OSNAP or screen zoom.
 
 ---
 
-## 1. Estándar Métrico Estricto (Unidades en Metros)
+## 1. Strict Metric Standard (Units in Meters)
 
-* **Obligatorio:** Todo dibujo se realiza **estrictamente en metros**.
-* Configuración obligatoria en la cabecera LISP:
+- **Mandatory:** All drawings and calculations **must be in meters**.
+- Required LISP header configuration:
   ```lisp
-  (setvar "INSUNITS" 4)     ; 4 = Metros
-  (setvar "MEASUREMENT" 1)  ; 1 = Métrico (ISO)
+  (setvar "INSUNITS" 4)     ; 4 = Meters
+  (setvar "MEASUREMENT" 1)  ; 1 = Metric (ISO)
   (setvar "LUNITS" 2)       ; 2 = Decimal
-  (setvar "LUPREC" 3)       ; 3 = Milímetros de precisión
+  (setvar "LUPREC" 3)       ; 3 = Millimeter precision
   ```
-* Prohibido trabajar en milímetros o pulgadas.
+- Do not draft in millimeters or inches unless explicitly requested.
 
 ---
 
-## 2. Reglas de Generación de Geometría con `entmake`
+## 2. Geometry Generation Rules with `entmake`
 
-1. **Independencia de OSNAP:** Todas las geometrías (líneas, polilíneas, círculos, arcos, textos, sombreados) deben crearse con `entmake`. Nunca utilizar `(command "_.LINE" ...)`, pues depende de los puntos de captura (OSNAP) y del zoom de la pantalla.
-2. **Capas Normativas Institucionales:**
-   * Todas las capas deben llevar el prefijo `PA14-` (ej. `PA14-EJE`, `PA14-MUROS`, `PA14-COTAS`, `PA14-TEXTO`).
-   * Colores definidos según el estándar ACI (1 a 255).
-3. **Calibración de Cotas y Textos:**
-   * Textos de cota entre `0.20 m` y `0.25 m` (`DIMTXT = 0.22`, `DIMASZ = 0.18`, `DIMDEC = 2`).
-   * Textos limpios en ASCII puro (sin caracteres especiales no compatibles con fuentes SHX).
-
----
-
-## 3. Organización Modular en el Código Python
-
-* **Planos del Túnel:** Centralizados en `src/casmas_pa14/lisp.py` $\rightarrow$ `salidas/lisp/PA14_dibujos.lsp`.
-* **Planos de Campamento y Superficie:** Encapsulados en el subpaquete modular:
-  👉 `src/casmas_pa14/lisp_campamento/`
-  * `base.py`: Primitivas y motor `Lienzo`.
-  * `plantas.py`: Plantas arquitectónicas.
-  * `procesos.py`: Infraestructura técnica y procesos industriales.
-  * `generador.py`: Compilador de `PA14_campamento_1.lsp` y `PA14_campamento_2.lsp`.
+1. **OSNAP Independence:** Create all geometry (lines, polylines, circles, arcs, texts, hatches) with `entmake`. Avoid `(command "_.LINE" ...)` in batch generators because it depends on active OSNAP settings and viewport zoom.
+2. **Structured Layering:**
+   - Assign explicit layers per discipline (e.g., `ARQ-WALLS`, `ARQ-DOORS`, `ARQ-DIMS`, `ARQ-TEXT`, `STR-AXIS`).
+   - Use standard ACI colors (`1` through `255`).
+3. **Dimension and Text Calibration:**
+   - Keep model-space metric text heights between `0.20 m` and `0.30 m` (`DIMTXT = 0.25`, `DIMASZ = 0.18`, `DIMDEC = 2`).
+   - Keep text strings in clean ASCII compatible with standard SHX/TTF fonts.

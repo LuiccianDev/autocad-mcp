@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.5.0] - 2026-11-24
+
+### Added
+- **Selective MCP Tool Mode Loading (`AUTOCAD_MCP_TOOL_MODE`):**
+  - Added `AUTOCAD_MCP_TOOL_MODE` across both `AutoCAD.McpPython` and `AutoCAD.McpServer` (.NET 10) supporting `granular` (default, 89 tools), `compound` (10 domain router tools `autocad_context` through `autocad_execution` with two-tier `action="help"` introspection, cross-domain hints, alias resolution, and structured JSON `anyOf` parameter schemas), and `core` (28 high-leverage standalone tools without aliases).
+  - Enforced fail-fast startup validation writing configuration errors strictly to `stderr` with exit code `1` and zero `stdout` output so STDIO JSON-RPC framing stays intact.
+- **Hardened Loopback Socket Transport (`AutoCAD.Gateway` & `AutoCAD.Gateway.Contracts`):**
+  - Replaced `HttpListener` with a dedicated `TcpListener` loopback server paired with `HttpRequestGuard` and `HttpWireCodec`, enforcing constant-time `X-Gateway-Token` authentication, strict `Host` validation, Fetch Metadata / `Origin` / `Referer` CSRF rejection, fixed `Content-Length` framing, and per-session `{pid}.json` auto-discovery.
+- **Native ObjectARX Entities, Layers, Drafting, Blocks, Xrefs & Plotting (55 Gateway Endpoints, 89 MCP Tools):**
+  - Added native single-transaction entity inspection, filtered/spatial cursor pagination (`query_entities` with HMAC `QueryCursor`), property modification, transforms (`move`, `rotate`, `scale`, `copy`, `mirror`), deletion, explode (`explode_entities`), and atomic batches (`execute_native_batch`, up to 500 ops with rollback).
+  - Added native layer creation/state/deletion with purge validation and multi-document lifecycle controls (`list_documents`, `new_drawing`, `open_drawing`, `activate_document`, `close_document`, `allow_edit_document`, `cancel_command`, `get_system_variable`, `set_system_variable`) protected by Edit Guard and optimistic document revisions.
+  - Added native `create_dimension`, `create_mleader`, `create_hatch`, `create_table`, `define_block`, `get_block_definition`, `get_block_attributes`, `set_block_attributes`, `list_xrefs`, native PaperSpace `create_viewport`, synchronous `export_pdf` (`BACKGROUNDPLOT=0`), and `capture_screenshot(inline=True)` base64 vision support.
+  - Added Civil 3D `get_civil3d_surface_stats` and `sample_civil3d_cross_section` endpoints, plus dynamic agent introspection endpoints (`GET /_tools` and `GET /_guide`) and `scripts/install-bundle.ps1` Autoloader `.bundle` staging.
+
+### Changed
+- **Main-Thread Dispatcher & Modular Architecture:**
+  - Replaced `UiThreadInvoker` with `[DllImport("user32.dll")] PostMessageW` idle waking, `StartOpenCloseTransaction` for reads via `Acad.Read`, single-transaction `Acad.Write` locks, synchronous `LispBridge` with delimited `LispSyntax` pre-validation, and clean C#/Python parity modules (`EntityBuilder`/`Modifier`/`Transformer`, modular Python `tools/` packages, unified `normalize_batch_element`).
+- **Civil 3D & Plotting Reliability:**
+  - Routed `sample_longitudinal_profile` directly to `GET /civil/profile`, unified all Gateway responses on `GatewayProtocol.WireJsonOptions` + `AcadGatewayException`, fixed PaperSpace `_.-PLOT` prompt alignment with temporary atomic PDF staging, and bounded profile/cross-section loops upfront.
+- **Metric Dimension Scaling, HTTP Client Reuse & Token Compaction:**
+  - Added automatic metric calibration (`text_height`, `arrow_size`, `dim_scale`) on `create_dimension` for meter drawings (`INSUNITS = 4`) when using uncalibrated default styles.
+  - Added persistent `httpx.AsyncClient` pooling in Python, 2s endpoint discovery caching, tiered timeouts (`10s` reads, `30s` writes, `60s` heavy ops), and idempotent `GET`-only retry across Python and .NET clients.
+  - Removed duplicate Spanish JSON keys (`nombre`, `soloLectura`, `unidades`, `bloqueada`, `congelada`, `apagada`, `tipo`, `texto`, `capa`) from context payloads, rounded extents/text coordinates to 4 decimals, and added SHA-256 manifest verification plus `-Uninstall` to `scripts/install-bundle.ps1`.
+
+### Security
+- **Defense-in-Depth Hardening (`security-audit` Pass):**
+  - Enforced loopback-only gateway URLs, disabled HTTP proxies and auto-redirects in C#/Python clients, blocked `Sec-Fetch-*` cross-site browser requests, and rejected symbolic-link/oversized discovery files.
+  - Hardened local path validation against Windows DOS reserved device names, trailing dots, UNC shares, alternate data streams, NTFS junctions/symlinks (`ReparsePoint` ancestor checks), and traversal; expanded `BlockedSystemVariables` with `_`/`.` prefix normalization; added `AUTOCAD_GATEWAY_RESTRICTED_MODE=1` to optionally lock down `/execute` and `/lisp/eval`; bound `/execute` idle dispatch to verified documents; and hardened `plot_style`, `layout_name`, strict JSON parsing (`NaN`/recursion guards), geometry/batch vertex budgets, and CI/PyPI release tag alignment.
+
+---
+
 ## [2.4.0] - 2026-11-07
 
 ### Added

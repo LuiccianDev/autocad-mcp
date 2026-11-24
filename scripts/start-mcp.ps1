@@ -1,13 +1,15 @@
 <#
 .SYNOPSIS
-    Ejecuta el servidor AutoCAD MCP Server vía STDIO.
+    Starts AutoCAD MCP Server over STDIO transport.
 .DESCRIPTION
-    Lanza el proceso de AutoCAD.McpServer.dll o AutoCAD.McpServer.exe en modo Release.
+    Launches AutoCAD.McpServer.dll or AutoCAD.McpServer.exe in Release mode.
+    By default, leaves AUTOCAD_GATEWAY_TOKEN unset so the server discovers the active
+    AutoCAD Gateway session descriptor automatically.
 #>
 
 [CmdletBinding()]
 param(
-    [string]$GatewayToken = "autocad-gateway-token-2027",
+    [string]$GatewayToken = "",
     [switch]$UseExecutable
 )
 
@@ -18,14 +20,16 @@ $releaseDir = Join-Path $repoRoot "AutoCAD.McpServer\bin\Release\net10.0"
 $dllPath = Join-Path $releaseDir "AutoCAD.McpServer.dll"
 $exePath = Join-Path $releaseDir "AutoCAD.McpServer.exe"
 
-$env:AUTOCAD_GATEWAY_TOKEN = $GatewayToken
+if (-not [string]::IsNullOrWhiteSpace($GatewayToken)) {
+    $env:AUTOCAD_GATEWAY_TOKEN = $GatewayToken.Trim()
+}
 
 if ($UseExecutable -and (Test-Path $exePath)) {
-    Write-Host "Iniciando AutoCAD MCP Server via ejecutable ($exePath)..." -ForegroundColor Cyan
+    [Console]::Error.WriteLine("Starting AutoCAD MCP Server via executable ($exePath)...")
     & "$exePath"
 } elseif (Test-Path $dllPath) {
-    Write-Host "Iniciando AutoCAD MCP Server via dotnet ($dllPath)..." -ForegroundColor Cyan
+    [Console]::Error.WriteLine("Starting AutoCAD MCP Server via dotnet ($dllPath)...")
     dotnet "$dllPath"
 } else {
-    Write-Error "No se encontraron los binarios compilados. Ejecuta primero .\scripts\build.ps1"
+    Write-Error "Compiled binaries not found. Run .\scripts\build.ps1 first."
 }

@@ -3,53 +3,40 @@ param(
     [Parameter(Position = 0)]
     [string]$Token,
 
-    [switch]$UpdateExampleConfigs
+    [switch]$Reveal
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ([string]::IsNullOrWhiteSpace($Token)) {
-    $Token = "luiccian-" + [System.Guid]::NewGuid().ToString("N")
+    $Token = "luiccian-" + [System.Security.Cryptography.RandomNumberGenerator]::GetHexString(32, $true)
     Write-Host ""
-    Write-Host "[+] Generando nuevo token seguro aleatorio..." -ForegroundColor Cyan
+    Write-Host "[+] Generated new cryptographically random token..." -ForegroundColor Cyan
 } else {
     $Token = $Token.Trim()
     Write-Host ""
-    Write-Host "[+] Aplicando token suministrado por el usuario..." -ForegroundColor Cyan
+    Write-Host "[+] Applying user-supplied token..." -ForegroundColor Cyan
 }
 
-# 1. Guardar en las variables de entorno de usuario en Windows (persistente entre reinicios)
+# Persist token in Windows user environment variables
 [System.Environment]::SetEnvironmentVariable("AUTOCAD_GATEWAY_TOKEN", $Token, [System.EnvironmentVariableTarget]::User)
 $env:AUTOCAD_GATEWAY_TOKEN = $Token
 
-Write-Host "=======================================================" -ForegroundColor Green
-Write-Host "  AUTOCAD AI GATEWAY - TOKEN CONFIGURADO CON EXITO" -ForegroundColor Green
-Write-Host "=======================================================" -ForegroundColor Green
-Write-Host "Variable registrada en Windows: AUTOCAD_GATEWAY_TOKEN" -ForegroundColor White
-Write-Host "Token activo:                   $Token" -ForegroundColor Yellow
-Write-Host ""
-
-# 2. Si se solicito actualizar las configuraciones de ejemplo
-if ($UpdateExampleConfigs) {
-    $repoRoot = Split-Path -Parent $PSScriptRoot
-    $claudeConfig = Join-Path $repoRoot "examples\configs\claude_desktop_config.json"
-    $mcpConfig = Join-Path $repoRoot "examples\configs\mcp_config.json"
-
-    foreach ($file in @($claudeConfig, $mcpConfig)) {
-        if (Test-Path $file) {
-            $content = Get-Content $file -Raw
-            $updated = $content -replace '"AUTOCAD_GATEWAY_TOKEN":\s*"[^"]*"', "`"AUTOCAD_GATEWAY_TOKEN`": `"$Token`""
-            Set-Content -Path $file -Value $updated -Encoding UTF8
-            Write-Host "[OK] Actualizado archivo: $file" -ForegroundColor Gray
-        }
-    }
+$masked = if ($Reveal) {
+    $Token
+} elseif ($Token.Length -le 12) {
+    "***"
+} else {
+    $Token.Substring(0, 8) + "..." + $Token.Substring($Token.Length - 4)
 }
 
+Write-Host "=======================================================" -ForegroundColor Green
+Write-Host "  AUTOCAD AI GATEWAY - TOKEN CONFIGURED" -ForegroundColor Green
+Write-Host "=======================================================" -ForegroundColor Green
+Write-Host "Windows User Env Var : AUTOCAD_GATEWAY_TOKEN" -ForegroundColor White
+Write-Host "Configured Token     : $masked (pass -Reveal to display full value)" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Copia este bloque en la seccion env de tu configuracion de IA:" -ForegroundColor Cyan
-Write-Host " `"env`": {" -ForegroundColor DarkYellow
-Write-Host "   `"AUTOCAD_GATEWAY_PORT`": `"5055`"," -ForegroundColor DarkYellow
-Write-Host "   `"AUTOCAD_GATEWAY_TOKEN`": `"$Token`"" -ForegroundColor DarkYellow
-Write-Host " }" -ForegroundColor DarkYellow
+Write-Host "Note: Leaving AUTOCAD_GATEWAY_TOKEN unset is recommended on single-user" -ForegroundColor Gray
+Write-Host "workstations so AutoCAD.Gateway auto-mints ephemeral per-session tokens." -ForegroundColor Gray
 Write-Host ""
