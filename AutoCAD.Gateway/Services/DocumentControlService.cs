@@ -689,7 +689,6 @@ public static class DocumentControlService
             Document doc = Acad.ActiveDocument;
             Acad.EnsureActiveDocument(doc, documentName, "regen_all");
 
-            Acad.EnsureQuiescent(doc);
             doc.Editor.Command("_.REGENALL");
             doc.Editor.Regen();
             DocumentSession session = DocumentSessionManager.GetOrCreate(doc);

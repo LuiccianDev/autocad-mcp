@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Split `PlottingService.cs` into `LayoutService.cs`, `ViewportService.cs`, `TitleBlockBuilder.cs`, and `PlottingService.cs`; extracted `RasterImageService.cs` from `DraftingService.cs`; extracted `BatchElementNormalizer.cs` from `DrawingTools.cs`; and split contract policies into `LineWeightPolicy.cs`, `DwgVersionPolicy.cs`, `PlottingPolicy.cs`, `OutputFormat.cs`, and `ToolAnnotationPolicy.cs`.
   - Fixed `create_dimension` metric scaling via `SetDimstyleData` across both `INSUNITS = 4` (mm) and `INSUNITS = 6` (m), stabilized silent synchronous `PlotEngine` PDF plotting (`BACKGROUNDPLOT=0`), and **moved `regen_all` in `compound` mode from `autocad_measurement` to `autocad_execution`** (breaking change for `autocad_measurement(action="regen_all")` callers; `granular` and `core` modes are unchanged).
 
+### Fixed
+- **Live Command-Context Rejection on `regen_all`:**
+  - Removed the redundant `Acad.EnsureQuiescent(doc)` call inside `DocumentControlService.RegenAllAsync`'s `ExecuteInCommandContextAsync` callback, keeping the `preflight` quiescence guard before entering AutoCAD's `EXECUTEFUNCTION` command context.
+
 ### Security
 - **Audit Hardening (`security-audit` + Thermos):**
   - Enforced `LispBridge.LoadFileAsync` file size cap (`16 MiB`), deferred directory creation until after document/revision/Edit-Guard/layout validations in `PlotPdfAsync` and `SaveDrawingAsync`, upgraded `RasterImageDef` to `ForWrite` on reused logos, blocked `ByLayer`/`ByBlock` layer linetypes, and removed `AcceptScalarAsString` parameter-name hardcoding from `CompoundDispatcher`.
