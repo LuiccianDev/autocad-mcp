@@ -111,3 +111,16 @@ The project operates through complementary components designed to work **togethe
 2. Keep unreleased changes on `master` under `## [X.Y.Z] - Unreleased` without a release date until the git tag is cut.
 3. Synchronize version numbers atomically across `AutoCAD.Gateway/AutoCAD.Gateway.csproj`, `AutoCAD.McpServer/AutoCAD.McpServer.csproj`, `AutoCAD.McpPython/pyproject.toml`, `CHANGELOG.md`, and the git tag `vX.Y.Z`.
 4. Keep changelog bullets concise (2–3 lines max per item), ordered in strict reverse chronological order with ISO dates (`## [X.Y.Z] - YYYY-MM-DD`).
+
+---
+
+## 7. Documentation Sync & `docs-craft` Workflow
+
+Whenever substantial changes are made (new/renamed MCP tools, Gateway routes, architecture refactors, environment variables, or breaking changes), **synchronize documentation before finishing**:
+
+1. **Audit Scope:** Verify and update [README.md](README.md), [AutoCAD.McpPython/README.md](AutoCAD.McpPython/README.md), [CHANGELOG.md](CHANGELOG.md) (`[Unreleased]` or target version), and affected guides under `docs/` (`ARCHITECTURE.md`, `GETTING_STARTED.md`, `TOOLS_REFERENCE.md`, `TOOLS_CHEAT_SHEET.md`, `TROUBLESHOOTING.md`).
+2. **Source-Verified Accuracy:** Cross-check every documented tool name, signature, route, count, and environment variable directly against `GatewayToolCatalog.cs`, `AutoCADToolCatalog.cs`, and `tool_mode.py`—never copy names from memory.
+3. **Use `docs-craft` Properly:** Follow the `docs-craft` skills (`docs-sync`, `docs-writer`, `readme-craft`) for formatting hygiene (PyPI-safe HTML in `AutoCAD.McpPython/README.md`, GFM/Mermaid in root/docs, zero decorative emojis) and always run:
+   ```powershell
+   python "C:\Users\DAVID\.gemini\config\plugins\docs-craft\scripts\check_docs.py" --repo-root . --json
+   ```

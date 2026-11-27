@@ -86,7 +86,7 @@ flowchart LR
 | `autocad_context` | 10 + 6 aliases | `get_drawing_info`, `get_layers`, `get_drawing_extents`, `capture_screenshot` |
 | `autocad_entities` | 6 + 0 aliases | `query_entities`, `get_entity`, `modify_entity`, `transform_entities`, `delete_entities`, `execute_native_batch` |
 | `autocad_drafting` | 10 + 0 aliases | `create_dimension`, `create_mleader`, `create_hatch`, `create_table`, `define_block`, `set_block_attributes`, `list_xrefs`, `explode_entities` |
-| `autocad_drawing` | 9 + 0 aliases | `draw_batch_geometry`, `draw_line`, `draw_polyline`, `draw_rectangle`, `draw_circle`, `draw_arc`, `insert_text`, `insert_block`, `attach_raster_image` |
+| `autocad_drawing` | 9 + 0 aliases | `draw_batch_geometry`, `draw_line`, `draw_polyline`, `draw_rectangle`, `draw_circle`, `draw_arc`, `insert_text`, `insert_block`, `insert_raster_image` |
 | `autocad_layers` | 4 + 0 aliases | `create_layer`, `set_current_layer`, `set_layer_state`, `delete_layer` |
 | `autocad_documents` | 9 + 0 aliases | `list_documents`, `new_drawing`, `open_drawing`, `activate_document`, `close_document`, `allow_edit_document`, `cancel_command`, `get_system_variable`, `set_system_variable` |
 | `autocad_measurement` | 3 + 1 alias | `measure_distance`, `calculate_polygon_area`, `purge_and_audit_drawing` |

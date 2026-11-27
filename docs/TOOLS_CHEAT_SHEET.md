@@ -1,105 +1,89 @@
 # Quick Reference & Decision Tree (MCP Tools Cheat Sheet)
 
-This document serves as an actionable cheat sheet and decision guide for developers, engineers, and AI models interacting with **`autocad-mcp`**.
+This document serves as an actionable cheat sheet and decision guide for developers, engineers, and AI models interacting with **`autocad-mcp`** (`v2.7.0`, 90 tools: 76 canonical + 14 legacy aliases across 10 domains).
 
-It answers in seconds:  
-**Which MCP tool should I invoke to achieve my goal in AutoCAD or Civil 3D?**
+- **Tool Modes (`AUTOCAD_MCP_TOOL_MODE`):** `granular` (default, 90 tools), `compound` (10 domain routers `autocad_context`–`autocad_execution` with `action="help"`), or `core` (28 high-leverage tools).
+- **Output Format (`AUTOCAD_MCP_OUTPUT_FORMAT`):** `compact` (default, token-reduced summary + `structuredContent`) or `json` (raw JSON text).
 
 ---
 
-## Quick Decision Matrix: "Goal" -> "Tool to Invoke"
+## Quick Decision Matrix: "Goal" -> "Canonical Tool"
 
-| Design Goal / Intent in CAD | Recommended Tool | Key Arguments | Requires Running CAD? |
+| Design Goal / Intent in CAD | Canonical Tool (Domain) | Key Arguments | Requires CAD? |
 |---|---|---|:---:|
-| **Check Gateway HTTP connectivity (port 5055)** | `ping_autocad_gateway` | *(none)* | Yes |
-| **Get drawing name, DWG path, and units** | `get_drawing_info` | *(none)* | Yes |
-| **Query bounding box extents (ExtMin/ExtMax)** | `get_drawing_extents` | *(none)* | Yes |
-| **Inspect user's currently selected objects** | `read_selection` | *(none)* | Yes |
-| **List Civil 3D horizontal alignments** | `list_civil3d_alignments` | *(none)* | Yes (Civil 3D) |
-| **Measure distance, azimuth, or slope between points** | `measure_distance` | `x1, y1, x2, y2, z1, z2` | No (Local) |
-| **Calculate polygon area or perimeter** | `calculate_polygon_area` | `points: "x1,y1;x2,y2;..."` | No (Local) |
-| **Configure metric standard (`INSUNITS=4`)** | `configure_drawing_environment` | *(none)* | Yes |
-| **Draw multiple entities / complete floor plan in 1 call** | `draw_batch_geometry` | `elements: [...]` | Yes |
-| **Draw a wall, grid axis, or straight line** | `draw_line` | `x1, y1, x2, y2, layer` | Yes |
-| **Draw a polyline boundary or perimeter** | `draw_polyline` | `points, closed: true, layer` | Yes |
-| **Draw a room, column, or footing rectangle** | `draw_rectangle` | `x1, y1, x2, y2, layer` | Yes |
-| **Draw a circular shaft, pillar, or tunnel arch** | `draw_circle` | `center_x, center_y, radius, layer` | Yes |
-| **Draw a curved arch or vault** | `draw_arc` | `center_x, center_y, radius, start_angle, end_angle` | Yes |
-| **Place single-line technical text or labels** | `insert_text` | `text, x, y, height, layer` | Yes |
-| **Insert an existing block definition** | `insert_block` | `block_name, x, y, scale` | Yes |
-| **Create a layer with color and linetype** | `create_layer` | `name, color_aci, linetype` | Yes |
-| **Set the active working layer** | `set_current_layer` | `name` | Yes |
-| **Toggle layer visibility, freeze, or lock** | `set_layer_state` | `name, action: "freeze"` | Yes |
-| **List all layers and their visibility/lock states** | `read_layers` | *(none)* | Yes |
-| **Count and summarize drawing objects by type** | `read_objects` | *(none)* | Yes |
-| **List all loaded block definitions** | `list_available_blocks` | *(none)* | Yes |
-| **Search text strings across model space** | `read_texts` | *(none)* | Yes |
-| **Capture drawing image ("eyes for AI")** | `capture_screen` | *(none)* | Yes |
-| **Zoom to drawing extents** | `zoom_extents` | *(none)* | Yes |
-| **Save current drawing file** | `save_drawing` | *(none)* | Yes |
-| **Purge unreferenced definitions and audit DWG** | `clean_and_purge_drawing` | `target: "all", audit: true` | Yes |
-| **Force complete graphics regeneration** | `regen_all` | *(none)* | Yes |
-| **Create paper space layout tab** | `create_layout` | `layout_name` | Yes |
-| **Configure sheet size (A0–A4) and PDF plotter** | `configure_layout_sheet` | `layout_name, sheet_size` | Yes |
-| **Create calibrated viewport with metric scale** | `create_viewport` | `x, y, width, height, scale, model_x, model_y` | Yes |
-| **Draw parametric title block / sheet border** | `insert_parametric_titleblock` | `corner_x, corner_y, title, drawing_number`| Yes |
-| **Export layout to physical PDF file** | `export_pdf` | `layout_name, pdf_path` | Yes |
-| **Query ground surface elevation (Z) at (X, Y)** | `get_surface_elevation` | `surface_name, x, y` | Yes (Civil 3D) |
-| **Sample longitudinal profile along an alignment** | `get_longitudinal_profile`| `alignment_name, surface_name, station_interval` | Yes (Civil 3D) |
-| **Calculate station (chainage) and lateral offset** | `get_alignment_station_offset` | `alignment_name, x, y` | Yes (Civil 3D) |
-| **Compute (X, Y) coordinates from station/offset** | `get_station_coordinate` | `alignment_name, station, offset` | Yes (Civil 3D) |
-| **Create alignment from PIs with curves** | `create_civil3d_alignment` | `name, points, radius` | Yes (Civil 3D) |
-| **Build topographic TIN surface from points** | `create_civil3d_surface` | `name, points` | Yes (Civil 3D) |
-| **Execute a batch sequence of CAD commands** | `execute_batch_commands` | `commands: [...]` | Yes |
-| **Execute raw CAD commands or plugin macros** | `execute_command` | `command: "WW\n200\n"` | Yes |
-| **Evaluate dynamic in-memory AutoLISP expressions** | `execute_lisp` | `code: "(+ 1 2)"` | Yes |
-| **Load external `.lsp` file from disk** | `load_lisp_file` | `file_path` | Yes |
+| **Check Gateway connectivity & active session** | `ping_gateway` (`execution`) | *(none)* | Yes |
+| **List Gateway HTTP routes & undo/Edit Guard rules** | `get_gateway_tools` / `get_gateway_guide` (`context`) | *(none)* | Yes |
+| **Get drawing name, DWG path, and units** | `get_drawing_info` (`context`) | *(none)* | Yes |
+| **Query bounding box extents (`ExtMin`/`ExtMax`)** | `get_drawing_extents` (`context`) | *(none)* | Yes |
+| **Inspect entity counts, layers, texts, blocks, selection** | `get_entities`, `get_layers`, `get_texts`, `list_blocks`, `get_selection_count` (`context`) | *(none)* | Yes |
+| **Capture drawing screenshot (multimodal `ImageContent`)** | `capture_screenshot` (`context`) | `inline: true` | Yes |
+| **Filter entities by type, layer, space, 2D bbox, or text** | `query_entities` (`entities`) | `types, layers, min_x, max_x, limit, cursor` | Yes |
+| **Inspect or modify one entity by hexadecimal handle** | `get_entity` / `modify_entity` (`entities`) | `handle, ...` | Yes |
+| **Move, rotate, scale, copy, or mirror entities atomically** | `transform_entities` (`entities`) | `handles, operation, dx, dy, angle, factor` | Yes |
+| **Delete entities or run up to 500 native ops atomically** | `delete_entities` / `execute_native_batch` (`entities`) | `handles` / `operations, rollback_on_error` | Yes |
+| **Measure distance, azimuth, or slope between points** | `measure_distance` (`measurement`) | `x1, y1, x2, y2, z1, z2` | No (Local) |
+| **Calculate polygon area, perimeter, and centroid** | `calculate_polygon_area` (`measurement`) | `points: "x1,y1;x2,y2;..."` | No (Local) |
+| **Purge unreferenced definitions and audit DWG** | `purge_and_audit_drawing` (`measurement`) | `target: "all", audit: true` | Yes |
+| **Configure metric standard (`INSUNITS=4`)** | `configure_drawing_units` (`execution`) | *(none)* | Yes |
+| **Draw multiple entities / complete floor plan in 1 call** | `draw_batch_geometry` (`drawing`) | `elements: [...]` | Yes |
+| **Draw line, polyline, rectangle, circle, arc, text, block** | `draw_line`, `draw_polyline`, `draw_rectangle`, `draw_circle`, `draw_arc`, `insert_text`, `insert_block` (`drawing`) | coordinates, `layer` | Yes |
+| **Attach and place a raster image (`PNG`/`JPG`/`BMP`/`TIF`)** | `insert_raster_image` (`drawing`) | `file_path, x, y, width, height, image_frame` | Yes |
+| **Create native dimensions, mleaders, hatches, or tables** | `create_dimension`, `create_mleader`, `create_hatch`, `create_table` (`drafting`) | geometry / `handles` / `cells_json` | Yes |
+| **Define blocks, read/update attributes, list Xrefs, explode** | `define_block`, `get_block_definition`, `get_block_attributes`, `set_block_attributes`, `list_xrefs`, `explode_entities` (`drafting`) | `name` / `handle` / `handles` | Yes |
+| **Create, activate, modify, or delete a layer** | `create_layer`, `set_current_layer`, `set_layer_state`, `delete_layer` (`layers`) | `name, color_aci, linetype, lineweight, action` | Yes |
+| **Manage MDI documents & Edit Guard** | `list_documents`, `new_drawing`, `open_drawing`, `activate_document`, `close_document`, `allow_edit_document` (`documents`) | `document` / `file_path` / `allow` | Yes |
+| **Cancel active prompt or read/set system variables** | `cancel_command`, `get_system_variable`, `set_system_variable` (`documents`) | `name, value` | Yes |
+| **Create layout, configure A0–A4 page, viewport, title block** | `create_layout`, `configure_layout_page`, `create_viewport`, `insert_title_block` (`plotting`) | `layout_name, paper_size, scale, template` | Yes |
+| **Export layout to physical PDF file** | `export_pdf` (`plotting`) | `layout_name, pdf_path, plot_style` | Yes |
+| **Check Civil 3D runtime & list surfaces/alignments** | `check_civil3d_status`, `list_civil3d_surfaces`, `list_civil3d_alignments` (`civil3d`) | *(none)* | Yes (Civil 3D) |
+| **Query surface elevation (Z) or surface statistics** | `get_surface_elevation`, `get_civil3d_surface_stats` (`civil3d`) | `x, y, surface_name` | Yes (Civil 3D) |
+| **Sample longitudinal profile or transverse cross-section** | `sample_longitudinal_profile`, `sample_civil3d_cross_section` (`civil3d`) | `alignment_name, surface_name, interval/station` | Yes (Civil 3D) |
+| **Convert between `(X, Y)` and `(station, offset)`** | `get_alignment_station_offset`, `get_point_at_station` (`civil3d`) | `alignment_name, ...` | Yes (Civil 3D) |
+| **Create Civil 3D alignment or TIN surface** | `create_civil3d_alignment`, `create_civil3d_surface` (`civil3d`) | `name, points, radius` | Yes (Civil 3D) |
+| **Run raw CAD commands, batch commands, or AutoLISP** | `execute_command`, `execute_batch_commands`, `evaluate_lisp`, `load_lisp_file` (`execution`) | `command` / `code` / `file_path` | Yes |
+| **Zoom extents, regenerate viewports, or save DWG** | `zoom_extents`, `regen_all`, `save_drawing` (`execution`) | `file_path, overwrite, dwg_version` | Yes |
 
 ---
 
 ## Standard Chained Workflows
 
-### Workflow 1: Clean Drawing Initialization
-When starting a new architectural or structural drawing:
+### Workflow 1: Clean Drawing Initialization & Native Drafting
 ```mermaid
 flowchart LR
-    A["configure_drawing_environment\n(INSUNITS=4 Meters)"] --> B["create_layer\n(ARQ-WALLS, STR-GRID)"]
-    B --> C["set_current_layer\n(ARQ-WALLS)"]
-    C --> D["draw_*\n(lines, rectangles, circles)"]
-    D --> E["zoom_extents\n(Full extents view)"]
+    A["new_drawing / allow_edit_document"] --> B["configure_drawing_units\n(INSUNITS=4 Meters)"]
+    B --> C["create_layer\n(ARQ-WALLS, color_aci, linetype)"]
+    C --> D["draw_batch_geometry / execute_native_batch\n(Atomic ObjectARX transaction)"]
+    D --> E["zoom_extents"]
 ```
 
 ---
 
-## Workflow 2: Layout Sheet & PDF Delivery
-Preparing a deliverable sheet directly from model space:
+### Workflow 2: Layout Sheet & PDF Delivery
 ```mermaid
 flowchart TD
-    A["1. create_layout\nlayout_name: 'SHEET-01'"] --> B["2. configure_layout_sheet\nsheet_size: 'A1', scale: 1:1 mm"]
-    B --> C["3. create_viewport\nscale: 500 (1:500 XP), centered on model coords"]
-    C --> D["4. insert_parametric_titleblock\ntitle block 180x45 mm with project metadata"]
-    D --> E["5. export_pdf\ngenerates physical PDF on disk via DWG To PDF"]
+    A["1. create_layout\nlayout_name: 'SHEET-01'"] --> B["2. configure_layout_page\npaper_size: 'A1', orientation: 'landscape'"]
+    B --> C["3. create_viewport\nscale: 500, center_model_x/y/z, lock_viewport: true"]
+    C --> D["4. insert_title_block\ntemplate: 'iso_standard', optional logo_path"]
+    D --> E["5. export_pdf\nSynchronous PlotEngine output"]
 ```
 
 ---
 
-## Workflow 3: Civil Engineering Alignment & Profile
-Topographic sampling and linear infrastructure analysis:
+### Workflow 3: Civil Engineering Alignment & Profile
 ```mermaid
 flowchart TD
-    A["1. check_civil3d_status\nConfirms Civil 3D 2027 runtime"] --> B["2. list_civil3d_surfaces\nInspects min/max ground elevations"]
-    B --> C["3. get_longitudinal_profile\nSamples Z elevations every 20 m along axis"]
-    C --> D["4. get_station_coordinate\nCalculates exact coordinates for structures"]
+    A["1. check_civil3d_status\nConfirms Civil 3D 2027 runtime"] --> B["2. list_civil3d_surfaces & get_civil3d_surface_stats\nInspects elevation bounds & triangles"]
+    B --> C["3. sample_longitudinal_profile / sample_civil3d_cross_section\nSamples ground elevations along axis"]
+    C --> D["4. get_point_at_station\nCalculates exact coordinates for structures"]
 ```
 
 ---
 
-## Workflow 4: Visual Feedback Loop for AI Agents
-Empowering AI agents to autonomously verify what they draw:
+### Workflow 4: Visual Feedback Loop for AI Agents
 ```mermaid
 flowchart LR
-    A["1. draw_*\nInject geometry"] --> B["2. zoom_extents\nFrame geometry"]
-    B --> C["3. capture_screen\nExport PNG"]
+    A["1. draw_* / execute_native_batch\nCreate or modify geometry"] --> B["2. zoom_extents\nFrame geometry"]
+    B --> C["3. capture_screenshot(inline=true)\nNative image/png ImageContent"]
     C --> D["4. Multimodal Inspection\nAI verifies visual layout"]
 ```
 
@@ -107,16 +91,11 @@ flowchart LR
 
 ## Prompting Best Practices for AI Copilots
 
-1. **Favor Typed Tools Over Raw Commands:**  
-   Instead of *"Type _.LINE 0,0 10,0 in the console"*, ask:  
-   *"Draw a line from (0,0) to (10,0) in meters on layer WALLS"*. The AI will call `draw_line`, avoiding line break syntax errors and accidental prompt cancellations.
-
-2. **Leverage Standalone Analytical Tools:**  
-   Before drawing, verify geometric constraints without invoking CAD:  
-   *"Calculate the area of polygon X,Y..."*. The AI calls `calculate_polygon_area` instantaneously with zero latency.
-
-3. **Specify Standard Layer Names:**  
-   All `draw_*` tools automatically create layers if they do not exist. Always specify standard names (e.g. `ARQ-WALLS`, `STR-COLUMNS`, `TUN-AXIS`).
-
-4. **Verify Surfaces Before Civil Profile Queries:**  
-   Ask the AI: *"Check available Civil 3D surfaces and sample the profile for Alignment-1"*. The AI will chain `list_civil3d_surfaces` with `get_longitudinal_profile` to prevent out-of-boundary elevation queries.
+1. **Prefer Native Transactions Over Raw Commands:**
+   Use `draw_batch_geometry`, `execute_native_batch`, `modify_entity`, `transform_entities`, and `create_dimension` instead of `execute_command`. Native tools execute in a single `Ctrl+Z` undo step and return exact entity handles.
+2. **Use `compound` Mode for Large Context Budgets:**
+   Set `AUTOCAD_MCP_TOOL_MODE=compound` to expose 10 domain routers (`autocad_context` through `autocad_execution`) and inspect schemas on demand with `action="help"`.
+3. **Leverage Local Analytical Tools First:**
+   Call `measure_distance` and `calculate_polygon_area` before mutating CAD geometry; both run locally with zero Gateway roundtrips.
+4. **Respect Edit Guard & Revisions:**
+   If a mutation returns `edit_guard_blocked`, authorize the drawing with `allow_edit_document` or create a fresh sheet with `new_drawing`. If `revision_conflict` occurs, re-query handles via `query_entities`.
