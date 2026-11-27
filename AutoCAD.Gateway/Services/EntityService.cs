@@ -172,8 +172,9 @@ public static class EntityService
             }
 
             string status = failed == 0 ? "success" : (succeeded == 0 ? "error" : "partial_error");
+            string batchErrCode = succeeded == 0 ? "batch_failed" : "batch_partial_error";
             ToolError? errObj = failed > 0
-                ? new ToolError("batch_partial_error", $"{failed} of {count} batch operations failed.")
+                ? new ToolError(batchErrCode, $"{failed} of {count} batch operations failed.")
                 : null;
             return JsonSerializer.Serialize(new
             {

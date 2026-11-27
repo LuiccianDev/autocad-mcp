@@ -42,7 +42,7 @@ The project operates through complementary components designed to work **togethe
    - Dispatches UI-thread database work via `Acad.Read`, `Acad.Write`, `Acad.RunOnDocumentAsync`, and `Application.Idle` (`ConcurrentQueue<string>`).
 
 2. **AutoCAD.McpPython (Python FastMCP) / AutoCAD.McpServer (.NET 10 STDIO MCP Server):**
-   - Standalone STDIO servers implementing Model Context Protocol (MCP v2.2) with `AUTOCAD_MCP_TOOL_MODE` (`granular` = 89 tools, `compound` = 10 domain routers, `core` = 28 tools).
+   - Standalone STDIO servers implementing Model Context Protocol (MCP v2.2) with `AUTOCAD_MCP_TOOL_MODE` (`granular` = 90 tools, `compound` = 10 domain routers, `core` = 28 tools).
    - Output .NET assembly: `AutoCAD.McpServer\bin\Release\net10.0\AutoCAD.McpServer.dll`.
    - Consumes the Gateway over loopback HTTP and exposes typed tools with strict parameter validation.
 

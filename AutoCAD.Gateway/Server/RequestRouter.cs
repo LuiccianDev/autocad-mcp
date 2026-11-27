@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 using AutoCAD.Gateway.Contracts;
 using AutoCAD.Gateway.Core;
@@ -115,6 +117,7 @@ public sealed class RequestRouter
 
         add("POST", GatewayRoutes.Execute, static (r, ctx) => r.HandleExecuteAsync(ctx.Body));
         add("POST", GatewayRoutes.LispEval, static (_, ctx) => HandleLispEvalAsync(ctx.Body));
+        add("POST", GatewayRoutes.LispLoad, static (_, ctx) => HandleLispLoadAsync(ctx.Body));
     }
 
     private static void RegisterEntityAndDraftingRoutes(
@@ -133,6 +136,7 @@ public sealed class RequestRouter
         add("POST", GatewayRoutes.DraftingMLeader, static async (_, ctx) => (200, await DraftingService.CreateMLeaderAsync(ctx.Body)));
         add("POST", GatewayRoutes.DraftingHatch, static async (_, ctx) => (200, await DraftingService.CreateHatchAsync(ctx.Body)));
         add("POST", GatewayRoutes.DraftingTable, static async (_, ctx) => (200, await DraftingService.CreateTableAsync(ctx.Body)));
+        add("POST", GatewayRoutes.DraftingRasterImage, static async (_, ctx) => (200, await RasterImageService.InsertRasterImageAsync(ctx.Body)));
 
         add("POST", GatewayRoutes.BlocksDefine, static async (_, ctx) => (200, await BlockService.DefineBlockAsync(ctx.Body)));
         add("GET", GatewayRoutes.BlocksDefinition, static async (_, ctx) =>
@@ -154,7 +158,10 @@ public sealed class RequestRouter
             return (200, await BlockService.ListXrefsAsync(document));
         });
 
-        add("POST", GatewayRoutes.PlottingViewport, static async (_, ctx) => (200, await PlottingService.CreateViewportAsync(ctx.Body)));
+        add("POST", GatewayRoutes.PlottingLayout, static async (_, ctx) => (200, await LayoutService.CreateLayoutAsync(ctx.Body)));
+        add("POST", GatewayRoutes.PlottingPageSetup, static async (_, ctx) => (200, await LayoutService.ConfigureLayoutPageAsync(ctx.Body)));
+        add("POST", GatewayRoutes.PlottingViewport, static async (_, ctx) => (200, await ViewportService.CreateViewportAsync(ctx.Body)));
+        add("POST", GatewayRoutes.PlottingTitleBlock, static async (_, ctx) => (200, await TitleBlockBuilder.InsertTitleBlockAsync(ctx.Body)));
         add("POST", GatewayRoutes.PlottingPdf, static async (_, ctx) => (200, await PlottingService.PlotPdfAsync(ctx.Body)));
     }
 
@@ -168,8 +175,10 @@ public sealed class RequestRouter
         add("GET", GatewayRoutes.Documents, static async (_, _) => (200, await DocumentControlService.ListDocumentsAsync()));
         add("POST", GatewayRoutes.SessionCancel, static async (_, _) => (200, await DocumentControlService.CancelCommandAsync()));
         add("POST", GatewayRoutes.SessionAllowEdit, static async (_, ctx) => (200, await DocumentControlService.AllowEditDocumentAsync(ctx.Body)));
+        add("POST", GatewayRoutes.SessionRegen, static async (_, ctx) => (200, await DocumentControlService.RegenAllAsync(ctx.Body)));
         add("POST", GatewayRoutes.DocumentsNew, static async (_, ctx) => (200, await DocumentControlService.NewDrawingAsync(ctx.Body)));
         add("POST", GatewayRoutes.DocumentsOpen, static async (_, ctx) => (200, await DocumentControlService.OpenDrawingAsync(ctx.Body)));
+        add("POST", GatewayRoutes.DocumentsSave, static async (_, ctx) => (200, await DocumentControlService.SaveDrawingAsync(ctx.Body)));
         add("POST", GatewayRoutes.DocumentsActivate, static async (_, ctx) => (200, await DocumentControlService.ActivateDocumentAsync(ctx.Body)));
         add("POST", GatewayRoutes.DocumentsClose, static async (_, ctx) => (200, await DocumentControlService.CloseDocumentAsync(ctx.Body)));
         add("GET", GatewayRoutes.SysVar, static async (_, ctx) =>
@@ -290,37 +299,101 @@ public sealed class RequestRouter
         string body,
         int boundPort = GatewayProtocol.DefaultPort)
     {
+        long startTick = Stopwatch.GetTimestamp();
+        (int StatusCode, string ResponseBody) result;
+
         try
         {
             if (!Routes.TryGetValue(path, out var methods))
             {
-                return ErrorResult(404, "not_found", "Route not found.");
+                result = ErrorResult(404, "not_found", "Route not found.");
             }
-
-            if (!methods.TryGetValue(method, out var handler))
+            else if (!methods.TryGetValue(method, out var handler))
             {
-                return ErrorResult(405, "method_not_allowed", "HTTP method not allowed.");
+                result = ErrorResult(405, "method_not_allowed", "HTTP method not allowed.");
             }
-
-            return await handler(this, new RouteContext(path, query, body, boundPort));
+            else
+            {
+                result = await handler(this, new RouteContext(path, query, body, boundPort));
+            }
         }
         catch (AcadGatewayException ex)
         {
-            return (ex.ToHttpStatusCode(), JsonSerializer.Serialize(
+            result = (ex.ToHttpStatusCode(), JsonSerializer.Serialize(
                 ToolEnvelope.Failure(ex.Code, ex.Message, ex.Detail), GatewayProtocol.WireJsonOptions));
         }
         catch (JsonException)
         {
-            return ErrorResult(400, "bad_json", "Invalid or malformed JSON field types.");
+            result = ErrorResult(400, "bad_json", "Invalid or malformed JSON field types.");
         }
         catch (Autodesk.AutoCAD.Runtime.Exception ex)
         {
-            return ErrorResult(409, "autocad_error", $"{ex.Message} ({ex.ErrorStatus})");
+            result = ErrorResult(409, "autocad_error", $"{ex.Message} ({ex.ErrorStatus})");
         }
         catch (Exception ex)
         {
             System.Diagnostics.Trace.TraceError("AutoCAD Gateway route error: {0}", ex);
-            return ErrorResult(500, "internal_error", "An internal gateway error occurred while processing the request.");
+            result = ErrorResult(500, "internal_error", "An internal gateway error occurred while processing the request.");
+        }
+
+        double durationMs = Stopwatch.GetElapsedTime(startTick).TotalMilliseconds;
+        return (result.StatusCode, StampDurationAndNormalizeJson(result.ResponseBody, durationMs));
+    }
+
+    private static string StampDurationAndNormalizeJson(string jsonBody, double durationMs)
+    {
+        if (string.IsNullOrWhiteSpace(jsonBody))
+        {
+            return jsonBody;
+        }
+
+        ReadOnlySpan<char> span = jsonBody.AsSpan().TrimEnd();
+        int closeIdx = span.Length - 1;
+        if (closeIdx < 1 || span[closeIdx] != '}')
+        {
+            return jsonBody;
+        }
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(jsonBody);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return jsonBody;
+            }
+
+            bool hasOk = doc.RootElement.TryGetProperty("ok", out _);
+            bool hasDuration = doc.RootElement.TryGetProperty("duration_ms", out _);
+            if (hasOk && hasDuration)
+            {
+                return jsonBody;
+            }
+
+            var extra = new System.Text.StringBuilder(48);
+            bool hasProps = doc.RootElement.EnumerateObject().MoveNext();
+            if (!hasOk &&
+                doc.RootElement.TryGetProperty("status", out JsonElement statusEl) &&
+                statusEl.ValueKind == JsonValueKind.String)
+            {
+                bool isOk = string.Equals(statusEl.GetString(), "success", StringComparison.OrdinalIgnoreCase);
+                extra.Append(hasProps ? ",\"ok\":" : "\"ok\":").Append(isOk ? "true" : "false");
+                hasProps = true;
+            }
+
+            if (!hasDuration)
+            {
+                double rounded = Math.Round(durationMs, 2);
+                extra.Append(hasProps ? ",\"duration_ms\":" : "\"duration_ms\":").Append(rounded.ToString(CultureInfo.InvariantCulture));
+            }
+
+            return extra.Length == 0
+                ? jsonBody
+                : string.Concat(span[..closeIdx], extra.ToString(), "}");
+        }
+        catch (JsonException ex)
+        {
+            Trace.TraceWarning("Skipped duration_ms stamping on non-JSON response payload: {0}", ex.Message);
+            return jsonBody;
         }
     }
 
@@ -330,7 +403,7 @@ public sealed class RequestRouter
         {
             return ErrorResult(
                 403,
-                "forbidden",
+                "restricted_mode",
                 "Raw CLI execution (/execute) is disabled while AUTOCAD_GATEWAY_RESTRICTED_MODE=1 is active.");
         }
 
@@ -358,47 +431,72 @@ public sealed class RequestRouter
             message: "Command successfully enqueued."), GatewayProtocol.WireJsonOptions));
     }
 
-    private static async Task<(int StatusCode, string ResponseBody)> HandleLispEvalAsync(string body)
+    private static Task<(int StatusCode, string ResponseBody)> HandleLispEvalAsync(string body) =>
+        ExecuteLispRequestAsync(
+            body,
+            "/lisp/eval",
+            "Unrestricted AutoLISP evaluation (/lisp/eval) is disabled while AUTOCAD_GATEWAY_RESTRICTED_MODE=1 is active.",
+            GatewayProtocol.DefaultLispTimeoutMs,
+            static (root, timeoutMs) =>
+            {
+                string? code = DatabaseHelpers.GetStringOpt(root, "code")
+                    ?? DatabaseHelpers.GetStringOpt(root, "expression");
+                if (string.IsNullOrWhiteSpace(code))
+                {
+                    throw new AcadGatewayException("bad_argument", "'code' (or 'expression') cannot be empty.");
+                }
+
+                return LispBridge.EvalAsync(code, timeoutMs);
+            });
+
+    private static Task<(int StatusCode, string ResponseBody)> HandleLispLoadAsync(string body) =>
+        ExecuteLispRequestAsync(
+            body,
+            "/lisp/load",
+            "External AutoLISP loading (/lisp/load) is disabled while AUTOCAD_GATEWAY_RESTRICTED_MODE=1 is active.",
+            GatewayProtocol.DefaultLispLoadTimeoutMs,
+            static (root, timeoutMs) =>
+            {
+                string filePath = DatabaseHelpers.GetRequiredString(root, "file_path");
+                return LispBridge.LoadFileAsync(filePath, timeoutMs);
+            });
+
+    private static async Task<(int StatusCode, string ResponseBody)> ExecuteLispRequestAsync(
+        string body,
+        string routeName,
+        string restrictedMessage,
+        int defaultTimeoutMs,
+        Func<JsonElement, int, Task<LispBridge.LispEvalResult>> runner)
     {
         if (DocumentSessionManager.RestrictedExecutionEnabled)
         {
-            return ErrorResult(
-                403,
-                "forbidden",
-                "Unrestricted AutoLISP evaluation (/lisp/eval) is disabled while AUTOCAD_GATEWAY_RESTRICTED_MODE=1 is active.");
+            return ErrorResult(403, "restricted_mode", restrictedMessage);
         }
 
         JsonElement root = DatabaseHelpers.ParseJsonObject(body);
-        string? code = DatabaseHelpers.GetStringOpt(root, "code");
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            code = DatabaseHelpers.GetStringOpt(root, "expression");
-        }
-
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return ErrorResult(400, "bad_argument", "'code' (or 'expression') cannot be empty.");
-        }
-
         long? timeoutVal = DatabaseHelpers.GetLongOpt(root, "timeout_ms")
             ?? DatabaseHelpers.GetLongOpt(root, "timeoutMs");
         int timeoutMs = timeoutVal.HasValue
             ? GatewayProtocol.ClampLispTimeoutMs(timeoutVal.Value)
-            : GatewayProtocol.DefaultLispTimeoutMs;
+            : defaultTimeoutMs;
 
-        var (value, document, cmdLine) = await LispBridge.EvalAsync(code, timeoutMs);
+        LispBridge.LispEvalResult res = await runner(root, timeoutMs).ConfigureAwait(false);
         return (200, SerializeLispResponse(
-            value,
-            document,
-            cmdLine?.State,
-            cmdLine?.PendingCommand,
-            cmdLine?.CmdActive,
-            cmdLine?.Hint));
+            res.Value,
+            res.Document,
+            res.DurationMs,
+            res.FilePath,
+            res.CommandLine?.State,
+            res.CommandLine?.PendingCommand,
+            res.CommandLine?.CmdActive,
+            res.CommandLine?.Hint));
     }
 
     private static string SerializeLispResponse(
         object? value,
         string document,
+        double durationMs,
+        string? filePath,
         string? commandState,
         string? pendingCommand,
         int? cmdActive,
@@ -410,7 +508,9 @@ public sealed class RequestRouter
             ["ok"] = true,
             ["value"] = value is null ? null : JsonSerializer.SerializeToNode(value, GatewayProtocol.WireJsonOptions),
             ["document"] = document,
+            ["duration_ms"] = durationMs,
         };
+        if (filePath is not null) envelope["file_path"] = filePath;
         if (commandState is not null) envelope["command_state"] = commandState;
         if (pendingCommand is not null) envelope["pending_command"] = pendingCommand;
         if (cmdActive.HasValue) envelope["cmd_active"] = cmdActive.Value;

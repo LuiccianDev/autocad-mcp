@@ -71,6 +71,7 @@ public sealed class DraftingTools
         double? textHeight = null,
         double? arrowSize = null,
         double? dimScale = null,
+        string space = "model",
         string layer = "0",
         long? expectedRevision = null,
         string? document = null)
@@ -78,6 +79,11 @@ public sealed class DraftingTools
         if (string.IsNullOrWhiteSpace(type) || !ValidDimensionTypes.Contains(type.Trim()))
         {
             return Task.FromResult(CadFormat.Error("'type' must be one of: aligned, rotated, radial, diametric, angular."));
+        }
+
+        if (!SecurityPolicy.TryNormalizeSpace(space, null, out string normSpace, out string? spaceErr))
+        {
+            return Task.FromResult(CadFormat.Error(spaceErr ?? "'space' must be 'model' or 'paper'."));
         }
 
         if (!string.IsNullOrWhiteSpace(dimStyle) && !SecurityPolicy.IsValidSymbolName(dimStyle))
@@ -139,6 +145,7 @@ public sealed class DraftingTools
             text_height = textHeight,
             arrow_size = arrowSize,
             dim_scale = dimScale,
+            space = normSpace,
             layer = layer.Trim(),
             expected_revision = expectedRevision,
             document,

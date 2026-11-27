@@ -72,3 +72,20 @@ def test_calculate_polygon_area():
     assert res["orientation"] == "counterclockwise"
     assert res["vertices"] == 4
 
+
+def test_math_error_envelopes():
+    dist_err = calculate_distance(0.0, 0.0, float("nan"), 1.0)
+    assert dist_err["status"] == "error"
+    assert dist_err["ok"] is False
+    assert dist_err["error"]["code"] == "bad_argument"
+
+    area_err = calculate_polygon_area("invalid")
+    assert area_err["status"] == "error"
+    assert area_err["ok"] is False
+    assert area_err["error"]["code"] == "bad_argument"
+
+    collinear_err = calculate_polygon_area("0,0;5,0;10,0")
+    assert collinear_err["status"] == "error"
+    assert collinear_err["ok"] is False
+    assert collinear_err["error"]["code"] == "bad_argument"
+

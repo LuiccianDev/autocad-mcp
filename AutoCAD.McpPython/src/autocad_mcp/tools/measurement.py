@@ -65,9 +65,3 @@ async def purge_and_audit_drawing(target: str = "all", audit: bool = True) -> st
 async def clean_and_purge_drawing(target: str = "all", audit: bool = True) -> str:
     """Alias for purge_and_audit_drawing: Purge unused definitions safely and audit errors."""
     return await purge_and_audit_drawing(target=target, audit=audit)
-
-
-@domain.tool(name="regen_all")
-async def regen_all() -> str:
-    """Regenerate all open viewports and recalculate drawing display curves and text metrics (_.REGENALL)."""
-    return await runtime.gateway.execute_command("_.REGENALL\n")

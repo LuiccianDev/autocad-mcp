@@ -64,6 +64,7 @@ from autocad_mcp.tools.drawing import (
     draw_polyline,
     draw_rectangle,
     insert_block,
+    insert_raster_image,
     insert_text,
 )
 from autocad_mcp.tools.entities import (
@@ -84,6 +85,7 @@ from autocad_mcp.tools.execution import (
     load_lisp_file,
     ping_autocad_gateway,
     ping_gateway,
+    regen_all,
     save_drawing,
     zoom_extents,
 )
@@ -93,7 +95,6 @@ from autocad_mcp.tools.measurement import (
     clean_and_purge_drawing,
     measure_distance,
     purge_and_audit_drawing,
-    regen_all,
 )
 from autocad_mcp.tools.plotting import (
     configure_layout_page,
@@ -164,6 +165,7 @@ __all__ = [
     "get_texts",
     "insert_block",
     "insert_parametric_titleblock",
+    "insert_raster_image",
     "insert_text",
     "insert_title_block",
     "list_available_blocks",

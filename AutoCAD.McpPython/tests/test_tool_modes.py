@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 import pytest
 from mcp.server.fastmcp import FastMCP
+from mcp.types import CallToolResult, TextContent
 
 import autocad_mcp.server as srv
 from autocad_mcp.compound import (
@@ -79,6 +80,28 @@ EXPECTED_COMPOUND_TOOLS = (
 
 
 def _extract_json_result(call_result: Any) -> dict[str, Any]:
+    if isinstance(call_result, CallToolResult):
+        first_text = next(
+            (b.text for b in call_result.content if isinstance(b, TextContent)),
+            "",
+        )
+        if call_result.isError:
+            try:
+                parsed_err = json.loads(first_text)
+                if isinstance(parsed_err, dict):
+                    return parsed_err
+            except json.JSONDecodeError:
+                pass
+            return {
+                "status": "error",
+                "ok": False,
+                "message": first_text,
+                "is_error": True,
+            }
+        if call_result.structuredContent is not None:
+            return call_result.structuredContent
+        return json.loads(first_text)
+
     _, payload = call_result
     return json.loads(payload["result"])
 
@@ -107,8 +130,8 @@ def test_parse_and_resolve_tool_mode(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_catalog_registration_validation_and_unwrapped_functions() -> None:
-    assert len(ALL_TOOL_EXPORTS) == 89
-    assert len(catalog.entries()) == 89
+    assert len(ALL_TOOL_EXPORTS) == 90
+    assert len(catalog.entries()) == 90
     assert {entry.name for entry in catalog.entries()} == set(ALL_TOOL_EXPORTS)
     assert {entry.name for entry in catalog.core_entries()} == EXPECTED_CORE_TOOLS
 
@@ -151,7 +174,7 @@ def test_catalog_registration_validation_and_unwrapped_functions() -> None:
 async def test_server_exposes_exact_tools_per_mode_and_reconfigures_idempotently() -> None:
     granular_server = srv.create_mcp_server(ToolMode.GRANULAR)
     granular_names = [tool.name for tool in await granular_server.list_tools()]
-    assert len(granular_names) == 89
+    assert len(granular_names) == 90
     assert set(granular_names) == set(ALL_TOOL_EXPORTS)
 
     core_server = srv.create_mcp_server(ToolMode.CORE)
@@ -165,7 +188,7 @@ async def test_server_exposes_exact_tools_per_mode_and_reconfigures_idempotently
 
     mutable_server = FastMCP("IdempotencyCheck")
     srv.configure_mcp_server(mutable_server, ToolMode.GRANULAR)
-    assert len(await mutable_server.list_tools()) == 89
+    assert len(await mutable_server.list_tools()) == 90
 
     srv.configure_mcp_server(mutable_server, ToolMode.COMPOUND)
     assert tuple(t.name for t in await mutable_server.list_tools()) == EXPECTED_COMPOUND_TOOLS
@@ -174,7 +197,7 @@ async def test_server_exposes_exact_tools_per_mode_and_reconfigures_idempotently
     assert {t.name for t in await mutable_server.list_tools()} == EXPECTED_CORE_TOOLS
 
     srv.configure_mcp_server(mutable_server, ToolMode.GRANULAR)
-    assert len(await mutable_server.list_tools()) == 89
+    assert len(await mutable_server.list_tools()) == 90
 
 
 @pytest.mark.asyncio

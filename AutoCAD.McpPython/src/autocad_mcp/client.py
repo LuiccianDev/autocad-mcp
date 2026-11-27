@@ -225,10 +225,15 @@ class AutoCADGatewayClient:
     _HEAVY_ENDPOINTS = frozenset(
         {
             "batch",
+            "plotting/layout",
+            "plotting/page-setup",
+            "plotting/title-block",
             "plotting/pdf",
             "documents/open",
             "documents/new",
+            "documents/save",
             "documents/purge-audit",
+            "lisp/load",
         }
     )
 
@@ -428,43 +433,86 @@ class AutoCADGatewayClient:
 
         return False, None, "connect_error", base_url
 
+    @staticmethod
+    def _error_envelope(
+        code: str,
+        message: str,
+        detail: str | None = None,
+        hint: str | None = None,
+    ) -> str:
+        err: dict[str, Any] = {"code": code, "message": message}
+        if detail:
+            err["detail"] = detail
+        if hint:
+            err["hint"] = hint
+        return json.dumps({"status": "error", "ok": False, "message": message, "error": err})
+
+    def _normalize_response(self, endpoint: str, status_code: int | None, text: str) -> str:
+        if status_code is not None and status_code >= 400:
+            if text:
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict):
+                        return text
+                except json.JSONDecodeError:
+                    pass
+            clipped = text if len(text) <= 4096 else text[:4096]
+            return self._error_envelope(
+                "http_error",
+                f"Gateway error ({status_code}) on {endpoint}.",
+                detail=clipped or f"status={status_code}",
+            )
+
+        if text:
+            return text
+        return self._error_envelope("http_error", f"Gateway returned HTTP {status_code}.", detail=f"status={status_code}")
+
     async def get_context(self, endpoint: str) -> str:
         """Query a Gateway GET endpoint (for example, 'context/layers' or '_ping')."""
         ok, status_code, text, base_url = await self._request("GET", endpoint)
         if not ok:
             if text == "connect_error":
-                return json.dumps(
-                    {
-                        "status": "error",
-                        "message": (
-                            f"Could not connect to AutoCAD Gateway at {base_url}. "
-                            "Ensure AutoCAD is open and AI_START_SERVER has been started."
-                        ),
-                    }
+                return self._error_envelope(
+                    "gateway_unreachable",
+                    f"Could not connect to AutoCAD Gateway at {base_url}. Ensure AutoCAD is open and AI_START_SERVER has been started.",
+                    hint="Start AutoCAD and run AI_START_SERVER, then retry ping_gateway.",
                 )
-            return json.dumps({"status": "error", "message": f"Gateway communication error: {text}"})
+            return self._error_envelope("gateway_error", f"Gateway communication error: {text}")
 
-        if text:
-            return text
-        return json.dumps(
-            {"status": "error", "code": status_code, "message": f"Gateway returned HTTP {status_code}."}
-        )
+        return self._normalize_response(endpoint, status_code, text)
 
     async def execute_command(self, command: str) -> str:
         """Send a command or AutoLISP macro to AutoCAD via POST /execute."""
         ok, status_code, text, base_url = await self._request("POST", "execute", {"command": command})
         if not ok:
             if text == "connect_error":
-                return (
-                    f"Connection failed to AutoCAD Gateway at {base_url}. "
-                    "Ensure AutoCAD is open and AI_START_SERVER is active."
+                return self._error_envelope(
+                    "gateway_unreachable",
+                    f"Connection failed to AutoCAD Gateway at {base_url}. Ensure AutoCAD is open and AI_START_SERVER is active.",
+                    hint="Start AutoCAD and run AI_START_SERVER, then retry.",
                 )
-            return f"Error executing AutoCAD command: {text}"
+            return self._error_envelope("gateway_error", f"Error executing AutoCAD command: {text}")
 
         if status_code is not None and 200 <= status_code < 300:
-            return "Success: Command enqueued in AutoCAD."
-        clipped = text if len(text) <= 4096 else f"{text[:4096]}... [truncated]"
-        return f"Gateway error ({status_code}): {clipped}"
+            if text:
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict):
+                        status_val = parsed.get("status")
+                        is_err = parsed.get("ok") is False or (
+                            isinstance(status_val, str) and status_val.lower() == "error"
+                        )
+                        if is_err:
+                            return text
+                        parsed.setdefault("status", "success")
+                        parsed.setdefault("ok", True)
+                        parsed["message"] = "Success: Command enqueued in AutoCAD."
+                        return json.dumps(parsed)
+                except json.JSONDecodeError:
+                    pass
+            return json.dumps({"status": "success", "ok": True, "message": "Success: Command enqueued in AutoCAD."})
+
+        return self._normalize_response("execute", status_code, text)
 
     async def post_json(
         self,
@@ -476,14 +524,14 @@ class AutoCADGatewayClient:
         ok, status_code, text, base_url = await self._request("POST", endpoint, data, timeout=timeout)
         if not ok:
             if text == "connect_error":
-                return json.dumps({"status": "error", "message": f"Could not connect to AutoCAD Gateway at {base_url}."})
-            return json.dumps({"status": "error", "message": f"Request to {endpoint} failed: {text}"})
+                return self._error_envelope(
+                    "gateway_unreachable",
+                    f"Could not connect to AutoCAD Gateway at {base_url}.",
+                    hint="Start AutoCAD and run AI_START_SERVER, then retry.",
+                )
+            return self._error_envelope("gateway_error", f"Request to {endpoint} failed: {text}")
 
-        if text:
-            return text
-        return json.dumps(
-            {"status": "error", "code": status_code, "message": f"Gateway returned HTTP {status_code}."}
-        )
+        return self._normalize_response(endpoint, status_code, text)
 
     async def ping(self) -> str:
         """Check Gateway connectivity and active session status via GET /_ping."""

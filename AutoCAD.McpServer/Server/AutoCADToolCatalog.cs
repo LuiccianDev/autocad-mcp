@@ -238,6 +238,7 @@ internal sealed class AutoCADToolCatalog
                 ? rawSnake
                 : paramMeta.CanonicalName.Trim();
             StructuredJsonKind structuredJson = paramMeta?.StructuredJson ?? StructuredJsonKind.None;
+            bool acceptScalarAsString = paramMeta?.AcceptScalarAsString == true;
 
             bool isRequired = !clrParam.HasDefaultValue;
             bool allowsNull = Nullable.GetUnderlyingType(clrParam.ParameterType) is not null
@@ -251,7 +252,8 @@ internal sealed class AutoCADToolCatalog
                 canonicalName,
                 isRequired,
                 allowsNull,
-                structuredJson);
+                structuredJson,
+                acceptScalarAsString);
 
             parameters.Add(paramDesc);
             RegisterAcceptedName(byAcceptedName, canonicalName, paramDesc, toolName);
@@ -499,4 +501,5 @@ internal sealed record ToolParameterDescriptor(
     string CanonicalName,
     bool IsRequired,
     bool AllowsNull,
-    StructuredJsonKind StructuredJson);
+    StructuredJsonKind StructuredJson,
+    bool AcceptScalarAsString);

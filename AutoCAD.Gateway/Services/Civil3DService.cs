@@ -361,6 +361,7 @@ public sealed class Civil3DService : ICivil3DService
             {
                 status = "success",
                 ok = true,
+                handle = alId.Handle.ToString(),
                 alignment = al.Name,
                 length = al.Length,
                 starting_station = al.StartingStation,
@@ -416,6 +417,7 @@ public sealed class Civil3DService : ICivil3DService
             {
                 status = "success",
                 ok = true,
+                handle = sid.Handle.ToString(),
                 surface = name,
                 points = pts.Count,
                 document = ctx.Doc.Name,

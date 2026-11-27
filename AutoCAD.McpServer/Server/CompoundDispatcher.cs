@@ -54,6 +54,7 @@ internal sealed class CompoundDispatcher
             return JsonSerializer.Serialize(new
             {
                 status = "success",
+                ok = true,
                 domain = domainDesc.Domain,
                 tool = domainDesc.CompoundToolName,
                 actions,
@@ -69,6 +70,7 @@ internal sealed class CompoundDispatcher
         return JsonSerializer.Serialize(new
         {
             status = "success",
+            ok = true,
             domain = domainDesc.Domain,
             action = resolved!.Name,
             resolved_from = resolvedFrom,
@@ -388,6 +390,19 @@ internal sealed class CompoundDispatcher
                 return true;
             }
 
+            if (paramDesc.AcceptScalarAsString &&
+                val.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+            {
+                if (val.ValueKind == JsonValueKind.Number && (!val.TryGetDouble(out double numVal) || !double.IsFinite(numVal)))
+                {
+                    error = $"Parameter '{paramDesc.CanonicalName}' expects a finite number.";
+                    return false;
+                }
+
+                value = val.GetRawText();
+                return true;
+            }
+
             if (paramDesc.StructuredJson == StructuredJsonKind.Array && val.ValueKind == JsonValueKind.Array)
             {
                 value = val.GetRawText();
@@ -455,6 +470,12 @@ internal sealed class CompoundDispatcher
 
             error = $"Parameter '{paramDesc.CanonicalName}' expects a finite number, got {val.ValueKind}.";
             return false;
+        }
+
+        if (effectiveType == typeof(JsonElement))
+        {
+            value = val.Clone();
+            return true;
         }
 
         try

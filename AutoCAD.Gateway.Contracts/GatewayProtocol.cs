@@ -29,8 +29,11 @@ public static class GatewayProtocol
     /// <summary>Default LISP evaluation timeout in milliseconds.</summary>
     public const int DefaultLispTimeoutMs = 15_000;
 
+    /// <summary>Default timeout in milliseconds for loading external AutoLISP files.</summary>
+    public const int DefaultLispLoadTimeoutMs = 60_000;
+
     /// <summary>Maximum permitted LISP evaluation timeout in milliseconds.</summary>
-    public const int MaxLispTimeoutMs = 120_000;
+    public const int MaxLispTimeoutMs = 300_000;
 
     /// <summary>Shared JSON serializer options across Gateway HTTP responses.</summary>
     public static readonly JsonSerializerOptions WireJsonOptions = new()
@@ -51,7 +54,7 @@ public static class GatewayProtocol
     public static int MapErrorCodeToHttpStatus(string? code) => code switch
     {
         "bad_argument" or "bad_handle" or "bad_json" or "bad_query" or "bad_request" or "bad_utf8" or "invalid_path" => 400,
-        "edit_guard" or "forbidden" => 403,
+        "edit_guard" or "forbidden" or "restricted_mode" => 403,
         "not_found" => 404,
         "busy" or "read_only" or "no_document" or "ambiguous_document" or "revision_conflict" or "already_running" or "already_exists" or "layer_in_use" or "unsaved_changes" or "autocad_error" or "civil_unavailable" => 409,
         "lisp_error" => 422,
@@ -176,7 +179,8 @@ public sealed class InstanceDescriptor
 public sealed record ToolError(
     [property: JsonPropertyName("code")] string Code,
     [property: JsonPropertyName("message")] string Message,
-    [property: JsonPropertyName("detail")] string? Detail = null);
+    [property: JsonPropertyName("detail")] string? Detail = null,
+    [property: JsonPropertyName("hint")] string? Hint = null);
 
 /// <summary>
 /// Standardized Gateway JSON envelope compatible with both legacy status-based clients
@@ -204,6 +208,14 @@ public sealed class ToolEnvelope
     [JsonPropertyName("error")]
     public ToolError? Error { get; init; }
 
+    /// <summary>Elapsed execution duration in milliseconds when measured at the Gateway boundary.</summary>
+    [JsonPropertyName("duration_ms")]
+    public double? DurationMs { get; init; }
+
+    /// <summary>Optional non-fatal warnings emitted during request execution.</summary>
+    [JsonPropertyName("warnings")]
+    public IReadOnlyList<string>? Warnings { get; init; }
+
     /// <summary>Creates a success envelope.</summary>
     public static ToolEnvelope Success(object? result = null, string? message = null) => new()
     {
@@ -215,12 +227,16 @@ public sealed class ToolEnvelope
     };
 
     /// <summary>Creates a failure envelope.</summary>
-    public static ToolEnvelope Failure(string code, string message, string? detail = null) => new()
+    public static ToolEnvelope Failure(
+        string code,
+        string message,
+        string? detail = null,
+        string? hint = null) => new()
     {
         Status = "error",
         Ok = false,
         Message = message,
         Result = null,
-        Error = new ToolError(code, message, detail),
+        Error = new ToolError(code, message, detail, hint),
     };
 }

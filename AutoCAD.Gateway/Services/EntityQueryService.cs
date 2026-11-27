@@ -301,13 +301,14 @@ public static class EntityQueryService
     {
         object? geometry = ent switch
         {
-            Line l => new { start = Pt3(l.StartPoint), end = Pt3(l.EndPoint), length = l.Length },
-            Circle c => new { center = Pt3(c.Center), radius = c.Radius },
-            Arc a => new { center = Pt3(a.Center), radius = a.Radius, start_angle = DatabaseHelpers.ToDegrees(a.StartAngle), end_angle = DatabaseHelpers.ToDegrees(a.EndAngle) },
-            Polyline pl => new { vertices = pl.NumberOfVertices, closed = pl.Closed, length = pl.Length },
-            DBText t => new { text = t.TextString, position = Pt3(t.Position), height = t.Height },
-            MText m => new { text = m.Text, position = Pt3(m.Location), height = m.TextHeight },
-            BlockReference br => new { block_name = br.Name, position = Pt3(br.Position), rotation = DatabaseHelpers.ToDegrees(br.Rotation), attributes = br.AttributeCollection.Count },
+            Line l => new { start = Pt3(l.StartPoint), end = Pt3(l.EndPoint), length = Round4(l.Length) },
+            Circle c => new { center = Pt3(c.Center), radius = Round4(c.Radius) },
+            Arc a => new { center = Pt3(a.Center), radius = Round4(a.Radius), start_angle = Round4(DatabaseHelpers.ToDegrees(a.StartAngle)), end_angle = Round4(DatabaseHelpers.ToDegrees(a.EndAngle)) },
+            Polyline pl => new { vertices = pl.NumberOfVertices, closed = pl.Closed, length = Round4(pl.Length) },
+            DBText t => new { text = t.TextString, position = Pt3(t.Position), height = Round4(t.Height) },
+            MText m => new { text = m.Text, position = Pt3(m.Location), height = Round4(m.TextHeight) },
+            BlockReference br => new { block_name = br.Name, position = Pt3(br.Position), rotation = Round4(DatabaseHelpers.ToDegrees(br.Rotation)), attributes = br.AttributeCollection.Count },
+            RasterImage ri => new { position = Pt3(ri.Orientation.Origin), width = Round4(ri.Orientation.Xaxis.Length), height = Round4(ri.Orientation.Yaxis.Length), image_def_handle = ri.ImageDefId.Handle.ToString() },
             _ => null,
         };
 
@@ -329,60 +330,69 @@ public static class EntityQueryService
         {
             start = Pt3(l.StartPoint),
             end = Pt3(l.EndPoint),
-            length = l.Length,
+            length = Round4(l.Length),
         },
         Circle c => new
         {
             center = Pt3(c.Center),
-            radius = c.Radius,
-            circumference = c.Circumference,
-            area = c.Area,
+            radius = Round4(c.Radius),
+            circumference = Round4(c.Circumference),
+            area = Round4(c.Area),
         },
         Arc a => new
         {
             center = Pt3(a.Center),
-            radius = a.Radius,
-            start_angle = DatabaseHelpers.ToDegrees(a.StartAngle),
-            end_angle = DatabaseHelpers.ToDegrees(a.EndAngle),
-            length = a.Length,
+            radius = Round4(a.Radius),
+            start_angle = Round4(DatabaseHelpers.ToDegrees(a.StartAngle)),
+            end_angle = Round4(DatabaseHelpers.ToDegrees(a.EndAngle)),
+            length = Round4(a.Length),
             start = Pt3(a.StartPoint),
             end = Pt3(a.EndPoint),
         },
         Polyline pl => new
         {
             closed = pl.Closed,
-            elevation = pl.Elevation,
-            length = pl.Length,
-            area = pl.Area,
+            elevation = Round4(pl.Elevation),
+            length = Round4(pl.Length),
+            area = Round4(pl.Area),
             vertices = Enumerable.Range(0, pl.NumberOfVertices).Select(i =>
             {
                 var p = pl.GetPoint2dAt(i);
-                return new { x = p.X, y = p.Y, bulge = pl.GetBulgeAt(i) };
+                return new { x = Round4(p.X), y = Round4(p.Y), bulge = Round4(pl.GetBulgeAt(i)) };
             }).ToArray(),
         },
         DBText t => new
         {
             text = t.TextString,
             position = Pt3(t.Position),
-            height = t.Height,
-            rotation = DatabaseHelpers.ToDegrees(t.Rotation),
+            height = Round4(t.Height),
+            rotation = Round4(DatabaseHelpers.ToDegrees(t.Rotation)),
         },
         MText m => new
         {
             text = m.Text,
             contents = m.Contents,
             position = Pt3(m.Location),
-            height = m.TextHeight,
-            width = m.Width,
-            rotation = DatabaseHelpers.ToDegrees(m.Rotation),
+            height = Round4(m.TextHeight),
+            width = Round4(m.Width),
+            rotation = Round4(DatabaseHelpers.ToDegrees(m.Rotation)),
         },
         BlockReference br => new
         {
             block_name = br.Name,
             position = Pt3(br.Position),
-            rotation = DatabaseHelpers.ToDegrees(br.Rotation),
-            scale = new[] { br.ScaleFactors.X, br.ScaleFactors.Y, br.ScaleFactors.Z },
+            rotation = Round4(DatabaseHelpers.ToDegrees(br.Rotation)),
+            scale = new[] { Round4(br.ScaleFactors.X), Round4(br.ScaleFactors.Y), Round4(br.ScaleFactors.Z) },
             attributes = ReadBlockAttributes(tr, br),
+        },
+        RasterImage ri => new
+        {
+            position = Pt3(ri.Orientation.Origin),
+            width = Round4(ri.Orientation.Xaxis.Length),
+            height = Round4(ri.Orientation.Yaxis.Length),
+            rotation = Round4(DatabaseHelpers.ToDegrees(ri.Rotation)),
+            image_def_handle = ri.ImageDefId.Handle.ToString(),
+            show_image = ri.ShowImage,
         },
         _ => new { dxf_name = ent.GetRXClass().DxfName },
     };
@@ -402,5 +412,7 @@ public static class EntityQueryService
         return attrs;
     }
 
-    private static double[] Pt3(Autodesk.AutoCAD.Geometry.Point3d p) => [p.X, p.Y, p.Z];
+    private static double Round4(double v) => double.IsFinite(v) ? Math.Round(v, 4) : v;
+
+    private static double[] Pt3(Autodesk.AutoCAD.Geometry.Point3d p) => [Round4(p.X), Round4(p.Y), Round4(p.Z)];
 }

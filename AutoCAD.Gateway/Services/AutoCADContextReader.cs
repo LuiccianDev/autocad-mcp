@@ -99,6 +99,13 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
 
                 if (ctx.Tr.GetObject(id, OpenMode.ForRead, false) is LayerTableRecord ltr)
                 {
+                    string ltName = "Continuous";
+                    if (!ltr.LinetypeObjectId.IsNull &&
+                        ctx.Tr.GetObject(ltr.LinetypeObjectId, OpenMode.ForRead, false) is LinetypeTableRecord ltRec)
+                    {
+                        ltName = ltRec.Name;
+                    }
+
                     list.Add(new LayerInfo
                     {
                         Name = ltr.Name,
@@ -106,6 +113,10 @@ public sealed class AutoCADContextReader : IAutoCADContextReader
                         IsFrozen = ltr.IsFrozen,
                         IsOff = ltr.IsOff,
                         Color = ltr.Color.ColorIndex,
+                        Linetype = ltName,
+                        Lineweight = LineWeightPolicy.FormatMillimeters((int)ltr.LineWeight),
+                        IsPlottable = ltr.IsPlottable,
+                        Description = ltr.Description ?? string.Empty,
                     });
                 }
             }

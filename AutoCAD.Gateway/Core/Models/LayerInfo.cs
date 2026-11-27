@@ -37,6 +37,30 @@ public sealed class LayerInfo
     [JsonPropertyName("color")]
     public short Color { get; set; }
 
+    /// <summary>
+    /// Gets or sets the linetype name assigned to the layer.
+    /// </summary>
+    [JsonPropertyName("linetype")]
+    public string Linetype { get; set; } = "Continuous";
+
+    /// <summary>
+    /// Gets or sets the formatted lineweight in millimeters or <c>"default"</c>.
+    /// </summary>
+    [JsonPropertyName("lineweight")]
+    public string Lineweight { get; set; } = "default";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether objects on this layer are plottable.
+    /// </summary>
+    [JsonPropertyName("is_plottable")]
+    public bool IsPlottable { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the optional layer description.
+    /// </summary>
+    [JsonPropertyName("description")]
+    public string Description { get; set; } = string.Empty;
+
     /// <summary>Backward-compatibility accessor.</summary>
     [JsonIgnore]
     public string Nombre => Name;

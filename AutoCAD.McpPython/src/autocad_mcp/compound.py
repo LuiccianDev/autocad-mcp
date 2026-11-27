@@ -119,6 +119,7 @@ def format_domain_help(
         return json.dumps(
             {
                 "status": "success",
+                "ok": True,
                 "domain": spec.key,
                 "tool": spec.compound_name,
                 "actions": actions_payload,
@@ -140,6 +141,7 @@ def format_domain_help(
 
     payload: dict[str, Any] = {
         "status": "success",
+        "ok": True,
         "domain": spec.key,
         "action": entry.name,
         "description": entry.tool_meta.description,

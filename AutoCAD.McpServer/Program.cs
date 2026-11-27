@@ -7,9 +7,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 ToolMode toolMode;
+OutputFormat outputFormat;
 try
 {
     toolMode = ToolModeParser.FromEnvironment();
+    outputFormat = OutputFormatParser.FromEnvironment();
 }
 catch (ArgumentException ex)
 {
@@ -37,11 +39,11 @@ builder.Services.AddMcpServer(options =>
     options.ServerInfo = new()
     {
         Name = "AutoCAD_AI_Context_Server",
-        Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "2.5.0"
+        Version = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "2.7.0"
     };
 })
 .WithStdioServerTransport()
-.WithConfiguredAutoCADTools(toolMode);
+.WithConfiguredAutoCADTools(toolMode, outputFormat);
 
 var host = builder.Build();
 await host.RunAsync();

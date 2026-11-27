@@ -36,6 +36,7 @@ public sealed class AutoCADCommandDispatcher : IAutoCADCommandDispatcher
 
         _commandQueue.Enqueue(new QueuedCommand(expectedDocument, command));
         Autodesk.AutoCAD.ApplicationServices.Application.Idle += _idleHandler;
+        MainThread.WakeMainWindowLoop();
     }
 
     /// <summary>

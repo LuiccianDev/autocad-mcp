@@ -107,6 +107,7 @@ $RECYCLE.BIN/
 docs/superpowers/
 .superpowers/
 .agents/
+graphify-out/
 release_body.md
 SHA256SUMS.txt
 *.zip

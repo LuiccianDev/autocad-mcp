@@ -210,7 +210,7 @@ internal static class CadFormat
     }
 
     /// <summary>Indicates whether <paramref name="value"/> contains any control characters.</summary>
-    public static bool HasControlChars(string? value) => value != null && value.Any(char.IsControl);
+    public static bool HasControlChars(string? value) => SecurityPolicy.HasControlChars(value);
 
     /// <summary>Indicates whether all supplied numeric values are finite (not NaN or infinite).</summary>
     /// <param name="values">Values to check.</param>
@@ -223,9 +223,17 @@ internal static class CadFormat
     public static bool AllOptionalFinite(params double?[] values) =>
         values.All(v => !v.HasValue || double.IsFinite(v.Value));
 
-    /// <summary>Serializes a standard error JSON response.</summary>
-    /// <param name="message">Descriptive error message.</param>
-    /// <returns>JSON <c>{"status":"error","message":...}</c>.</returns>
-    public static string Error(string message) =>
-        JsonSerializer.Serialize(new { status = "error", message });
+    /// <summary>Serializes a standard structured error JSON response.</summary>
+    public static string Error(
+        string message,
+        string code = "bad_argument",
+        string? detail = null,
+        string? hint = null) =>
+        JsonSerializer.Serialize(new
+        {
+            status = "error",
+            ok = false,
+            message,
+            error = new ToolError(code, message, detail, hint),
+        }, GatewayProtocol.WireJsonOptions);
 }

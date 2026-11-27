@@ -45,4 +45,6 @@ internal sealed class CompoundParamAttribute : Attribute
     public string? CanonicalName { get; }
 
     public StructuredJsonKind StructuredJson { get; set; } = StructuredJsonKind.None;
+
+    public bool AcceptScalarAsString { get; set; }
 }

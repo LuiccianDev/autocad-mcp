@@ -1,8 +1,22 @@
-# MCP Tools Technical Reference Manual (45 Tools)
+# MCP Tools Technical Reference Manual
 
-This document is the comprehensive technical specification for all **45 tools** implemented in **`AutoCAD.McpServer`** and **`AutoCAD.McpPython`** for consumption by Artificial Intelligence Models (Claude, Antigravity, Cursor, ChatGPT) and developers under the Model Context Protocol (v2.2) standard.
+This manual documents tool parameters, execution modalities, and MCP output behavior implemented in **`AutoCAD.McpServer`** (.NET 10) and **`AutoCAD.McpPython`** (FastMCP). Both servers run across `granular` (90 tools: 76 canonical + 14 aliases), `compound` (10 domain routers with `action="help"`), and `core` (28 tools) modes.
 
 All coordinates, dimensions, and elevations are strictly interpreted in **meters** (`INSUNITS = 4`).
+
+---
+
+## MCP Output Protocol (`v2.7.0`)
+
+At the MCP server boundary (`McpResultAdapter` in C# and `mcp_result.py` in Python), every tool response maps into native MCP `CallToolResult`:
+
+| Behavior | Environment / Condition | Output Envelope |
+| :--- | :--- | :--- |
+| Compact text + structured JSON | `AUTOCAD_MCP_OUTPUT_FORMAT=compact` (default) | Tabular/key-value summary in `content[0].text` with full JSON object in `structuredContent`. |
+| Legacy raw JSON text | `AUTOCAD_MCP_OUTPUT_FORMAT=json` | Raw JSON string in `content[0].text` plus `structuredContent` on success. |
+| Error propagation | `ok == false`, `status == "error"`, or `status == "partial_error"` | `isError = true`, concise error diagnostic text (`[code]`, `Detail:`, `Hint:`, or partial batch summary), and `structuredContent` omitted. |
+| Native screenshots | `capture_screenshot(inline=true)` | `TextContent` metadata followed by `ImageContent` (`image/png`), with `image_base64` stripped from text and `structuredContent`. |
+| Tool annotations | All modes (`tools/list`) | Deterministic `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` hints (`outputSchema` omitted in `tools/list` to preserve context budget). |
 
 ---
 

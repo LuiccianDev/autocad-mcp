@@ -149,7 +149,10 @@ public sealed class DocumentTools
     /// </summary>
     [McpServerTool(Name = "set_system_variable")]
     [Description("Set a non-security AutoCAD system variable on the active drawing (blocks TRUSTEDPATHS, SECURELOAD, SAFEMODE, etc.).")]
-    public Task<string> SetSystemVariable(string name, string value, string? document = null)
+    public Task<string> SetSystemVariable(
+        string name,
+        [CompoundParam(AcceptScalarAsString = true)] string value,
+        string? document = null)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -161,7 +164,6 @@ public sealed class DocumentTools
             return Task.FromResult(CadFormat.Error($"Modifying security-sensitive system variable '{name.Trim()}' is blocked."));
         }
 
-        // Send exact string value so Gateway coerces strictly from AutoCAD's runtime sysvar type.
         string payload = JsonSerializer.Serialize(new { name = name.Trim(), value = value ?? string.Empty, document });
         return _gatewayClient.PostJsonAsync("sysvar", payload);
     }

@@ -22,6 +22,7 @@ public static class GatewayRoutes
 
     public const string Execute = "/execute";
     public const string LispEval = "/lisp/eval";
+    public const string LispLoad = "/lisp/load";
 
     public const string EntitiesQuery = "/entities/query";
     public const string EntitiesGet = "/entities/get";
@@ -36,6 +37,7 @@ public static class GatewayRoutes
     public const string DraftingMLeader = "/drafting/mleader";
     public const string DraftingHatch = "/drafting/hatch";
     public const string DraftingTable = "/drafting/table";
+    public const string DraftingRasterImage = "/drafting/raster-image";
 
     public const string BlocksDefine = "/blocks/define";
     public const string BlocksDefinition = "/blocks/definition";
@@ -46,14 +48,19 @@ public static class GatewayRoutes
     public const string LayersState = "/layers/state";
     public const string LayersDelete = "/layers/delete";
 
+    public const string PlottingLayout = "/plotting/layout";
+    public const string PlottingPageSetup = "/plotting/page-setup";
     public const string PlottingViewport = "/plotting/viewport";
+    public const string PlottingTitleBlock = "/plotting/title-block";
     public const string PlottingPdf = "/plotting/pdf";
 
     public const string Documents = "/documents";
     public const string SessionCancel = "/session/cancel";
     public const string SessionAllowEdit = "/session/allow-edit";
+    public const string SessionRegen = "/session/regen";
     public const string DocumentsNew = "/documents/new";
     public const string DocumentsOpen = "/documents/open";
+    public const string DocumentsSave = "/documents/save";
     public const string DocumentsActivate = "/documents/activate";
     public const string DocumentsClose = "/documents/close";
     public const string SysVar = "/sysvar";
@@ -97,6 +104,7 @@ public static class GatewayToolCatalog
         // Execution & AutoLISP
         new("execute_command", "execution", "Enqueue non-modal AutoCAD command text strings under Edit Guard validation.", "POST", GatewayRoutes.Execute, true, UndoKind.ToolDefined, true),
         new("evaluate_lisp", "execution", "Evaluate AutoLISP synchronously on the command loop and convert ResultBuffer output to JSON.", "POST", GatewayRoutes.LispEval, true, UndoKind.ToolDefined, true),
+        new("load_lisp_file", "execution", "Validate and load an external AutoLISP (.lsp) script file synchronously with configurable timeout and duration metrics.", "POST", GatewayRoutes.LispLoad, true, UndoKind.ToolDefined, true),
 
         // Native Entity CRUD, Spatial Query & Atomic Batch
         new("query_entities", "entities", "Filter entities by type, layer, space, 2D bbox, and text with revision-bound pagination cursors.", "POST", GatewayRoutes.EntitiesQuery, false, UndoKind.None, false),
@@ -113,6 +121,7 @@ public static class GatewayToolCatalog
         new("create_mleader", "drafting", "Create a native MLeader callout annotation inside one transaction.", "POST", GatewayRoutes.DraftingMLeader, true, UndoKind.SingleStep, true),
         new("create_hatch", "drafting", "Create a solid or patterned associative hatch from handles or closed polygon points.", "POST", GatewayRoutes.DraftingHatch, true, UndoKind.SingleStep, true),
         new("create_table", "drafting", "Create a populated native AutoCAD Table entity inside one transaction.", "POST", GatewayRoutes.DraftingTable, true, UndoKind.SingleStep, true),
+        new("insert_raster_image", "drafting", "Attach and place a raster image entity (PNG/JPG/BMP/TIF) with IMAGEFRAME control inside one transaction.", "POST", GatewayRoutes.DraftingRasterImage, true, UndoKind.SingleStep, true),
         new("define_block", "blocks", "Define a reusable BlockTableRecord from handles or inline operations and optional attributes.", "POST", GatewayRoutes.BlocksDefine, true, UndoKind.SingleStep, true),
         new("get_block_definition", "blocks", "Inspect entities, origin, Xref status, and attribute definitions of a named block.", "GET", GatewayRoutes.BlocksDefinition, false, UndoKind.None, false),
         new("get_block_attributes", "blocks", "Read AttributeReference tag values of an inserted BlockReference handle.", "GET", GatewayRoutes.BlocksAttributes, false, UndoKind.None, false),
@@ -125,15 +134,20 @@ public static class GatewayToolCatalog
         new("delete_layer", "layers", "Safely erase an unused non-system, non-current layer using ObjectARX Purge verification.", "POST", GatewayRoutes.LayersDelete, true, UndoKind.SingleStep, true),
 
         // Plotting & Viewports
-        new("create_viewport", "plotting", "Create a scaled PaperSpace Viewport entity inside one atomic transaction.", "POST", GatewayRoutes.PlottingViewport, true, UndoKind.SingleStep, true),
-        new("plot_pdf", "plotting", "Plot a layout synchronously to PDF forcing and restoring BACKGROUNDPLOT=0.", "POST", GatewayRoutes.PlottingPdf, true, UndoKind.NotUndoable, true),
+        new("create_layout", "plotting", "Create a PaperSpace layout tab and optionally erase its auto-generated default viewport.", "POST", GatewayRoutes.PlottingLayout, true, UndoKind.SingleStep, true),
+        new("configure_layout_page", "plotting", "Configure PaperSpace layout PlotSettings (ISO full bleed A0-A4, landscape/portrait, 1:1 mm, CTB/STB) natively.", "POST", GatewayRoutes.PlottingPageSetup, true, UndoKind.SingleStep, true),
+        new("create_viewport", "plotting", "Create a scaled PaperSpace Viewport entity with optional 3D DCS target, direction, and visual style inside one atomic transaction.", "POST", GatewayRoutes.PlottingViewport, true, UndoKind.SingleStep, true),
+        new("insert_title_block", "plotting", "Draw a native parametric PaperSpace title block with configurable template and optional raster logo.", "POST", GatewayRoutes.PlottingTitleBlock, true, UndoKind.SingleStep, true),
+        new("plot_pdf", "plotting", "Plot a layout synchronously to PDF via PlotEngine forcing and restoring BACKGROUNDPLOT=0.", "POST", GatewayRoutes.PlottingPdf, true, UndoKind.NotUndoable, true),
 
         // Document Session & System Variables
         new("list_documents", "documents", "List all open AutoCAD MDI drawings with session IDs, revisions, and Edit Guard flags.", "GET", GatewayRoutes.Documents, false, UndoKind.None, false),
         new("cancel_command", "documents", "Send Ctrl+C cancellation sequence and report updated command-line state.", "POST", GatewayRoutes.SessionCancel, true, UndoKind.NotUndoable, false),
         new("allow_edit_document", "documents", "Authorize or revoke Edit Guard management status on an existing open drawing.", "POST", GatewayRoutes.SessionAllowEdit, true, UndoKind.NotUndoable, false),
+        new("regen_all", "documents", "Regenerate all viewports in the active drawing synchronously.", "POST", GatewayRoutes.SessionRegen, true, UndoKind.NotUndoable, false),
         new("new_drawing", "documents", "Create a new drawing (optionally from a .dwt template) marked as Gateway-managed.", "POST", GatewayRoutes.DocumentsNew, true, UndoKind.NotUndoable, false),
         new("open_drawing", "documents", "Open an existing local .dwg drawing file and focus it without bypassing Edit Guard.", "POST", GatewayRoutes.DocumentsOpen, true, UndoKind.NotUndoable, false),
+        new("save_drawing", "documents", "Save the active or target drawing in place or to a validated .dwg path via Database.SaveAs.", "POST", GatewayRoutes.DocumentsSave, true, UndoKind.NotUndoable, true),
         new("activate_document", "documents", "Switch AutoCAD active MDI drawing by path, unique filename, or session ID.", "POST", GatewayRoutes.DocumentsActivate, true, UndoKind.NotUndoable, false),
         new("close_document", "documents", "Close an open drawing requiring explicit save or discard confirmation and Edit Guard check.", "POST", GatewayRoutes.DocumentsClose, true, UndoKind.NotUndoable, true),
         new("get_system_variable", "sysvar", "Read a non-security AutoCAD system variable safely.", "GET", GatewayRoutes.SysVar, false, UndoKind.None, false),

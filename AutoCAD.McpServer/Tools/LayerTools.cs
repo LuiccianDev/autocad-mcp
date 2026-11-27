@@ -27,38 +27,46 @@ public sealed class LayerTools
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
     }
 
-    /// <summary>Creates or updates a layer with standard color and linetype, making it current.</summary>
+    /// <summary>Creates or updates a layer with ACI color, linetype, lineweight, and plottability.</summary>
     [McpServerTool(Name = "create_layer")]
     [ToolExposure(Core = true)]
-    [Description("Create a new layer (or update it if existing) with ACI color (1-255) and linetype, and activate it as current layer.")]
+    [Description("Create a new layer (or update it if existing) with ACI color (1-255), linetype, lineweight, and plottability.")]
     public async Task<string> CreateLayer(
-        string name, int colorAci = 7, string linetype = "Continuous", string description = "")
+        string name,
+        int colorAci = 7,
+        string linetype = "Continuous",
+        [CompoundParam(AcceptScalarAsString = true)] string? lineweight = null,
+        bool? isPlottable = null,
+        string description = "",
+        bool setCurrent = true,
+        string? document = null)
     {
         if (!SecurityPolicy.IsValidSymbolName(name))
         {
             return Error($"Invalid layer name: '{name}'.");
         }
 
-        if (colorAci is < 1 or > 255)
+        var body = new Dictionary<string, object?>
         {
-            return Error("ACI color must be between 1 and 255.");
+            ["name"] = name.Trim(),
+            ["document"] = document,
+        };
+
+        if (!TryPopulateLayerProperties(
+                body,
+                colorAci,
+                linetype,
+                lineweight,
+                isPlottable,
+                string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+                setCurrent,
+                out _,
+                out string? propErr))
+        {
+            return Error(propErr ?? "Invalid layer property.");
         }
 
-        if (!SecurityPolicy.IsValidSymbolName(linetype))
-        {
-            return Error($"Invalid linetype name: '{linetype}'.");
-        }
-
-        string payload = JsonSerializer.Serialize(new
-        {
-            name = name.Trim(),
-            color_index = colorAci,
-            linetype = linetype.Trim(),
-            description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-            set_current = true,
-        });
-
-        return await _gatewayClient.PostJsonAsync("layers/create", payload);
+        return await _gatewayClient.PostJsonAsync("layers/create", JsonSerializer.Serialize(body));
     }
 
     /// <summary>Sets an existing layer as the current active layer (CLAYER).</summary>
@@ -80,40 +88,79 @@ public sealed class LayerTools
         return await _gatewayClient.PostJsonAsync("layers/state", payload);
     }
 
-    /// <summary>Modifies the visibility/editability state (on, off, freeze, thaw, lock, unlock) of an existing layer.</summary>
+    /// <summary>Modifies visibility/editability state and/or color, linetype, lineweight, or plottability of a layer.</summary>
     [McpServerTool(Name = "set_layer_state")]
     [ToolExposure(Core = true)]
-    [Description("Modify visibility/editability state of an existing layer: 'on', 'off', 'freeze', 'thaw', 'lock', 'unlock'.")]
-    public async Task<string> SetLayerState(string name, string action)
+    [Description("Modify layer state ('on', 'off', 'freeze', 'thaw', 'lock', 'unlock') and/or colorAci, linetype, lineweight, isPlottable.")]
+    public async Task<string> SetLayerState(
+        string name,
+        string? action = null,
+        int? colorAci = null,
+        string? linetype = null,
+        [CompoundParam(AcceptScalarAsString = true)] string? lineweight = null,
+        bool? isPlottable = null,
+        string? description = null,
+        bool? setCurrent = null,
+        string? document = null)
     {
         if (!SecurityPolicy.IsValidSymbolName(name))
         {
             return Error($"Invalid layer name: '{name}'.");
         }
 
-        var body = new Dictionary<string, object?> { ["name"] = name.Trim() };
-        switch (action?.Trim().ToLowerInvariant())
+        var body = new Dictionary<string, object?>
         {
-            case "on" or "activar":
-                body["on"] = true;
-                break;
-            case "off" or "desactivar":
-                body["on"] = false;
-                break;
-            case "freeze" or "congelar":
-                body["frozen"] = true;
-                break;
-            case "thaw" or "descongelar":
-                body["frozen"] = false;
-                break;
-            case "lock" or "bloquear":
-                body["locked"] = true;
-                break;
-            case "unlock" or "desbloquear":
-                body["locked"] = false;
-                break;
-            default:
-                return Error($"Invalid action '{action}'. Use: on, off, freeze, thaw, lock, unlock.");
+            ["name"] = name.Trim(),
+            ["document"] = document,
+        };
+        bool hasMutation = false;
+
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            switch (action.Trim().ToLowerInvariant())
+            {
+                case "on" or "activar":
+                    body["on"] = true;
+                    break;
+                case "off" or "desactivar":
+                    body["on"] = false;
+                    break;
+                case "freeze" or "congelar":
+                    body["frozen"] = true;
+                    break;
+                case "thaw" or "descongelar":
+                    body["frozen"] = false;
+                    break;
+                case "lock" or "bloquear":
+                    body["locked"] = true;
+                    break;
+                case "unlock" or "desbloquear":
+                    body["locked"] = false;
+                    break;
+                default:
+                    return Error($"Invalid action '{action}'. Use: on, off, freeze, thaw, lock, unlock.");
+            }
+
+            hasMutation = true;
+        }
+
+        if (!TryPopulateLayerProperties(
+                body,
+                colorAci,
+                linetype,
+                lineweight,
+                isPlottable,
+                description,
+                setCurrent,
+                out bool anyPropAdded,
+                out string? propErr))
+        {
+            return Error(propErr ?? "Invalid layer property.");
+        }
+
+        if (!hasMutation && !anyPropAdded)
+        {
+            return Error("Specify 'action' or at least one layer property (colorAci, linetype, lineweight, isPlottable, description, setCurrent).");
         }
 
         return await _gatewayClient.PostJsonAsync("layers/state", JsonSerializer.Serialize(body));
@@ -131,5 +178,80 @@ public sealed class LayerTools
 
         string payload = JsonSerializer.Serialize(new { name = name.Trim(), document });
         return await _gatewayClient.PostJsonAsync("layers/delete", payload);
+    }
+
+    private static bool TryPopulateLayerProperties(
+        Dictionary<string, object?> body,
+        int? colorAci,
+        string? linetype,
+        string? lineweight,
+        bool? isPlottable,
+        string? description,
+        bool? setCurrent,
+        out bool anyAdded,
+        out string? error)
+    {
+        anyAdded = false;
+        error = null;
+
+        if (colorAci.HasValue)
+        {
+            if (colorAci.Value is < 1 or > 255)
+            {
+                error = "ACI color must be between 1 and 255.";
+                return false;
+            }
+
+            body["color_index"] = colorAci.Value;
+            anyAdded = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(linetype))
+        {
+            if (!SecurityPolicy.IsValidLayerLinetypeName(linetype, out error))
+            {
+                return false;
+            }
+
+            body["linetype"] = linetype.Trim();
+            anyAdded = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(lineweight))
+        {
+            if (!LineWeightPolicy.TryParseLineWeight(lineweight, out _, out string display, out error))
+            {
+                return false;
+            }
+
+            body["lineweight"] = display;
+            anyAdded = true;
+        }
+
+        if (isPlottable.HasValue)
+        {
+            body["is_plottable"] = isPlottable.Value;
+            anyAdded = true;
+        }
+
+        if (description is not null)
+        {
+            if (HasControlChars(description))
+            {
+                error = "Layer description cannot contain control characters.";
+                return false;
+            }
+
+            body["description"] = description;
+            anyAdded = true;
+        }
+
+        if (setCurrent.HasValue)
+        {
+            body["set_current"] = setCurrent.Value;
+            anyAdded = true;
+        }
+
+        return true;
     }
 }

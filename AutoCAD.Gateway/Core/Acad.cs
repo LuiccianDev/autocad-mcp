@@ -176,6 +176,39 @@ public static class Acad
         }, timeoutMs, cancellationToken);
     }
 
+    /// <summary>Validates that the resolved document revision matches <paramref name="expectedRevision"/> when supplied.</summary>
+    public static void CheckRevision(DocumentSession session, long? expectedRevision)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (expectedRevision.HasValue && expectedRevision.Value != session.Revision)
+        {
+            throw new AcadGatewayException(
+                "revision_conflict",
+                $"Drawing revision mismatch (expected {expectedRevision.Value}, current {session.Revision}). Re-query before mutating.");
+        }
+    }
+
+    /// <summary>Verifies that an optional <paramref name="documentName"/> (path, filename, or session ID) refers to <paramref name="activeDoc"/>.</summary>
+    public static void EnsureActiveDocument(Document activeDoc, string? documentName, string operationName)
+    {
+        ArgumentNullException.ThrowIfNull(activeDoc);
+        if (string.IsNullOrWhiteSpace(documentName))
+        {
+            return;
+        }
+
+        string target = documentName.Trim();
+        Document? resolved = DocumentSessionManager.FindOpenDocument(target);
+        if (resolved is not null && ReferenceEquals(resolved, activeDoc))
+        {
+            return;
+        }
+
+        throw new AcadGatewayException(
+            "bad_argument",
+            $"{operationName} requires document '{target}' to be active; call activate_document first.");
+    }
+
     /// <summary>Throws <c>busy</c> if the target document (or AutoCAD command line when active) is mid-command.</summary>
     public static void EnsureQuiescent(Document doc)
     {

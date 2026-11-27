@@ -93,6 +93,7 @@ EXPECTED_PHASE5_TOOLS = [
     "create_mleader",
     "create_hatch",
     "create_table",
+    "insert_raster_image",
     "define_block",
     "get_block_definition",
     "get_block_attributes",
@@ -316,7 +317,7 @@ async def test_evaluate_lisp_uses_sync_bridge_and_clamps_timeout(monkeypatch):
     assert posts[0] == ("lisp/eval", {"code": "(+ 40 2)", "timeout_ms": 250}, 30.0)
 
     await execute_lisp("(+ 1 1)", timeout_ms=999999)
-    assert posts[1] == ("lisp/eval", {"code": "(+ 1 1)", "timeout_ms": 120000}, 135.0)
+    assert posts[1] == ("lisp/eval", {"code": "(+ 1 1)", "timeout_ms": 300000}, 315.0)
 
     empty_res = json.loads(await evaluate_lisp("   "))
     assert empty_res["status"] == "error"
@@ -393,8 +394,8 @@ async def test_phase3_native_payloads_and_security_guards(monkeypatch):
     assert bad_lisp_path["status"] == "error"
 
     await load_lisp_file(r"C:\scripts\test.lsp")
-    assert posts[-1][0] == "lisp/eval"
-    assert posts[-1][1]["code"] == '(load "C:/scripts/test.lsp")'
+    assert posts[-1][0] == "lisp/load"
+    assert posts[-1][1] == {"file_path": r"C:\scripts\test.lsp", "timeout_ms": 60000}
 
     bad_pdf = json.loads(await export_pdf("Layout1\n_QUIT", r"C:\out\plan.pdf"))
     assert bad_pdf["status"] == "error"
@@ -412,11 +413,13 @@ async def test_phase4_catalog_and_guide_tools(monkeypatch):
 
     monkeypatch.setattr(srv.gateway, "get_context", mock_get)
 
-    _, res_tools = await mcp.call_tool("get_gateway_tools", {})
-    _, res_guide = await mcp.call_tool("get_gateway_guide", {})
+    res_tools = await mcp.call_tool("get_gateway_tools", {})
+    res_guide = await mcp.call_tool("get_gateway_guide", {})
     assert called == ["_tools", "_guide"]
-    assert res_tools["result"] == json.dumps({"status": "success", "endpoint": "_tools"})
-    assert res_guide["result"] == json.dumps({"status": "success", "endpoint": "_guide"})
+    assert res_tools.isError is False
+    assert res_guide.isError is False
+    assert res_tools.structuredContent == {"status": "success", "endpoint": "_tools"}
+    assert res_guide.structuredContent == {"status": "success", "endpoint": "_guide"}
 
 
 @pytest.mark.asyncio
@@ -625,8 +628,10 @@ async def test_phase6_parity_and_payload_regressions(monkeypatch):
     assert posts[-1][1]["expected_revision"] == 3
     assert posts[-1][1]["document"] == "Drawing1.dwg"
 
-    await configure_layout_page("Layout1")
-    assert "_.-PLOT\nY\nLayout1\n" in cmds[-1]
+    await configure_layout_page("Layout1", paper_size="A3", orientation="landscape")
+    assert posts[-1][0] == "plotting/page-setup"
+    assert posts[-1][1]["paper_size"] == "A3"
+    assert posts[-1][1]["orientation"] == "landscape"
 
     lisp_code, summary = build_batch_geometry_lisp(
         [{"type": "polyline", "points": [[0, 0, 0.5], [10, 0]], "closed": False}]
@@ -658,8 +663,10 @@ async def test_v250_security_hardening_regressions():
     pause_plot = json.loads(await export_pdf("Layout1", r"C:\Temp\out.pdf", plot_style="\\"))
     assert pause_plot["status"] == "error"
 
-    space_layout = json.loads(await create_layout("SHEET 01"))
-    assert space_layout["status"] == "error"
+    model_layout = json.loads(await create_layout("Model"))
+    assert model_layout["status"] == "error"
+    assert model_layout["ok"] is False
+    assert model_layout["error"]["code"] == "bad_argument"
 
     prompt_layout = json.loads(await configure_layout_page("?", plot_style="monochrome.ctb"))
     assert prompt_layout["status"] == "error"
@@ -669,3 +676,104 @@ async def test_v250_security_hardening_regressions():
 
     oversized_cells = json.loads(await create_table(0, 0, rows=1, cols=1, cells_json=[["a", "b"]]))
     assert oversized_cells["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_v260_native_tools_and_unified_outputs(monkeypatch):
+    from autocad_mcp.server import (
+        configure_layout_page,
+        create_layout,
+        create_viewport,
+        export_pdf,
+        insert_raster_image,
+        insert_title_block,
+        regen_all,
+        save_drawing,
+        set_layer_state,
+    )
+    import autocad_mcp.server as srv
+
+    posts = []
+
+    async def mock_post(endpoint: str, data: dict, timeout: float | None = None):
+        posts.append((endpoint, data, timeout))
+        return json.dumps({"status": "success", "ok": True, "endpoint": endpoint})
+
+    monkeypatch.setattr(srv.gateway, "post_json", mock_post)
+
+    await create_layout("SHEET 01", clear_default_viewport=True, activate=False)
+    assert posts[-1][0] == "plotting/layout"
+    assert posts[-1][1]["layout_name"] == "SHEET 01"
+    assert posts[-1][1]["clear_default_viewport"] is True
+    assert posts[-1][1]["activate"] is False
+
+    await configure_layout_page("SHEET 01", paper_size="A3", orientation="portrait")
+    assert posts[-1][0] == "plotting/page-setup"
+    assert posts[-1][1]["orientation"] == "portrait"
+
+    await create_viewport(
+        10, 10, 200, 150, 500, 100, 200,
+        center_model_z=3200.0,
+        view_direction="sw_iso",
+        shade_plot="hidden",
+        visual_style="Realistic",
+        lock_viewport=True,
+    )
+    assert posts[-1][0] == "plotting/viewport"
+    assert posts[-1][1]["center_model_z"] == 3200.0
+    assert posts[-1][1]["view_direction"] == "sw_iso"
+    assert posts[-1][1]["shade_plot"] == "hidden"
+
+    await insert_raster_image(r"C:\assets\logo.png", 10, 20, width=25, image_frame=0, space="paper", layout_name="SHEET 01")
+    assert posts[-1][0] == "drafting/raster-image"
+    assert posts[-1][1]["width"] == 25
+    assert posts[-1][1]["image_frame"] == 0
+
+    await insert_title_block(400, 10, layout_name="SHEET 01", template="detailed", logo_path=r"C:\assets\logo.png")
+    assert posts[-1][0] == "plotting/title-block"
+    assert posts[-1][1]["template"] == "detailed"
+    assert posts[-1][1]["logo_path"] == r"C:\assets\logo.png"
+
+    await export_pdf("SHEET 01", r"C:\out\a3.pdf", paper_size="A3", orientation="landscape")
+    assert posts[-1][0] == "plotting/pdf"
+    assert posts[-1][1]["paper_size"] == "A3"
+    assert posts[-1][1]["orientation"] == "landscape"
+
+    await save_drawing(r"C:\out\saved.dwg", overwrite=True, dwg_version="2018")
+    assert posts[-1][0] == "documents/save"
+    assert posts[-1][1]["file_path"] == r"C:\out\saved.dwg"
+    assert posts[-1][1]["overwrite"] is True
+
+    await set_layer_state("AXIS", color_aci=1, linetype="DASHED", lineweight="0.35", is_plottable=False)
+    assert posts[-1][0] == "layers/state"
+    assert posts[-1][1]["color_index"] == 1
+    assert posts[-1][1]["lineweight"] == "0.35"
+    assert posts[-1][1]["is_plottable"] is False
+
+    await regen_all(document="Plan.dwg")
+    assert posts[-1][0] == "session/regen"
+    assert posts[-1][1]["document"] == "Plan.dwg"
+
+    client = AutoCADGatewayClient(port=5055, token="t")
+    exec_res = json.loads(
+        client._error_envelope("gateway_unreachable", "fail", hint="retry")
+    )
+    assert exec_res["ok"] is False
+    assert exec_res["error"]["code"] == "gateway_unreachable"
+    assert exec_res["error"]["hint"] == "retry"
+
+    bad_dir = json.loads(await create_viewport(10, 10, 200, 150, 500, 100, 200, view_direction="diagonal"))
+    assert bad_dir["status"] == "error"
+    assert bad_dir["ok"] is False
+
+    bad_lt = json.loads(await set_layer_state("AXIS", linetype="ByLayer"))
+    assert bad_lt["status"] == "error"
+    assert bad_lt["ok"] is False
+
+    # Empty lineweight is treated as omitted rather than failing Gateway validation.
+    await set_layer_state("AXIS", action="on", lineweight="")
+    assert "lineweight" not in posts[-1][1]
+
+    # Omitting space when layout_name is supplied infers paper space automatically.
+    await insert_raster_image(r"C:\assets\logo.png", 10, 20, layout_name="SHEET 01")
+    assert posts[-1][1]["space"] == "paper"

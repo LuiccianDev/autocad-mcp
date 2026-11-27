@@ -14,7 +14,7 @@ namespace AutoCAD.McpServer.Tools;
 /// Provides MCP tools for command execution, AutoLISP evaluation, viewport navigation, and environment setup in AutoCAD.
 /// </summary>
 [McpServerToolType]
-[ToolDomain("execution", "autocad_execution", "Ping Gateway, run AutoCAD commands or batches, evaluate or load AutoLISP, zoom, save, and configure metric units.")]
+[ToolDomain("execution", "autocad_execution", "Ping Gateway, run AutoCAD commands or batches, evaluate or load AutoLISP, zoom, save, regen viewports, and configure metric units.")]
 public sealed class ExecutionTools
 {
     private readonly IAutoCADGatewayClient _gatewayClient;
@@ -59,8 +59,14 @@ public sealed class ExecutionTools
             using var doc = JsonDocument.Parse(trimmed);
             if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
+                int itemCount = 0;
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
+                    if (++itemCount > SecurityPolicy.MaxBatchOperations)
+                    {
+                        return CadFormat.Error($"'commandsJson' cannot exceed {SecurityPolicy.MaxBatchOperations} items.");
+                    }
+
                     if (el.ValueKind != JsonValueKind.String)
                     {
                         return CadFormat.Error("All entries in 'commandsJson' array must be strings.");
@@ -138,7 +144,7 @@ public sealed class ExecutionTools
     /// Evaluates AutoLISP code synchronously inside AutoCAD and returns its converted JSON value.
     /// </summary>
     /// <param name="code">AutoLISP code to evaluate (e.g. '(entmake ...)', '(setq ...)' or full routines).</param>
-    /// <param name="timeoutMs">Evaluation timeout in milliseconds (250 to 120000, default 15000).</param>
+    /// <param name="timeoutMs">Evaluation timeout in milliseconds (250 to 300000, default 15000).</param>
     /// <returns>JSON containing evaluated value, document name, and command-line state.</returns>
     [McpServerTool(Name = "evaluate_lisp")]
     [ToolExposure(Core = true)]
@@ -160,39 +166,87 @@ public sealed class ExecutionTools
     }
 
     /// <summary>
-    /// Loads and executes an external AutoLISP script file (.lsp) from disk inside AutoCAD via (load ...).
+    /// Validates and loads an external AutoLISP script file (.lsp) from disk synchronously with duration metrics.
     /// </summary>
-    /// <param name="filePath">Full file path of the .lsp script (e.g. 'C:/scripts/routine.lsp').</param>
-    /// <returns>Asynchronous task returning file load result.</returns>
     [McpServerTool(Name = "load_lisp_file")]
-    [Description("Load and evaluate an external AutoLISP script file (.lsp) from disk inside AutoCAD via synchronous LISP evaluation.")]
-    public async Task<string> LoadLispFile(string filePath)
+    [Description("Validate and load an external AutoLISP script file (.lsp) from disk inside AutoCAD synchronously with duration metrics.")]
+    public async Task<string> LoadLispFile(
+        string filePath,
+        int timeoutMs = GatewayProtocol.DefaultLispLoadTimeoutMs)
     {
         if (!SecurityPolicy.ValidateLocalFilePath(filePath, out string normPath, out string? pathErr, ".lsp"))
         {
-            return CadFormat.Error(pathErr ?? "Invalid AutoLISP script path.");
+            return CadFormat.Error(pathErr ?? "Invalid AutoLISP script path.", code: "invalid_path");
         }
 
-        string fwd = normPath.Replace('\\', '/');
-        return await EvaluateLisp($"(load {CadFormat.LispString(fwd)})");
+        int clampedTimeout = GatewayProtocol.ClampLispTimeoutMs(timeoutMs);
+        string payload = JsonSerializer.Serialize(new
+        {
+            file_path = normPath,
+            timeout_ms = clampedTimeout,
+        });
+        return await _gatewayClient.PostJsonAsync("lisp/load", payload, timeoutMs: clampedTimeout);
     }
 
     /// <summary>
     /// Executes Zoom Extents ('_.ZOOM E') in AutoCAD to center and fit all entities in the viewport.
     /// </summary>
-    /// <returns>Asynchronous task returning confirmation.</returns>
     [McpServerTool(Name = "zoom_extents")]
     [Description("Execute Zoom Extents ('_.ZOOM E') in AutoCAD to center and fit all elements in the viewport.")]
     public async Task<string> ZoomExtents() => await _gatewayClient.ExecuteCommandAsync("_.ZOOM\nE\n");
 
     /// <summary>
-    /// Saves the active AutoCAD drawing file ('_.QSAVE').
+    /// Saves the active or target AutoCAD drawing in place or safely to a new .dwg file via Database.SaveAs.
     /// </summary>
-    /// <returns>Asynchronous task returning confirmation.</returns>
     [McpServerTool(Name = "save_drawing")]
     [ToolExposure(Core = true)]
-    [Description("Save the active AutoCAD drawing file ('_.QSAVE').")]
-    public async Task<string> SaveDrawing() => await _gatewayClient.ExecuteCommandAsync("_.QSAVE\n");
+    [Description("Save the active or target drawing in place or safely to a new .dwg path via Database.SaveAs.")]
+    public async Task<string> SaveDrawing(
+        string? filePath = null,
+        bool overwrite = false,
+        string dwgVersion = "current",
+        bool bakAndRename = true,
+        bool createDirectories = false,
+        long? expectedRevision = null,
+        string? document = null)
+    {
+        string? normPath = null;
+        if (!string.IsNullOrWhiteSpace(filePath))
+        {
+            if (!SecurityPolicy.ValidateLocalFilePath(filePath, out normPath, out string? pathErr, ".dwg"))
+            {
+                return CadFormat.Error(pathErr ?? "Invalid .dwg output path.", code: "invalid_path");
+            }
+        }
+
+        if (!DwgVersionPolicy.TryParseDwgVersion(dwgVersion, out string canonicalVersion, out string? verErr))
+        {
+            return CadFormat.Error(verErr ?? "Unsupported DWG version.");
+        }
+
+        string payload = JsonSerializer.Serialize(new
+        {
+            file_path = normPath,
+            overwrite,
+            dwg_version = canonicalVersion,
+            bak_and_rename = bakAndRename,
+            create_directories = createDirectories,
+            expected_revision = expectedRevision,
+            document,
+        });
+        return await _gatewayClient.PostJsonAsync("documents/save", payload);
+    }
+
+    /// <summary>
+    /// Regenerates all open viewports synchronously via the native Gateway endpoint.
+    /// </summary>
+    [McpServerTool(Name = "regen_all")]
+    [Description("Regenerate all open viewports synchronously via the native Gateway endpoint.")]
+    public async Task<string> RegenAll(string? document = null)
+    {
+        string payload = JsonSerializer.Serialize(new { document });
+        return await _gatewayClient.PostJsonAsync("session/regen", payload);
+    }
 
     /// <summary>
     /// Configures AutoCAD drawing environment to METRIC METERS (INSUNITS=4, MEASUREMENT=1, LUNITS=2, LUPREC=3) and calibrates dimensions.

@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Autodesk.AutoCAD.ApplicationServices;
@@ -89,18 +92,71 @@ public static class LispBridge
         return null;
     }
 
+    /// <summary>Structured result from a synchronous AutoLISP evaluation or file load.</summary>
+    public sealed record LispEvalResult(
+        object? Value,
+        string Document,
+        CommandLineState? CommandLine,
+        double DurationMs,
+        string? FilePath = null);
+
+    /// <summary>
+    /// Validates and loads an external <c>.lsp</c> file synchronously with syntax pre-check and CMDECHO suppression.
+    /// </summary>
+    public static async Task<LispEvalResult> LoadFileAsync(
+        string filePath,
+        int timeoutMs = GatewayProtocol.DefaultLispLoadTimeoutMs,
+        CancellationToken cancellationToken = default)
+    {
+        if (!SecurityPolicy.ValidateLocalFilePath(filePath, out string normPath, out string? pathErr, ".lsp"))
+        {
+            throw new AcadGatewayException("invalid_path", pathErr ?? "Invalid AutoLISP file path.");
+        }
+
+        DatabaseHelpers.EnsureNoReparsePoints(normPath);
+        if (!File.Exists(normPath))
+        {
+            throw new AcadGatewayException("not_found", $"AutoLISP file not found: '{normPath}'.");
+        }
+
+        long fileLength = new FileInfo(normPath).Length;
+        if (fileLength > GatewayProtocol.MaxBodyBytes)
+        {
+            throw new AcadGatewayException(
+                "bad_argument",
+                $"AutoLISP file '{normPath}' ({fileLength} bytes) exceeds maximum size ({GatewayProtocol.MaxBodyBytes} bytes).");
+        }
+
+        string source = await File.ReadAllTextAsync(normPath, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+        if (source.Length > 0 && source[0] == '\uFEFF')
+        {
+            source = source[1..];
+        }
+
+        string? syntaxError = LispSyntax.Validate(source);
+        if (syntaxError is not null)
+        {
+            throw new AcadGatewayException("bad_argument", $"Syntax error in '{normPath}': {syntaxError}");
+        }
+
+        string escaped = EscapeLispString(normPath.Replace('\\', '/'));
+        LispEvalResult res = await EvalAsync($"(load {escaped})", timeoutMs, cancellationToken).ConfigureAwait(false);
+        return res with { FilePath = normPath };
+    }
+
     /// <summary>
     /// Evaluates AutoLISP code inside the active drawing and returns its converted JSON value
-    /// together with post-execution command-line state.
+    /// together with post-execution command-line state and measured duration.
     /// </summary>
     /// <param name="code">AutoLISP code snippet to evaluate inside a lexical <c>(progn ...)</c>.</param>
     /// <param name="timeoutMs">Requested timeout in milliseconds (clamped to safe bounds).</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
-    public static async Task<(object? Value, string Document, CommandLineState? CommandLine)> EvalAsync(
+    public static async Task<LispEvalResult> EvalAsync(
         string code,
         int timeoutMs = GatewayProtocol.DefaultLispTimeoutMs,
         CancellationToken cancellationToken = default)
     {
+        long startTick = Stopwatch.GetTimestamp();
         string? syntaxError = LispSyntax.Validate(code);
         if (syntaxError is not null)
         {
@@ -166,10 +222,14 @@ public static class LispBridge
             catch (TimeoutException)
             {
                 CommandLineState? leftover = await ReadCommandLineAsync().ConfigureAwait(false);
+                await TryCancelActiveCommandAsync().ConfigureAwait(false);
+                string hint = leftover?.CmdActive is int ca && (ca & 8) != 0
+                    ? "A modal dialog (for example SECURELOAD trust prompt or file dialog) is blocking AutoCAD."
+                    : (leftover?.Hint ?? "A modal dialog or interactive prompt may still be open in AutoCAD.");
                 throw new AcadGatewayException(
                     "lisp_timeout",
                     $"AutoLISP evaluation did not return within {clampedTimeout} ms.",
-                    leftover?.Hint ?? "A modal dialog or interactive prompt may still be open in AutoCAD.");
+                    hint);
             }
             catch (AcadGatewayException ex) when (ex.Code == "lisp_error")
             {
@@ -178,12 +238,48 @@ public static class LispBridge
             }
 
             CommandLineState? commandLine = await ReadCommandLineAsync().ConfigureAwait(false);
-            return (value, documentName, commandLine);
+            double durationMs = Stopwatch.GetElapsedTime(startTick).TotalMilliseconds;
+            return new LispEvalResult(value, documentName, commandLine, Math.Round(durationMs, 2));
         }
         finally
         {
             Requests.TryRemove(token, out _);
             EvaluationGate.Release();
+        }
+    }
+
+    private static string EscapeLispString(string value)
+    {
+        var sb = new StringBuilder(value.Length + 2);
+        sb.Append('"');
+        foreach (char c in value)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\n':
+                case '\r': sb.Append(' '); break;
+                default: sb.Append(c); break;
+            }
+        }
+
+        sb.Append('"');
+        return sb.ToString();
+    }
+
+    private static async Task TryCancelActiveCommandAsync()
+    {
+        try
+        {
+            await MainThread.InvokeAsync(() =>
+            {
+                Acad.ActiveDocument.SendStringToExecute("\x03\x03", true, false, false);
+            }, 500).ConfigureAwait(false);
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Trace.TraceWarning("Best-effort AutoLISP timeout cancellation failed: {0}", ex.Message);
         }
     }
 
@@ -203,16 +299,19 @@ public static class LispBridge
 
     private static string BuildDispatchExpression(string token) =>
         "(progn (vl-load-com)" +
-        "((lambda (*error* _amcp_v _amcp_ok)" +
-        $"(setq *error* (function (lambda (msg) (acad-mcp-err \"{token}\" (if msg (vl-princ-to-string msg) \"AutoLISP error\")) (princ))))" +
+        "((lambda (*error* _amcp_ce _amcp_v _amcp_ok)" +
+        "(setq _amcp_ce (getvar \"CMDECHO\"))" +
+        "(setvar \"CMDECHO\" 0)" +
+        $"(setq *error* (function (lambda (msg) (setvar \"CMDECHO\" _amcp_ce) (acad-mcp-err \"{token}\" (if msg (vl-princ-to-string msg) \"AutoLISP error\")) (princ))))" +
         $"(setq _amcp_v (vl-catch-all-apply (function (lambda () (eval (read (acad-mcp-source \"{token}\")))))))" +
+        "(setvar \"CMDECHO\" _amcp_ce)" +
         "(if (vl-catch-all-error-p _amcp_v)" +
         $"(acad-mcp-err \"{token}\" (vl-catch-all-error-message _amcp_v))" +
         "(progn " +
         $"(setq _amcp_ok (vl-catch-all-apply (function (lambda () (acad-mcp-ok \"{token}\" _amcp_v)))))" +
         "(if (vl-catch-all-error-p _amcp_ok)" +
         $"(acad-mcp-ok \"{token}\" (vl-princ-to-string _amcp_v))))))" +
-        "*error* nil nil)(princ))\n";
+        "*error* nil nil nil)(princ))\n";
 
     private static object? ConvertResult(TypedValue[] values)
     {

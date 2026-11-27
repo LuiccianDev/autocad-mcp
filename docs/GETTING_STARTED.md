@@ -106,15 +106,18 @@ Requires only [`uv`](https://astral.sh/uv). Runs the official PyPI distribution 
 > [!NOTE]
 > Leave `AUTOCAD_GATEWAY_TOKEN` and `AUTOCAD_GATEWAY_PORT` unset for zero-config auto-discovery via `{pid}.json`. Only set `AUTOCAD_GATEWAY_TOKEN` explicitly if you fixed a manual token inside AutoCAD via `AI_SET_TOKEN`.
 
-### Selective Tool Loading (`AUTOCAD_MCP_TOOL_MODE`)
+### Selective Tool Loading & Output Format
 
-Set `AUTOCAD_MCP_TOOL_MODE` in the MCP client environment block to match your token budget:
+Set `AUTOCAD_MCP_TOOL_MODE` and optionally `AUTOCAD_MCP_OUTPUT_FORMAT` in the MCP client environment block:
 
-| Mode | Tools Exposed | Notes |
+| Mode (`AUTOCAD_MCP_TOOL_MODE`) | Tools Exposed | Notes |
 | :--- | :--- | :--- |
-| `granular` | 89 | Default mode exposing all 75 canonical tools and 14 aliases. |
+| `granular` | 90 | Default mode exposing all 76 canonical tools and 14 aliases. |
 | `compound` | 10 | Domain routers `autocad_context` through `autocad_execution` with `action="help"` schema lookup. |
 | `core` | 28 | Compact set of high-leverage tools with zero aliases. |
+
+- `AUTOCAD_MCP_OUTPUT_FORMAT=compact` (default): Emits token-efficient compact summaries in `content[0].text` while preserving the full machine-readable payload in `structuredContent`. Invalid values fail fast on `stderr` without corrupting STDIO JSON-RPC.
+- `AUTOCAD_MCP_OUTPUT_FORMAT=json`: Preserves legacy raw JSON strings in `content[0].text` alongside `structuredContent`, native `isError`, `ImageContent`, and `ToolAnnotations`.
 
 ---
 
@@ -188,7 +191,7 @@ The AI will sequentially execute:
 
 ## References & Documentation
 
-- [MCP Tools Reference Manual (89 Tools)](TOOLS_REFERENCE.md): Complete catalog with parameter schemas, types, and JSON responses.
+- [MCP Tools Reference Manual](TOOLS_REFERENCE.md): Tool catalog, MCP output protocol behavior, parameter schemas, and JSON responses.
 - [Tools Quick Reference & Cheat Sheet](TOOLS_CHEAT_SHEET.md): Decision tree for selecting the right tool for each CAD design task.
 - [System Architecture](ARCHITECTURE.md): Deep dive into the concurrency model and UI thread dispatcher.
 - [Troubleshooting Guide](TROUBLESHOOTING.md): Resolving network, NETLOAD, and command execution issues.
