@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Autodesk.AutoCAD.ApplicationServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using AutoCAD.Gateway.Contracts;
 using AutoCAD.Gateway.Core;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -441,15 +442,31 @@ public static class DocumentControlService
 
         if (valEl.ValueKind == JsonValueKind.String)
         {
-            string sVal = valEl.GetString() ?? string.Empty;
-            if (current is short && short.TryParse(sVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out short sParsed))
+            string sVal = (valEl.GetString() ?? string.Empty).Trim();
+            if (current is short)
             {
-                return sParsed;
+                if (short.TryParse(sVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out short sParsed))
+                {
+                    return sParsed;
+                }
+
+                if (bool.TryParse(sVal, out bool bShort))
+                {
+                    return bShort ? (short)1 : (short)0;
+                }
             }
 
-            if (current is int && int.TryParse(sVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out int iParsed))
+            if (current is int)
             {
-                return iParsed;
+                if (int.TryParse(sVal, NumberStyles.Integer, CultureInfo.InvariantCulture, out int iParsed))
+                {
+                    return iParsed;
+                }
+
+                if (bool.TryParse(sVal, out bool bInt))
+                {
+                    return bInt ? 1 : 0;
+                }
             }
 
             if (current is double && double.TryParse(sVal, NumberStyles.Float, CultureInfo.InvariantCulture, out double dParsed) && double.IsFinite(dParsed))
@@ -457,7 +474,7 @@ public static class DocumentControlService
                 return dParsed;
             }
 
-            return sVal;
+            return valEl.GetString() ?? string.Empty;
         }
 
         if (valEl.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -494,5 +511,198 @@ public static class DocumentControlService
         }
 
         throw new AcadGatewayException("bad_argument", $"Invalid value type for system variable '{name}'.");
+    }
+
+    /// <summary>
+    /// Saves the active or target drawing in place or to a validated local <c>.dwg</c> path via <c>Database.SaveAs</c>.
+    /// </summary>
+    public static Task<string> SaveDrawingAsync(string body)
+    {
+        JsonElement root = string.IsNullOrWhiteSpace(body) ? default : DatabaseHelpers.ParseJsonObject(body);
+        string? rawFilePath = root.ValueKind == JsonValueKind.Object
+            ? (DatabaseHelpers.GetStringOpt(root, "file_path") ?? DatabaseHelpers.GetStringOpt(root, "save_as"))
+            : null;
+        bool overwrite = root.ValueKind == JsonValueKind.Object && (DatabaseHelpers.GetBoolOpt(root, "overwrite") ?? false);
+        string? rawVersion = root.ValueKind == JsonValueKind.Object ? DatabaseHelpers.GetStringOpt(root, "dwg_version") : null;
+        bool bakAndRename = root.ValueKind != JsonValueKind.Object || (DatabaseHelpers.GetBoolOpt(root, "bak_and_rename") ?? true);
+        bool createDirectories = root.ValueKind == JsonValueKind.Object && (DatabaseHelpers.GetBoolOpt(root, "create_directories") ?? false);
+        string? documentName = root.ValueKind == JsonValueKind.Object ? DatabaseHelpers.GetStringOpt(root, "document") : null;
+        long? expectedRevision = root.ValueKind == JsonValueKind.Object ? DatabaseHelpers.GetLongOpt(root, "expected_revision") : null;
+
+        if (!DwgVersionPolicy.TryParseDwgVersion(rawVersion, out string canonicalVersion, out string? versionErr))
+        {
+            throw new AcadGatewayException("bad_argument", versionErr ?? "Unsupported DWG version.");
+        }
+
+        string? validatedPath = null;
+        if (!string.IsNullOrWhiteSpace(rawFilePath))
+        {
+            if (!SecurityPolicy.ValidateLocalFilePath(rawFilePath, out string normPath, out string? pathErr, ".dwg"))
+            {
+                throw new AcadGatewayException("invalid_path", pathErr ?? "Invalid .dwg output path.");
+            }
+
+            DatabaseHelpers.EnsureNoReparsePoints(normPath);
+            validatedPath = normPath;
+        }
+
+        DwgVersion dwgVersion = MapDwgVersion(canonicalVersion);
+
+        return Acad.RunOnDocumentAsync((doc, session) =>
+        {
+            Acad.EnsureQuiescent(doc);
+            Acad.CheckRevision(session, expectedRevision);
+
+            string prevDocName = doc.Name;
+            string targetPath = !string.IsNullOrWhiteSpace(validatedPath) ? validatedPath : doc.Name;
+            if (!Path.IsPathFullyQualified(targetPath))
+            {
+                throw new AcadGatewayException(
+                    "bad_argument",
+                    $"Drawing '{prevDocName}' has never been saved to disk; provide an explicit 'file_path' (.dwg).");
+            }
+
+            bool isInPlace = Path.IsPathFullyQualified(prevDocName) &&
+                string.Equals(Path.GetFullPath(prevDocName), Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase);
+
+            if (isInPlace)
+            {
+                if (DocumentSessionManager.EditGuardEnabled && !session.IsManaged)
+                {
+                    throw new AcadGatewayException(
+                        "edit_guard",
+                        $"Drawing '{prevDocName}' is protected by Edit Guard. Call allow_edit_document or save to a new 'file_path'.");
+                }
+
+                if (doc.IsReadOnly)
+                {
+                    throw new AcadGatewayException(
+                        "read_only",
+                        $"Drawing '{prevDocName}' is open read-only. Provide a new 'file_path' to save a copy.");
+                }
+            }
+            else
+            {
+                Document? conflict = DocumentSessionManager.FindOpenDocument(targetPath);
+                if (conflict is not null && !ReferenceEquals(conflict, doc))
+                {
+                    throw new AcadGatewayException(
+                        "busy",
+                        $"Target path '{targetPath}' is already open in another AutoCAD document window.");
+                }
+            }
+
+            bool existed = File.Exists(targetPath);
+            if (!isInPlace && existed && !overwrite)
+            {
+                throw new AcadGatewayException(
+                    "already_exists",
+                    $"File '{targetPath}' already exists. Pass overwrite=true to replace it.");
+            }
+
+            if (existed && overwrite && DocumentSessionManager.EditGuardEnabled && !session.IsManaged)
+            {
+                throw new AcadGatewayException(
+                    "edit_guard",
+                    $"Overwriting '{targetPath}' from an unmanaged drawing requires allow_edit_document.");
+            }
+
+            // Defer directory creation until every document, Edit Guard, revision, and overwrite check succeeds.
+            string? parent = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrEmpty(parent) && !Directory.Exists(parent))
+            {
+                if (!createDirectories)
+                {
+                    throw new AcadGatewayException(
+                        "not_found",
+                        $"Target directory '{parent}' does not exist. Pass create_directories=true to create it.");
+                }
+
+                Directory.CreateDirectory(parent);
+                DatabaseHelpers.EnsureNoReparsePoints(targetPath);
+            }
+
+            using DocumentLock docLock = doc.LockDocument();
+            try
+            {
+                doc.Database.SaveAs(targetPath, isInPlace || bakAndRename, dwgVersion, doc.Database.SecurityParameters);
+            }
+            catch (Autodesk.AutoCAD.Runtime.Exception ex)
+            {
+                throw new AcadGatewayException("autocad_error", $"Failed to save drawing to '{targetPath}': {ex.Message} ({ex.ErrorStatus})");
+            }
+            catch (IOException ex)
+            {
+                throw new AcadGatewayException("invalid_path", $"I/O error saving '{targetPath}': {ex.Message}");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new AcadGatewayException("invalid_path", $"Access denied saving '{targetPath}': {ex.Message}");
+            }
+
+            DocumentSessionManager.ObserveActiveDocument(AcApp.DocumentManager.MdiActiveDocument?.Name);
+            long sizeBytes = File.Exists(targetPath) ? new FileInfo(targetPath).Length : 0L;
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                file_path = targetPath,
+                previous_document = prevDocName,
+                document = doc.Name,
+                in_place = isInPlace,
+                overwritten = existed,
+                dwg_version = canonicalVersion,
+                file_size_bytes = sizeBytes,
+                revision = session.Revision,
+            }, GatewayProtocol.WireJsonOptions);
+        }, write: false, requireIdle: false, expectedRevision: null, documentName: documentName);
+    }
+
+    private static DwgVersion MapDwgVersion(string canonicalVersion) => canonicalVersion switch
+    {
+        "current" => DwgVersion.Current,
+        "AC1032" => DwgVersion.AC1032,
+        "AC1027" => DwgVersion.AC1027,
+        "AC1024" => DwgVersion.AC1024,
+        "AC1021" => DwgVersion.AC1021,
+        "AC1018" => DwgVersion.AC1800,
+        "AC1015" => DwgVersion.AC1015,
+        _ => throw new AcadGatewayException("bad_argument", $"Unsupported canonical DWG version '{canonicalVersion}'."),
+    };
+
+    /// <summary>
+    /// Regenerates all viewports in the active drawing synchronously without requiring <c>Edit Guard</c>
+    /// or <c>RESTRICTED_MODE=0</c>.
+    /// </summary>
+    public static Task<string> RegenAllAsync(string body)
+    {
+        string? documentName = null;
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            JsonElement root = DatabaseHelpers.ParseJsonObject(body);
+            documentName = DatabaseHelpers.GetStringOpt(root, "document");
+        }
+
+        return MainThread.InCommandContextAsync(() =>
+        {
+            Document doc = Acad.ActiveDocument;
+            Acad.EnsureActiveDocument(doc, documentName, "regen_all");
+
+            Acad.EnsureQuiescent(doc);
+            doc.Editor.Command("_.REGENALL");
+            doc.Editor.Regen();
+            DocumentSession session = DocumentSessionManager.GetOrCreate(doc);
+
+            return JsonSerializer.Serialize(new
+            {
+                status = "success",
+                ok = true,
+                action = "regen_all",
+                scope = "all_viewports",
+                document = doc.Name,
+                revision = session.Revision,
+            }, GatewayProtocol.WireJsonOptions);
+        }, preflight: () => Acad.EnsureQuiescent(Acad.ActiveDocument), timeoutMs: 30_000);
     }
 }

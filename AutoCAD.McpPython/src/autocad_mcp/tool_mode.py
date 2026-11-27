@@ -10,10 +10,19 @@ from functools import cached_property
 from typing import Any, TypeVar
 
 from mcp.server.fastmcp.tools.base import Tool
+from mcp.types import ToolAnnotations
 
 TOOL_MODE_ENV_VAR = "AUTOCAD_MCP_TOOL_MODE"
+OUTPUT_FORMAT_ENV_VAR = "AUTOCAD_MCP_OUTPUT_FORMAT"
 
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+class OutputFormat(str, Enum):
+    """Supported MCP tool content output profiles."""
+
+    COMPACT = "compact"
+    JSON = "json"
 
 
 class ToolMode(str, Enum):
@@ -95,7 +104,7 @@ DEFAULT_DOMAINS: tuple[DomainSpec, ...] = (
     DomainSpec(
         key="measurement",
         compound_name="autocad_measurement",
-        summary="Compute 2D/3D distances, polygon areas, purge/audit drawing databases, and regenerate viewports.",
+        summary="Compute 2D/3D distances, polygon areas, and purge/audit drawing databases.",
     ),
     DomainSpec(
         key="plotting",
@@ -112,34 +121,188 @@ DEFAULT_DOMAINS: tuple[DomainSpec, ...] = (
         compound_name="autocad_execution",
         summary=(
             "Ping the Gateway, run AutoCAD commands or batch macros, evaluate or load AutoLISP, "
-            "zoom, save drawings, and configure metric units."
+            "zoom, regenerate viewports, save drawings, and configure metric units."
         ),
     ),
 )
 
 
-def parse_tool_mode(raw: str | None) -> ToolMode:
-    """Parse AUTOCAD_MCP_TOOL_MODE value, defaulting unset or blank values to granular."""
+def _parse_enum_env(raw: str | None, enum_cls: type[Any], env_var: str, default: Any, allowed: str) -> Any:
     if raw is None:
-        return ToolMode.GRANULAR
+        return default
     if not isinstance(raw, str):
-        raise ValueError(f"Invalid {TOOL_MODE_ENV_VAR} value {raw!r}. Expected one of: granular, compound, core.")
+        raise ValueError(f"Invalid {env_var} value {raw!r}. Expected one of: {allowed}.")
 
     normalized = raw.strip().lower()
     if not normalized:
-        return ToolMode.GRANULAR
+        return default
 
     try:
-        return ToolMode(normalized)
+        return enum_cls(normalized)
     except ValueError as exc:
-        raise ValueError(
-            f"Invalid {TOOL_MODE_ENV_VAR} value '{raw.strip()}'. Expected one of: granular, compound, core."
-        ) from exc
+        raise ValueError(f"Invalid {env_var} value '{raw.strip()}'. Expected one of: {allowed}.") from exc
+
+
+def parse_tool_mode(raw: str | None) -> ToolMode:
+    """Parse AUTOCAD_MCP_TOOL_MODE value, defaulting unset or blank values to granular."""
+    return _parse_enum_env(raw, ToolMode, TOOL_MODE_ENV_VAR, ToolMode.GRANULAR, "granular, compound, core")
 
 
 def resolve_tool_mode() -> ToolMode:
     """Read and parse the active tool exposure mode from the process environment."""
     return parse_tool_mode(os.environ.get(TOOL_MODE_ENV_VAR))
+
+
+def parse_output_format(raw: str | None) -> OutputFormat:
+    """Parse AUTOCAD_MCP_OUTPUT_FORMAT value, defaulting unset or blank values to compact."""
+    return _parse_enum_env(raw, OutputFormat, OUTPUT_FORMAT_ENV_VAR, OutputFormat.COMPACT, "compact, json")
+
+
+def resolve_output_format() -> OutputFormat:
+    """Read and parse the active output format from the process environment."""
+    return parse_output_format(os.environ.get(OUTPUT_FORMAT_ENV_VAR))
+
+
+_READ_ONLY_TOOLS = frozenset({
+    "get_drawing_info",
+    "get_entities",
+    "get_layers",
+    "get_texts",
+    "get_drawing_extents",
+    "get_selection_count",
+    "list_blocks",
+    "capture_screenshot",
+    "get_gateway_tools",
+    "get_gateway_guide",
+    "query_entities",
+    "get_entity",
+    "get_block_definition",
+    "get_block_attributes",
+    "list_xrefs",
+    "list_documents",
+    "get_system_variable",
+    "measure_distance",
+    "calculate_polygon_area",
+    "ping_gateway",
+    "check_civil3d_status",
+    "list_civil3d_surfaces",
+    "list_civil3d_alignments",
+    "get_surface_elevation",
+    "get_civil3d_surface_stats",
+    "get_alignment_station_offset",
+    "get_point_at_station",
+    "sample_longitudinal_profile",
+    "sample_civil3d_cross_section",
+})
+
+_DESTRUCTIVE_TOOLS = frozenset({
+    "delete_entities",
+    "delete_layer",
+    "explode_entities",
+    "close_document",
+    "purge_and_audit_drawing",
+    "save_drawing",
+    "execute_native_batch",
+    "execute_command",
+    "execute_batch_commands",
+    "evaluate_lisp",
+    "load_lisp_file",
+})
+
+_OPEN_WORLD_TOOLS = frozenset({
+    "new_drawing",
+    "save_drawing",
+    "open_drawing",
+    "close_document",
+    "export_pdf",
+    "insert_raster_image",
+    "insert_title_block",
+    "execute_command",
+    "execute_batch_commands",
+    "evaluate_lisp",
+    "load_lisp_file",
+})
+
+_IDEMPOTENT_MUTATORS = frozenset({
+    "create_layer",
+    "set_layer_state",
+    "set_current_layer",
+    "set_block_attributes",
+    "activate_document",
+    "allow_edit_document",
+    "cancel_command",
+    "set_system_variable",
+    "configure_layout_page",
+    "zoom_extents",
+    "regen_all",
+    "configure_drawing_units",
+})
+
+
+def enumerate_classified_tools() -> tuple[str, ...]:
+    """Return every canonical tool name referenced across annotation classification sets."""
+    return tuple([
+        *_READ_ONLY_TOOLS,
+        *_DESTRUCTIVE_TOOLS,
+        *_OPEN_WORLD_TOOLS,
+        *_IDEMPOTENT_MUTATORS,
+    ])
+
+
+def resolve_tool_annotations(canonical_name: str, domain: str | None = None) -> ToolAnnotations:
+    """Resolve deterministic MCP ToolAnnotations matching ToolAnnotationPolicy.cs."""
+    if not isinstance(canonical_name, str) or not canonical_name.strip():
+        raise ValueError("canonical_name must be a non-empty tool name.")
+    del domain  # Unused; kept only for optional positional compatibility.
+    tool = canonical_name.strip()
+    open_world = tool in _OPEN_WORLD_TOOLS
+
+    if tool in _READ_ONLY_TOOLS:
+        return ToolAnnotations(
+            readOnlyHint=True,
+            destructiveHint=False,
+            idempotentHint=True,
+            openWorldHint=open_world,
+        )
+    if tool in _DESTRUCTIVE_TOOLS:
+        return ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=open_world,
+        )
+    return ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=tool in _IDEMPOTENT_MUTATORS,
+        openWorldHint=open_world,
+    )
+
+
+def resolve_compound_annotations(domain: str, target_catalog: ToolCatalog | None = None) -> ToolAnnotations:
+    """Aggregate conservative MCP ToolAnnotations dynamically from a domain's canonical actions."""
+    active_catalog = target_catalog or catalog
+    dom = domain.strip().lower()
+    canonical_names = [
+        entry.name
+        for entry in active_catalog.entries(include_aliases=False)
+        if entry.domain == dom
+    ]
+    if not canonical_names:
+        return ToolAnnotations(
+            readOnlyHint=False,
+            destructiveHint=True,
+            idempotentHint=False,
+            openWorldHint=True,
+        )
+
+    specs = [resolve_tool_annotations(name) for name in canonical_names]
+    return ToolAnnotations(
+        readOnlyHint=all(bool(s.readOnlyHint) for s in specs),
+        destructiveHint=any(bool(s.destructiveHint) for s in specs),
+        idempotentHint=all(bool(s.idempotentHint) for s in specs),
+        openWorldHint=any(bool(s.openWorldHint) for s in specs),
+    )
 
 
 class DomainRegistrar:
@@ -303,11 +466,17 @@ __all__ = [
     "DEFAULT_DOMAINS",
     "DomainRegistrar",
     "DomainSpec",
+    "OUTPUT_FORMAT_ENV_VAR",
+    "OutputFormat",
     "TOOL_MODE_ENV_VAR",
     "ToolCatalog",
     "ToolEntry",
     "ToolMode",
     "catalog",
+    "parse_output_format",
     "parse_tool_mode",
+    "resolve_compound_annotations",
+    "resolve_output_format",
+    "resolve_tool_annotations",
     "resolve_tool_mode",
 ]

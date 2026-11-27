@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using AutoCAD.Gateway.Contracts;
@@ -12,22 +11,13 @@ using ModelContextProtocol.Server;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// Provides MCP tools for PaperSpace layouts, standardized sheet configuration (A0-A4),
-/// viewport creation with metric scales, title block insertion, and PDF plotting.
+/// Provides MCP tools for PaperSpace layouts, native page setups (A0-A4),
+/// 2D/3D DCS viewports, native parametric title blocks with logos, and silent PDF plotting.
 /// </summary>
 [McpServerToolType]
 [ToolDomain("plotting", "autocad_plotting", "Create PaperSpace layouts, configure page setups, create metric viewports, draw title blocks, and export PDFs.")]
 public sealed class PlottingTools
 {
-    private static readonly Dictionary<string, string> PaperMediaMap = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["A0"] = "ISO_full_bleed_A0_(841.00_x_1189.00_MM)",
-        ["A1"] = "ISO_full_bleed_A1_(841.00_x_594.00_MM)",
-        ["A2"] = "ISO_full_bleed_A2_(594.00_x_420.00_MM)",
-        ["A3"] = "ISO_full_bleed_A3_(420.00_x_297.00_MM)",
-        ["A4"] = "ISO_full_bleed_A4_(297.00_x_210.00_MM)",
-    };
-
     private readonly IAutoCADGatewayClient _gatewayClient;
 
     /// <summary>Initializes a new instance of the <see cref="PlottingTools"/> class.</summary>
@@ -37,78 +27,88 @@ public sealed class PlottingTools
         _gatewayClient = gatewayClient ?? throw new ArgumentNullException(nameof(gatewayClient));
     }
 
-    /// <summary>Creates a new PaperSpace layout tab and switches the active view to that layout.</summary>
-    /// <param name="layoutName">Unique name for the layout tab (e.g. 'SHEET-01').</param>
-    /// <returns>Asynchronous task returning confirmation.</returns>
+    /// <summary>Creates a PaperSpace layout tab natively and optionally removes its default viewport.</summary>
     [McpServerTool(Name = "create_layout")]
-    [Description("Create a new PaperSpace Layout tab and switch the active view to that layout.")]
-    public async Task<string> CreateLayout(string layoutName)
+    [Description("Create a new PaperSpace Layout tab natively and optionally erase its auto-generated default viewport.")]
+    public async Task<string> CreateLayout(
+        string layoutName,
+        bool clearDefaultViewport = true,
+        bool activate = true,
+        long? expectedRevision = null,
+        string? document = null)
     {
-        if (!SecurityPolicy.IsSafeLayoutName(layoutName, allowSpaces: false))
+        if (!PlottingPolicy.TryValidatePaperLayoutName(layoutName, out string cleanName, out string? layoutErr))
         {
-            return CadFormat.Error("Layout name must be a valid AutoCAD symbol free of spaces, control characters, or '~'/'?'.");
+            return CadFormat.Error(layoutErr ?? "Invalid PaperSpace layout name.");
         }
 
-        string cleanName = layoutName.Trim();
-        string command = $"_.-LAYOUT\nN\n{cleanName}\n_.-LAYOUT\nS\n{cleanName}\n_.TILEMODE\n0\n";
-        return await _gatewayClient.ExecuteCommandAsync(command);
+        string payload = JsonSerializer.Serialize(new
+        {
+            layout_name = cleanName,
+            clear_default_viewport = clearDefaultViewport,
+            activate,
+            expected_revision = expectedRevision,
+            document,
+        });
+        return await _gatewayClient.PostJsonAsync("plotting/layout", payload);
     }
 
-    /// <summary>Configures standardized sheet size (A0 to A4) of a layout for 1:1 metric PDF plotting.</summary>
-    /// <param name="layoutName">Name of the layout to configure.</param>
-    /// <param name="paperSize">Standardized sheet size: 'A0', 'A1', 'A2', 'A3', or 'A4'.</param>
-    /// <param name="plotStyle">Plot style table file (.ctb), default 'monochrome.ctb'.</param>
-    /// <returns>Asynchronous task returning page configuration result.</returns>
+    /// <summary>Configures PaperSpace layout PlotSettings (A0-A4, landscape/portrait, 1:1 mm) natively.</summary>
     [McpServerTool(Name = "configure_layout_page")]
-    [Description("Configure standardized sheet size (A0 to A4) of a Layout for 1:1 metric PDF plotting with monochrome plot styles.")]
+    [Description("Configure standardized sheet size (A0 to A4) and orientation of a Layout natively for 1:1 metric PDF plotting.")]
     public async Task<string> ConfigureLayoutPage(
         string layoutName,
         string paperSize = "A1",
-        string plotStyle = "monochrome.ctb")
+        string plotStyle = "monochrome.ctb",
+        string orientation = "landscape",
+        string plotDevice = "DWG To PDF.pc3",
+        long? expectedRevision = null,
+        string? document = null)
     {
-        if (!SecurityPolicy.IsSafeLayoutName(layoutName, allowSpaces: false))
+        if (!PlottingPolicy.TryValidatePaperLayoutName(layoutName, out string cleanLayout, out string? layoutErr))
         {
-            return CadFormat.Error("Layout name must be a valid AutoCAD symbol free of spaces, control characters, or '~'/'?'.");
+            return CadFormat.Error(layoutErr ?? "Invalid PaperSpace layout name.");
         }
 
-        if (!SecurityPolicy.IsSafePlotStyleName(plotStyle, allowSpaces: false))
+        if (!SecurityPolicy.IsSafePlotStyleName(plotStyle, allowSpaces: true))
         {
-            return CadFormat.Error("Plot style must be a safe .ctb or .stb filename without spaces, paths, or '~'/'?'.");
+            return CadFormat.Error("Plot style must be a safe .ctb or .stb filename without path separators or '~'/'?'.");
         }
 
-        string cleanPaper = (paperSize ?? string.Empty).Trim();
-        if (!PaperMediaMap.TryGetValue(cleanPaper, out string? mediaName))
+        string cleanPaper = (paperSize ?? string.Empty).Trim().ToUpperInvariant();
+        if (!PlottingPolicy.ValidPaperSizes.Contains(cleanPaper))
         {
             return CadFormat.Error($"Unsupported paperSize '{paperSize}'. Expected one of: A0, A1, A2, A3, A4.");
         }
 
-        string cleanLayout = layoutName.Trim();
-        string cleanStyle = plotStyle.Trim();
-        var sb = new StringBuilder();
-        sb.Append($"_.-LAYOUT\nS\n{cleanLayout}\n");
-        sb.Append("_.TILEMODE\n0\n_.PSPACE\n");
-        sb.Append($"_.-PLOT\nY\n{cleanLayout}\nDWG To PDF.pc3\n{mediaName}\nM\nL\nN\nL\n1:1\n0.00,0.00\nY\n{cleanStyle}\nY\nN\nN\nN\n\nY\nN\n");
+        string cleanOrientation = (orientation ?? "landscape").Trim().ToLowerInvariant();
+        if (!PlottingPolicy.ValidOrientations.Contains(cleanOrientation))
+        {
+            return CadFormat.Error("'orientation' must be 'landscape' or 'portrait'.");
+        }
 
-        return await _gatewayClient.ExecuteCommandAsync(sb.ToString());
+        if (string.IsNullOrWhiteSpace(plotDevice) || CadFormat.HasControlChars(plotDevice))
+        {
+            return CadFormat.Error("'plotDevice' must be a non-empty plotter configuration name without control characters.");
+        }
+
+        string payload = JsonSerializer.Serialize(new
+        {
+            layout_name = cleanLayout,
+            paper_size = cleanPaper,
+            plot_style = plotStyle.Trim(),
+            orientation = cleanOrientation,
+            plot_device = plotDevice.Trim(),
+            expected_revision = expectedRevision,
+            document,
+        });
+        return await _gatewayClient.PostJsonAsync("plotting/page-setup", payload);
     }
 
-    /// <summary>
-    /// Creates a native PaperSpace Viewport entity in active or target PaperSpace, configures metric scale, and centers model coordinates.
-    /// </summary>
-    /// <param name="lowerX">Lower left X coordinate on the sheet (mm).</param>
-    /// <param name="lowerY">Lower left Y coordinate on the sheet (mm).</param>
-    /// <param name="width">Viewport width on sheet (mm, must be &gt; 0).</param>
-    /// <param name="height">Viewport height on sheet (mm, must be &gt; 0).</param>
-    /// <param name="scale">Engineering metric scale denominator (e.g. 1000 for 1:1000, 500 for 1:500).</param>
-    /// <param name="centerModelX">Center East (X) coordinate in ModelSpace in meters.</param>
-    /// <param name="centerModelY">Center North (Y) coordinate in ModelSpace in meters.</param>
-    /// <param name="layoutName">Optional PaperSpace layout name; uses active PaperSpace when omitted.</param>
-    /// <param name="expectedRevision">Optional expected drawing revision for optimistic concurrency.</param>
-    /// <param name="document">Optional target open drawing name or session ID.</param>
-    /// <returns>Asynchronous task returning created Viewport result.</returns>
+    /// <summary>Creates a native PaperSpace Viewport with 2D/3D DCS centering, metric scale, and visual controls.</summary>
     [McpServerTool(Name = "create_viewport")]
     [ToolExposure(Core = true)]
-    [Description("Create a native PaperSpace Viewport entity with exact metric scale (1000/Scale) and target ModelSpace center inside one transaction.")]
+    [Description("Create a native PaperSpace Viewport entity with 2D/3D DCS centering, exact metric scale (1000/Scale), and visual style controls.")]
     public async Task<string> CreateViewport(
         double lowerX,
         double lowerY,
@@ -117,11 +117,18 @@ public sealed class PlottingTools
         double scale,
         double centerModelX,
         double centerModelY,
+        double centerModelZ = 0.0,
+        [CompoundParam("view_direction", StructuredJson = StructuredJsonKind.Array)] string? viewDirection = null,
+        double twistAngle = 0.0,
+        string? shadePlot = null,
+        string? visualStyle = null,
+        bool lockViewport = true,
+        string layer = "0",
         string? layoutName = null,
         long? expectedRevision = null,
         string? document = null)
     {
-        if (!CadFormat.AllFinite(lowerX, lowerY, width, height, scale, centerModelX, centerModelY) ||
+        if (!CadFormat.AllFinite(lowerX, lowerY, width, height, scale, centerModelX, centerModelY, centerModelZ, twistAngle) ||
             width <= 0 || height <= 0 || scale <= 0)
         {
             return CadFormat.Error("Viewport coordinates and positive width, height, and metric scale must be finite numbers.");
@@ -130,6 +137,31 @@ public sealed class PlottingTools
         if (CadFormat.HasControlChars(layoutName))
         {
             return CadFormat.Error("Layout name cannot contain control characters.");
+        }
+
+        if (!SecurityPolicy.IsValidSymbolName(layer))
+        {
+            return CadFormat.Error($"Invalid layer name: '{layer}'.");
+        }
+
+        if (!PlottingPolicy.TryParseViewDirectionInput(viewDirection, out object? parsedDir, out string? dirErr))
+        {
+            return CadFormat.Error(dirErr ?? "Invalid viewDirection.");
+        }
+
+        string? normShade = null;
+        if (!string.IsNullOrWhiteSpace(shadePlot))
+        {
+            normShade = shadePlot.Trim().ToLowerInvariant();
+            if (!PlottingPolicy.ValidShadePlots.Contains(normShade))
+            {
+                return CadFormat.Error($"Unsupported shadePlot '{shadePlot}'. Expected: as_displayed, wireframe, hidden, rendered.");
+            }
+        }
+
+        if (CadFormat.HasControlChars(visualStyle))
+        {
+            return CadFormat.Error("Visual style name cannot contain control characters.");
         }
 
         string payload = JsonSerializer.Serialize(new
@@ -141,6 +173,13 @@ public sealed class PlottingTools
             scale,
             center_model_x = centerModelX,
             center_model_y = centerModelY,
+            center_model_z = centerModelZ,
+            view_direction = parsedDir,
+            twist_angle = twistAngle,
+            shade_plot = normShade,
+            visual_style = string.IsNullOrWhiteSpace(visualStyle) ? null : visualStyle.Trim(),
+            lock_viewport = lockViewport,
+            layer = layer.Trim(),
             layout_name = string.IsNullOrWhiteSpace(layoutName) ? null : layoutName.Trim(),
             expected_revision = expectedRevision,
             document,
@@ -149,18 +188,9 @@ public sealed class PlottingTools
         return await _gatewayClient.PostJsonAsync("plotting/viewport", payload);
     }
 
-    /// <summary>Draws a parametric engineering title block in PaperSpace with project metadata.</summary>
-    /// <param name="cornerX">Bottom-right X coordinate on the sheet (mm) where title block is anchored.</param>
-    /// <param name="cornerY">Bottom-right Y coordinate on the sheet (mm) where title block is anchored.</param>
-    /// <param name="projectTitle">Main project title.</param>
-    /// <param name="drawingName">Drawing sheet content / title.</param>
-    /// <param name="sheetCode">Sheet identifier code (e.g. 'L-01').</param>
-    /// <param name="scaleText">Printed scale text (e.g. '1:1000', 'AS SHOWN').</param>
-    /// <param name="author">Author or designer name.</param>
-    /// <param name="date">Drawing date string.</param>
-    /// <returns>Asynchronous task returning title block creation result.</returns>
+    /// <summary>Draws a native parametric engineering title block in PaperSpace with optional raster logo.</summary>
     [McpServerTool(Name = "insert_title_block")]
-    [Description("Insert and draw a parametric engineering title block in PaperSpace with metadata fields (Title, Drawing, Sheet, Scale, Designer, Date).")]
+    [Description("Insert a native parametric engineering title block in PaperSpace with configurable template and optional raster logo.")]
     public async Task<string> InsertTitleBlock(
         double cornerX,
         double cornerY,
@@ -169,7 +199,13 @@ public sealed class PlottingTools
         string sheetCode = "L-01",
         string scaleText = "1:1000",
         string author = "ENGINEERING",
-        string? date = null)
+        string? date = null,
+        string? layoutName = null,
+        string template = "iso_standard",
+        string? logoPath = null,
+        string layer = "FORMAT_TITLEBLOCK",
+        long? expectedRevision = null,
+        string? document = null)
     {
         if (!CadFormat.AllFinite(cornerX, cornerY))
         {
@@ -177,63 +213,73 @@ public sealed class PlottingTools
         }
 
         if (CadFormat.HasControlChars(projectTitle) || CadFormat.HasControlChars(drawingName) || CadFormat.HasControlChars(sheetCode) ||
-            CadFormat.HasControlChars(scaleText) || CadFormat.HasControlChars(author) || CadFormat.HasControlChars(date))
+            CadFormat.HasControlChars(scaleText) || CadFormat.HasControlChars(author) || CadFormat.HasControlChars(date) ||
+            CadFormat.HasControlChars(layoutName))
         {
             return CadFormat.Error("Title block text fields cannot contain control characters or newlines.");
         }
 
+        if (!SecurityPolicy.IsValidSymbolName(layer))
+        {
+            return CadFormat.Error($"Invalid layer name: '{layer}'.");
+        }
+
+        string cleanTemplate = (template ?? "iso_standard").Trim().ToLowerInvariant();
+        if (!PlottingPolicy.ValidTemplates.Contains(cleanTemplate))
+        {
+            return CadFormat.Error($"Unsupported template '{template}'. Expected: iso_standard, compact, detailed.");
+        }
+
+        string? normLogo = null;
+        if (!string.IsNullOrWhiteSpace(logoPath))
+        {
+            if (!SecurityPolicy.ValidateLocalFilePath(
+                    logoPath,
+                    out normLogo,
+                    out string? logoErr,
+                    SecurityPolicy.RasterImageExtensions))
+            {
+                return CadFormat.Error(logoErr ?? "Invalid logo image path.", code: "invalid_path");
+            }
+        }
+
         string finalDate = string.IsNullOrWhiteSpace(date) ? DateTime.Now.ToString("yyyy-MM") : date.Trim();
-        double titleWidth = 180.0;
-        double titleHeight = 45.0;
-
-        double x0 = cornerX - titleWidth;
-        double y0 = cornerY;
-        double x1 = cornerX;
-        double y1 = cornerY + titleHeight;
-
-        var sb = new StringBuilder();
-        sb.Append("_.TILEMODE\n0\n_.PSPACE\n");
-        sb.Append("_.-LAYER\nM\nFORMAT_TITLEBLOCK\nC\n7\nFORMAT_TITLEBLOCK\n\n");
-        sb.Append($"_.RECTANG\n{CadFormat.Num(x0)},{CadFormat.Num(y0)}\n{CadFormat.Num(x1)},{CadFormat.Num(y1)}\n");
-        sb.Append($"_.LINE\n{CadFormat.Num(x0)},{CadFormat.Num(y0 + 25.0)}\n{CadFormat.Num(x1)},{CadFormat.Num(y0 + 25.0)}\n\n");
-        sb.Append($"_.LINE\n{CadFormat.Num(x0)},{CadFormat.Num(y0 + 12.0)}\n{CadFormat.Num(x1)},{CadFormat.Num(y0 + 12.0)}\n\n");
-        sb.Append($"_.LINE\n{CadFormat.Num(x0 + 120.0)},{CadFormat.Num(y0)}\n{CadFormat.Num(x0 + 120.0)},{CadFormat.Num(y0 + 25.0)}\n\n");
-
-        sb.Append($"_.-TEXT\n{CadFormat.Num(x0 + 5.0)},{CadFormat.Num(y0 + 35.0)}\n3.5\n0\nPROJECT: {projectTitle.Trim().ToUpperInvariant()}\n");
-        sb.Append($"_.-TEXT\n{CadFormat.Num(x0 + 5.0)},{CadFormat.Num(y0 + 28.0)}\n3.0\n0\nDRAWING: {drawingName.Trim().ToUpperInvariant()}\n");
-        sb.Append($"_.-TEXT\n{CadFormat.Num(x0 + 5.0)},{CadFormat.Num(y0 + 16.0)}\n2.5\n0\nAUTHOR / DISCIPLINE: {author.Trim().ToUpperInvariant()}\n");
-        sb.Append($"_.-TEXT\n{CadFormat.Num(x0 + 5.0)},{CadFormat.Num(y0 + 4.0)}\n2.5\n0\nDATE: {finalDate}\n");
-        sb.Append($"_.-TEXT\n{CadFormat.Num(x0 + 125.0)},{CadFormat.Num(y0 + 16.0)}\n2.5\n0\nSCALE: {scaleText.Trim()}\n");
-        sb.Append($"_.-TEXT\n{CadFormat.Num(x0 + 125.0)},{CadFormat.Num(y0 + 4.0)}\n4.5\n0\nSHEET: {sheetCode.Trim().ToUpperInvariant()}\n");
-
-        return await _gatewayClient.ExecuteCommandAsync(sb.ToString());
+        string payload = JsonSerializer.Serialize(new
+        {
+            corner_x = cornerX,
+            corner_y = cornerY,
+            project_title = projectTitle.Trim(),
+            drawing_name = drawingName.Trim(),
+            sheet_code = sheetCode.Trim(),
+            scale_text = scaleText.Trim(),
+            author = author.Trim(),
+            date = finalDate,
+            layout_name = string.IsNullOrWhiteSpace(layoutName) ? null : layoutName.Trim(),
+            template = cleanTemplate,
+            logo_path = normLogo,
+            layer = layer.Trim(),
+            expected_revision = expectedRevision,
+            document,
+        });
+        return await _gatewayClient.PostJsonAsync("plotting/title-block", payload);
     }
 
-    /// <summary>Plots and exports a PaperSpace layout synchronously to a physical PDF document using 'DWG To PDF.pc3'.</summary>
-    /// <param name="layoutName">Name of the PaperSpace layout to plot (e.g. 'Layout1' or 'SHEET-01').</param>
-    /// <param name="pdfPath">Absolute output path for the PDF file (e.g. 'C:/Drawings/Sheet01.pdf').</param>
-    /// <param name="plotStyle">Plot style table file (.ctb), default 'monochrome.ctb'.</param>
-    /// <param name="expectedRevision">Optional expected drawing revision for optimistic concurrency.</param>
-    /// <param name="document">Optional target open drawing name (must already be active).</param>
-    /// <returns>Asynchronous task returning PDF plot result.</returns>
+    /// <summary>Plots and exports a PaperSpace layout synchronously to PDF via PlotEngine.</summary>
     [McpServerTool(Name = "export_pdf")]
     [ToolExposure(Core = true)]
-    [Description("Plot and export a PaperSpace layout directly to a physical PDF file using the 'DWG To PDF.pc3' virtual plotter.")]
+    [Description("Plot and export a PaperSpace layout synchronously to PDF via PlotEngine forcing BACKGROUNDPLOT=0.")]
     public async Task<string> ExportPdf(
         string layoutName,
         string pdfPath,
         string plotStyle = "monochrome.ctb",
+        string? paperSize = null,
+        string? orientation = null,
         long? expectedRevision = null,
         string? document = null)
     {
-        if (!SecurityPolicy.IsSafeLayoutName(layoutName, allowSpaces: true))
+        if (!PlottingPolicy.TryValidatePaperLayoutName(layoutName, out string cleanLayout, out string? layoutErr))
         {
-            return CadFormat.Error("Layout name must be a valid AutoCAD symbol free of control characters or '~'/'?'.");
-        }
-
-        if (string.Equals(layoutName.Trim(), "Model", StringComparison.OrdinalIgnoreCase))
-        {
-            return CadFormat.Error("Export PDF requires a PaperSpace layout name; 'Model' is not supported.");
+            return CadFormat.Error(layoutErr ?? "Export PDF requires a valid PaperSpace layout name; 'Model' is not supported.");
         }
 
         if (!SecurityPolicy.IsSafePlotStyleName(plotStyle, allowSpaces: true))
@@ -243,14 +289,36 @@ public sealed class PlottingTools
 
         if (!SecurityPolicy.ValidateLocalFilePath(pdfPath, out string normPdf, out string? pathErr, ".pdf"))
         {
-            return CadFormat.Error(pathErr ?? "Invalid PDF output path.");
+            return CadFormat.Error(pathErr ?? "Invalid PDF output path.", code: "invalid_path");
+        }
+
+        string? cleanPaper = null;
+        if (!string.IsNullOrWhiteSpace(paperSize))
+        {
+            cleanPaper = paperSize.Trim().ToUpperInvariant();
+            if (!PlottingPolicy.ValidPaperSizes.Contains(cleanPaper))
+            {
+                return CadFormat.Error($"Unsupported paperSize '{paperSize}'. Expected one of: A0, A1, A2, A3, A4.");
+            }
+        }
+
+        string? cleanOrientation = null;
+        if (!string.IsNullOrWhiteSpace(orientation))
+        {
+            cleanOrientation = orientation.Trim().ToLowerInvariant();
+            if (!PlottingPolicy.ValidOrientations.Contains(cleanOrientation))
+            {
+                return CadFormat.Error("'orientation' must be 'landscape' or 'portrait'.");
+            }
         }
 
         string payload = JsonSerializer.Serialize(new
         {
-            layout_name = layoutName.Trim(),
+            layout_name = cleanLayout,
             pdf_path = normPdf,
             plot_style = plotStyle.Trim(),
+            paper_size = cleanPaper,
+            orientation = cleanOrientation,
             expected_revision = expectedRevision,
             document,
         });
@@ -259,33 +327,24 @@ public sealed class PlottingTools
     }
 
     /// <summary>Alias for configure_layout_page.</summary>
-    /// <param name="layoutName">Name of the layout to configure.</param>
-    /// <param name="paperSize">Standardized sheet size: 'A0', 'A1', 'A2', 'A3', or 'A4'.</param>
-    /// <param name="plotStyle">Plot style table file (.ctb), default 'monochrome.ctb'.</param>
-    /// <returns>Asynchronous task returning page configuration result.</returns>
     [McpServerTool(Name = "configure_layout_sheet")]
     [ToolExposure(AliasOf = "configure_layout_page")]
     [Description("Alias for configure_layout_page: Configure standardized sheet size (A0 to A4) of a Layout.")]
-    public async Task<string> ConfigureLayoutSheet(
+    public Task<string> ConfigureLayoutSheet(
         string layoutName,
         string paperSize = "A1",
-        string plotStyle = "monochrome.ctb") =>
-        await ConfigureLayoutPage(layoutName, paperSize, plotStyle);
+        string plotStyle = "monochrome.ctb",
+        string orientation = "landscape",
+        string plotDevice = "DWG To PDF.pc3",
+        long? expectedRevision = null,
+        string? document = null) =>
+        ConfigureLayoutPage(layoutName, paperSize, plotStyle, orientation, plotDevice, expectedRevision, document);
 
     /// <summary>Alias for insert_title_block.</summary>
-    /// <param name="cornerX">Bottom-right X coordinate on the sheet (mm).</param>
-    /// <param name="cornerY">Bottom-right Y coordinate on the sheet (mm).</param>
-    /// <param name="projectTitle">Main project title.</param>
-    /// <param name="drawingName">Drawing sheet content / title.</param>
-    /// <param name="sheetCode">Sheet identifier code (e.g. 'L-01').</param>
-    /// <param name="scaleText">Printed scale text.</param>
-    /// <param name="author">Author or designer name.</param>
-    /// <param name="date">Drawing date string.</param>
-    /// <returns>Asynchronous task returning title block creation result.</returns>
     [McpServerTool(Name = "insert_parametric_titleblock")]
     [ToolExposure(AliasOf = "insert_title_block")]
-    [Description("Alias for insert_title_block: Insert and draw a parametric engineering title block in PaperSpace.")]
-    public async Task<string> InsertParametricTitleblock(
+    [Description("Alias for insert_title_block: Insert a native parametric engineering title block in PaperSpace.")]
+    public Task<string> InsertParametricTitleblock(
         double cornerX,
         double cornerY,
         string projectTitle = "ENGINEERING PROJECT",
@@ -293,6 +352,12 @@ public sealed class PlottingTools
         string sheetCode = "L-01",
         string scaleText = "1:1000",
         string author = "ENGINEERING",
-        string? date = null) =>
-        await InsertTitleBlock(cornerX, cornerY, projectTitle, drawingName, sheetCode, scaleText, author, date);
+        string? date = null,
+        string? layoutName = null,
+        string template = "iso_standard",
+        string? logoPath = null,
+        string layer = "FORMAT_TITLEBLOCK",
+        long? expectedRevision = null,
+        string? document = null) =>
+        InsertTitleBlock(cornerX, cornerY, projectTitle, drawingName, sheetCode, scaleText, author, date, layoutName, template, logoPath, layer, expectedRevision, document);
 }

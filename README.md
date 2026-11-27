@@ -12,7 +12,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
 </p>
 
-Connects AI coding agents (Antigravity, Claude Desktop, Cursor, VS Code) to a live **AutoCAD 2027** or **Civil 3D 2027** session with **89 tools across 10 domains** (75 canonical actions and 14 legacy aliases), selectable via `AUTOCAD_MCP_TOOL_MODE` (`granular`, `compound`, or `core`).
+Connects AI coding agents (Antigravity, Claude Desktop, Cursor, VS Code) to a live **AutoCAD 2027** or **Civil 3D 2027** session with **90 tools across 10 domains** (76 canonical actions and 14 legacy aliases), selectable via `AUTOCAD_MCP_TOOL_MODE` (`granular`, `compound`, or `core`) and formatted via `AUTOCAD_MCP_OUTPUT_FORMAT` (`compact` or `json`).
 
 ---
 
@@ -66,24 +66,33 @@ flowchart LR
 
 | Mode | Tools Exposed | Behavior |
 | :--- | :--- | :--- |
-| `granular` (default) | 89 tools | Exposes all 75 canonical tools and 14 legacy aliases directly. |
+| `granular` (default) | 90 tools | Exposes all 76 canonical tools and 14 legacy aliases directly. |
 | `compound` | 10 domain routers | Exposes `autocad_context` through `autocad_execution` using `action` and `params` (with `action="help"` introspection). |
 | `core` | 28 tools | Exposes high-leverage standalone tools with zero aliases for minimal context overhead. |
 
-### Domain Catalog (89 Tools)
+### Output Protocol & Tool Metadata (`AUTOCAD_MCP_OUTPUT_FORMAT`)
+
+| Setting / Capability | Default | Behavior |
+| :--- | :--- | :--- |
+| `AUTOCAD_MCP_OUTPUT_FORMAT` | `compact` | `compact` emits token-reduced tabular/key-value summaries in `content[0].text` alongside full JSON in `structuredContent`. `json` emits legacy raw JSON text. Invalid values fail fast to `stderr` (`exit code 1`). |
+| Native `isError` | Enabled | Validation, Gateway, and partial-batch errors return `CallToolResult.isError = true` with concise diagnostic context (`structuredContent` omitted). |
+| Multimodal `ImageContent` | Enabled | `capture_screenshot(inline=true)` emits native `image/png` `ImageContent` plus clean metadata, omitting raw base64 from text and `structuredContent`. |
+| MCP `ToolAnnotations` | Enabled | All 90 granular tools and 10 `compound` routers advertise `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint` in `tools/list`. |
+
+### Domain Catalog (90 Tools)
 
 | Domain (`compound` Router) | Canonical / Alias Count | Representative Canonical Actions |
 | :--- | :--- | :--- |
 | `autocad_context` | 10 + 6 aliases | `get_drawing_info`, `get_layers`, `get_drawing_extents`, `capture_screenshot` |
 | `autocad_entities` | 6 + 0 aliases | `query_entities`, `get_entity`, `modify_entity`, `transform_entities`, `delete_entities`, `execute_native_batch` |
 | `autocad_drafting` | 10 + 0 aliases | `create_dimension`, `create_mleader`, `create_hatch`, `create_table`, `define_block`, `set_block_attributes`, `list_xrefs`, `explode_entities` |
-| `autocad_drawing` | 8 + 0 aliases | `draw_batch_geometry`, `draw_line`, `draw_polyline`, `draw_rectangle`, `draw_circle`, `draw_arc`, `insert_text`, `insert_block` |
+| `autocad_drawing` | 9 + 0 aliases | `draw_batch_geometry`, `draw_line`, `draw_polyline`, `draw_rectangle`, `draw_circle`, `draw_arc`, `insert_text`, `insert_block`, `attach_raster_image` |
 | `autocad_layers` | 4 + 0 aliases | `create_layer`, `set_current_layer`, `set_layer_state`, `delete_layer` |
 | `autocad_documents` | 9 + 0 aliases | `list_documents`, `new_drawing`, `open_drawing`, `activate_document`, `close_document`, `allow_edit_document`, `cancel_command`, `get_system_variable`, `set_system_variable` |
-| `autocad_measurement` | 4 + 1 alias | `measure_distance`, `calculate_polygon_area`, `purge_and_audit_drawing`, `regen_all` |
+| `autocad_measurement` | 3 + 1 alias | `measure_distance`, `calculate_polygon_area`, `purge_and_audit_drawing` |
 | `autocad_plotting` | 5 + 2 aliases | `create_layout`, `configure_layout_page`, `create_viewport`, `insert_title_block`, `export_pdf` |
 | `autocad_civil3d` | 11 + 2 aliases | `check_civil3d_status`, `list_civil3d_surfaces`, `get_surface_elevation`, `get_civil3d_surface_stats`, `list_civil3d_alignments`, `sample_longitudinal_profile`, `sample_civil3d_cross_section`, `create_civil3d_alignment`, `create_civil3d_surface` |
-| `autocad_execution` | 8 + 3 aliases | `ping_gateway`, `execute_command`, `execute_batch_commands`, `evaluate_lisp`, `load_lisp_file`, `configure_drawing_units`, `zoom_extents`, `save_drawing` |
+| `autocad_execution` | 9 + 3 aliases | `ping_gateway`, `execute_command`, `execute_batch_commands`, `evaluate_lisp`, `load_lisp_file`, `configure_drawing_units`, `zoom_extents`, `save_drawing`, `regen_all` |
 
 ---
 

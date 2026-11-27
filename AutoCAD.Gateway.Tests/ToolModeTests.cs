@@ -14,6 +14,7 @@ using AutoCAD.McpServer.Services;
 using AutoCAD.McpServer.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using static AutoCAD.Gateway.Tests.TestAssert;
 
@@ -44,12 +45,12 @@ internal static class ToolModeTests
         Func<string, Func<Task>, Task> runAsync)
     {
         run("ToolModeParser parses empty, case-insensitive modes, env vars, and rejects invalid values", TestToolModeParser);
-        run("AutoCADToolCatalog discovers 10 domains, 89 total, 75 canonical, 14 aliases, and exact 28 core tools", TestCatalogDiscoveryAndSchemas);
+        run("AutoCADToolCatalog discovers 10 domains, 90 total, 76 canonical, 14 aliases, and exact 28 core tools", TestCatalogDiscoveryAndSchemas);
         run("CompoundDispatcher.BuildHelp returns overview, targeted schemas, alias resolution, and cross-domain hints", TestCompoundHelp);
         await runAsync("CompoundDispatcher.DispatchAsync validates inputs and dispatches sync, async, alias, and native JSON payloads", TestCompoundDispatchAsync);
-        run("McpToolRegistrationExtensions registers 89, 28, and 10 tools by mode with valid compound schemas", TestMcpRegistrationModes);
+        run("McpToolRegistrationExtensions registers 90, 28, and 10 tools by mode with valid compound schemas", TestMcpRegistrationModes);
         await runAsync("Thermos regressions: structured anyOf schemas, cross-domain aliases, async errors, DI scoping, and batch validation", TestThermosRegressionsAsync);
-        await runAsync("Out-of-process STDIO MCP server respects AUTOCAD_MCP_TOOL_MODE and rejects invalid mode on stderr", TestStdioEndToEndAsync);
+        await runAsync("Out-of-process STDIO MCP server respects AUTOCAD_MCP_TOOL_MODE and AUTOCAD_MCP_OUTPUT_FORMAT", TestStdioEndToEndAsync);
     }
 
     private static void TestToolModeParser()
@@ -89,8 +90,8 @@ internal static class ToolModeTests
         var catalog = new AutoCADToolCatalog();
 
         AssertEqual(10, catalog.Domains.Count, "10 tool domains");
-        AssertEqual(89, catalog.AllActions.Count, "89 total tools");
-        AssertEqual(75, catalog.CanonicalActions.Count, "75 canonical actions");
+        AssertEqual(90, catalog.AllActions.Count, "90 total tools");
+        AssertEqual(76, catalog.CanonicalActions.Count, "76 canonical actions");
         AssertEqual(28, catalog.CoreActions.Count, "28 core tools");
         AssertEqual(14, catalog.AllActions.Count(a => a.IsAlias), "14 legacy aliases");
         AssertTrue(catalog.CoreActions.All(a => !a.IsAlias), "core mode excludes all aliases");
@@ -323,7 +324,7 @@ internal static class ToolModeTests
     {
         foreach (var (mode, expectedCount) in new[]
         {
-            (ToolMode.Granular, 89),
+            (ToolMode.Granular, 90),
             (ToolMode.Core, 28),
             (ToolMode.Compound, 10),
         })
@@ -361,10 +362,17 @@ internal static class ToolModeTests
     {
         string serverDll = ResolveMcpServerDllPath();
 
-        await VerifyStdioModeAsync(serverDll, "compound", 10, ExpectedCompoundTools, callDistanceCheck: true);
-        await VerifyStdioModeAsync(serverDll, "core", 28, ExpectedCoreTools, callDistanceCheck: false);
-        await VerifyStdioModeAsync(serverDll, "granular", 89, null, callDistanceCheck: false);
+        await VerifyStdioModeAsync(serverDll, "compound", 10, ExpectedCompoundTools, callDistanceCheck: true, outputFormat: "compact");
+        await VerifyStdioModeAsync(serverDll, "compound", 10, ExpectedCompoundTools, callDistanceCheck: true, outputFormat: "json");
+        await VerifyStdioModeAsync(serverDll, "core", 28, ExpectedCoreTools, callDistanceCheck: false, outputFormat: "compact");
+        await VerifyStdioModeAsync(serverDll, "granular", 90, null, callDistanceCheck: false, outputFormat: "compact");
 
+        await AssertInvalidEnvVarExitsAsync(serverDll, ToolModeParser.EnvVarName, "invalid_mode_xyz");
+        await AssertInvalidEnvVarExitsAsync(serverDll, OutputFormatParser.EnvVarName, "xml");
+    }
+
+    private static async Task AssertInvalidEnvVarExitsAsync(string serverDll, string envVarName, string invalidValue)
+    {
         var psi = new ProcessStartInfo("dotnet", $"exec \"{serverDll}\"")
         {
             RedirectStandardInput = true,
@@ -373,18 +381,18 @@ internal static class ToolModeTests
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.Environment[ToolModeParser.EnvVarName] = "invalid_mode_xyz";
+        psi.Environment[envVarName] = invalidValue;
 
-        using var invalidProc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start AutoCAD.McpServer process.");
-        invalidProc.StandardInput.Close();
-        string stdout = await invalidProc.StandardOutput.ReadToEndAsync();
-        string stderr = await invalidProc.StandardError.ReadToEndAsync();
+        using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start AutoCAD.McpServer process.");
+        proc.StandardInput.Close();
+        string stdout = await proc.StandardOutput.ReadToEndAsync();
+        string stderr = await proc.StandardError.ReadToEndAsync();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await invalidProc.WaitForExitAsync(cts.Token);
+        await proc.WaitForExitAsync(cts.Token);
 
-        AssertEqual(1, invalidProc.ExitCode, "invalid AUTOCAD_MCP_TOOL_MODE returns exit code 1");
-        AssertEqual(string.Empty, stdout, "invalid mode writes nothing to stdout");
-        AssertTrue(stderr.Contains(ToolModeParser.EnvVarName, StringComparison.Ordinal), "invalid mode logs error to stderr");
+        AssertEqual(1, proc.ExitCode, $"invalid {envVarName} returns exit code 1");
+        AssertEqual(string.Empty, stdout, $"invalid {envVarName} writes nothing to stdout");
+        AssertTrue(stderr.Contains(envVarName, StringComparison.Ordinal), $"invalid {envVarName} logs error to stderr");
     }
 
     private static async Task VerifyStdioModeAsync(
@@ -392,7 +400,8 @@ internal static class ToolModeTests
         string modeValue,
         int expectedToolCount,
         string[]? expectedNames,
-        bool callDistanceCheck)
+        bool callDistanceCheck,
+        string outputFormat = "compact")
     {
         var psi = new ProcessStartInfo("dotnet", $"exec \"{serverDll}\"")
         {
@@ -403,6 +412,7 @@ internal static class ToolModeTests
             CreateNoWindow = true,
         };
         psi.Environment[ToolModeParser.EnvVarName] = modeValue;
+        psi.Environment[OutputFormatParser.EnvVarName] = outputFormat;
 
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start AutoCAD.McpServer process.");
         try
@@ -457,6 +467,12 @@ internal static class ToolModeTests
                     var actualSet = tools.Select(t => t.GetProperty("name").GetString()!).OrderBy(n => n, StringComparer.Ordinal).ToArray();
                     var expectedSet = expectedNames.OrderBy(n => n, StringComparer.Ordinal).ToArray();
                     AssertTrue(actualSet.SequenceEqual(expectedSet, StringComparer.Ordinal), $"STDIO tool names match for {modeValue}");
+
+                    if (modeValue == "compound")
+                    {
+                        var ctxTool = tools.First(t => t.GetProperty("name").GetString() == "autocad_context");
+                        AssertTrue(ctxTool.GetProperty("annotations").GetProperty("readOnlyHint").GetBoolean(), "STDIO tools/list exposes readOnlyHint=true for autocad_context");
+                    }
                 }
             }
 
@@ -465,15 +481,37 @@ internal static class ToolModeTests
                 await SendAsync("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"autocad_measurement\",\"arguments\":{\"action\":\"measure_distance\",\"params\":{\"x1\":0,\"y1\":0,\"x2\":6,\"y2\":8}}}}");
                 using var callResp = await ReadJsonRpcAsync();
                 AssertEqual(3, callResp.RootElement.GetProperty("id").GetInt32(), "tools/call id");
-                string text = callResp.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
-                using var payload = JsonDocument.Parse(text);
-                AssertEqual(10.0, payload.RootElement.GetProperty("distance_2d").GetDouble(), "STDIO compound tools/call returns 6-8-10 distance");
+                JsonElement callResultEl = callResp.RootElement.GetProperty("result");
+                AssertEqual(10.0, callResultEl.GetProperty("structuredContent").GetProperty("distance_2d").GetDouble(), "STDIO structuredContent returns 6-8-10 distance");
+                string text = callResultEl.GetProperty("content")[0].GetProperty("text").GetString()!;
+                if (outputFormat == "json")
+                {
+                    using var payload = JsonDocument.Parse(text);
+                    AssertEqual(10.0, payload.RootElement.GetProperty("distance_2d").GetDouble(), "STDIO json mode content text returns 6-8-10 distance");
+                }
+                else
+                {
+                    AssertTrue(text.Contains("distance_2d: 10", StringComparison.Ordinal), "STDIO compact mode text renders concise distance_2d");
+                }
 
                 await SendAsync("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"autocad_layers\",\"arguments\":{}}}");
                 using var helpResp = await ReadJsonRpcAsync();
-                string helpText = helpResp.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!;
-                using var helpPayload = JsonDocument.Parse(helpText);
-                AssertEqual("layers", helpPayload.RootElement.GetProperty("domain").GetString(), "STDIO compound call omitting args defaults to help");
+                JsonElement helpResultEl = helpResp.RootElement.GetProperty("result");
+                AssertEqual("layers", helpResultEl.GetProperty("structuredContent").GetProperty("domain").GetString(), "STDIO compound help structuredContent returns domain=layers");
+                string helpText = helpResultEl.GetProperty("content")[0].GetProperty("text").GetString()!;
+                if (outputFormat == "json")
+                {
+                    using var helpPayload = JsonDocument.Parse(helpText);
+                    AssertEqual("layers", helpPayload.RootElement.GetProperty("domain").GetString(), "STDIO json help text preserves JSON");
+                }
+                else
+                {
+                    AssertTrue(helpText.Contains("Domain 'layers' (autocad_layers)", StringComparison.Ordinal), "STDIO compact help text uses compact overview");
+                }
+
+                await SendAsync("{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"autocad_context\",\"arguments\":{\"action\":\"nonexistent_action\"}}}");
+                using var errResp = await ReadJsonRpcAsync();
+                AssertTrue(errResp.RootElement.GetProperty("result").GetProperty("isError").GetBoolean(), "STDIO domain validation failure sets isError=true");
             }
 
             proc.StandardInput.Close();
@@ -654,6 +692,94 @@ internal static class ToolModeTests
         AssertTrue(mockGateway.Calls[0].Body.Contains("\"text_height\":0.28", StringComparison.Ordinal), "CreateDimension serializes text_height");
         AssertTrue(mockGateway.Calls[0].Body.Contains("\"arrow_size\":0.2", StringComparison.Ordinal), "CreateDimension serializes arrow_size");
         AssertTrue(mockGateway.Calls[0].Body.Contains("\"dim_scale\":1", StringComparison.Ordinal), "CreateDimension serializes dim_scale");
+        AssertTrue(mockGateway.Calls[0].Body.Contains("\"space\":\"model\"", StringComparison.Ordinal), "CreateDimension serializes space");
+
+        // Verify new native endpoints, layer lineweight/color, 3D viewport, SaveAs, LISP load, raster image, and parity checks
+        mockGateway.Calls.Clear();
+        var plottingTools = new PlottingTools(mockGateway);
+        await plottingTools.CreateLayout("PLAN A3", clearDefaultViewport: true);
+        AssertEqual("POST:plotting/layout", mockGateway.Calls[^1].Route, "CreateLayout posts to plotting/layout");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"clear_default_viewport\":true", StringComparison.Ordinal), "CreateLayout sets clear_default_viewport");
+
+        await plottingTools.ConfigureLayoutPage("PLAN A3", paperSize: "A3", orientation: "landscape");
+        AssertEqual("POST:plotting/page-setup", mockGateway.Calls[^1].Route, "ConfigureLayoutPage posts to plotting/page-setup");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"orientation\":\"landscape\"", StringComparison.Ordinal), "ConfigureLayoutPage sends orientation");
+
+        await plottingTools.CreateViewport(10, 10, 200, 150, 500, 100, 200, centerModelZ: 3500.0, viewDirection: "sw_iso", shadePlot: "hidden", visualStyle: "Realistic", lockViewport: true);
+        AssertEqual("POST:plotting/viewport", mockGateway.Calls[^1].Route, "CreateViewport posts to plotting/viewport");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"center_model_z\":3500", StringComparison.Ordinal), "CreateViewport sends center_model_z");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"view_direction\":\"sw_iso\"", StringComparison.Ordinal), "CreateViewport sends view_direction");
+
+        await plottingTools.InsertTitleBlock(400, 10, template: "compact", logoPath: @"C:\assets\logo.png");
+        AssertEqual("POST:plotting/title-block", mockGateway.Calls[^1].Route, "InsertTitleBlock posts to plotting/title-block");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"template\":\"compact\"", StringComparison.Ordinal), "InsertTitleBlock sends template");
+
+        await drawingTools.InsertRasterImage(@"C:\assets\logo.png", 10, 20, width: 30);
+        AssertEqual("POST:drafting/raster-image", mockGateway.Calls[^1].Route, "InsertRasterImage posts to drafting/raster-image");
+
+        await execTools.SaveDrawing(@"C:\out\copy.dwg", overwrite: true, dwgVersion: "2018");
+        AssertEqual("POST:documents/save", mockGateway.Calls[^1].Route, "SaveDrawing posts to documents/save");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"dwg_version\":\"AC1032\"", StringComparison.Ordinal), "SaveDrawing maps 2018 to AC1032");
+
+        await execTools.LoadLispFile(@"C:\scripts\tunnel.lsp", timeoutMs: 90_000);
+        AssertEqual("POST:lisp/load", mockGateway.Calls[^1].Route, "LoadLispFile posts to lisp/load");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"timeout_ms\":90000", StringComparison.Ordinal), "LoadLispFile sends timeout_ms");
+
+        await execTools.RegenAll();
+        AssertEqual("POST:session/regen", mockGateway.Calls[^1].Route, "RegenAll posts to session/regen");
+
+        var layerTools = new LayerTools(mockGateway);
+        await layerTools.SetLayerState("AXIS", colorAci: 1, linetype: "DASHED", lineweight: "0.35");
+        AssertEqual("POST:layers/state", mockGateway.Calls[^1].Route, "SetLayerState posts to layers/state");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"lineweight\":\"0.35\"", StringComparison.Ordinal), "SetLayerState sends normalized lineweight");
+
+        using (var doc = JsonDocument.Parse(await drawingTools.DrawBatchGeometry("[{\"type\":\"line\",\"x1\":1,\"y1\":1,\"x2\":1,\"y2\":1}]")))
+        {
+            AssertEqual("error", doc.RootElement.GetProperty("status").GetString(), "DrawBatchGeometry rejects zero-length line");
+            AssertTrue(!doc.RootElement.GetProperty("ok").GetBoolean(), "Error envelope sets ok=false");
+        }
+
+        using (var doc = JsonDocument.Parse(await dispatcher.DispatchAsync("documents", "set_system_variable", ParseJson("{\"name\":\"DIMSCALE\",\"value\":1.5}"))))
+        {
+            AssertEqual("POST:sysvar", mockGateway.Calls[^1].Route, "Compound set_system_variable accepts numeric value");
+        }
+
+        // Negative & Thermos regression checks
+        var docTools = new DocumentTools(mockGateway);
+        await docTools.SetSystemVariable("DIMSCALE", "0.5");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"value\":\"0.5\"", StringComparison.Ordinal), "SetSystemVariable preserves fractional leading-zero value cleanly");
+
+        using (var doc = JsonDocument.Parse(await plottingTools.CreateViewport(10, 10, 200, 150, 500, 100, 200, viewDirection: "invalid_preset")))
+        {
+            AssertEqual("error", doc.RootElement.GetProperty("status").GetString(), "CreateViewport rejects unknown view_direction preset client-side");
+        }
+
+        using (var doc = JsonDocument.Parse(await execTools.SaveDrawing(@"C:\out\copy.dwg", dwgVersion: "1995")))
+        {
+            AssertEqual("error", doc.RootElement.GetProperty("status").GetString(), "SaveDrawing rejects unsupported dwg_version client-side");
+        }
+
+        using (var doc = JsonDocument.Parse(await layerTools.SetLayerState("AXIS", linetype: "ByLayer")))
+        {
+            AssertEqual("error", doc.RootElement.GetProperty("status").GetString(), "SetLayerState rejects ByLayer linetype");
+        }
+
+        using (var doc = JsonDocument.Parse(await layerTools.SetLayerState("AXIS", lineweight: "0.17")))
+        {
+            AssertEqual("error", doc.RootElement.GetProperty("status").GetString(), "SetLayerState rejects invalid ISO lineweight");
+        }
+
+        await drawingTools.InsertRasterImage(@"C:\assets\logo.png", 10, 20, layoutName: "SHEET 01");
+        AssertTrue(mockGateway.Calls[^1].Body.Contains("\"space\":\"paper\"", StringComparison.Ordinal), "InsertRasterImage infers paper space when layoutName is supplied without explicit space");
+
+        AssertEqual(
+            AutoCADGatewayClient.HeavyOperationTimeoutMs,
+            AutoCADGatewayClient.ResolveTimeoutMs(HttpMethod.Post, "documents/save"),
+            "documents/save uses heavy operation timeout");
+        AssertEqual(
+            AutoCADGatewayClient.HeavyOperationTimeoutMs,
+            AutoCADGatewayClient.ResolveTimeoutMs(HttpMethod.Post, "lisp/load"),
+            "lisp/load uses heavy operation timeout");
     }
 
     private static string ResolveMcpServerDllPath()
@@ -747,37 +873,6 @@ internal static class ToolModeTests
             await Task.Yield();
             cancellationToken.ThrowIfCancellationRequested();
             return "{\"status\":\"success\"}";
-        }
-    }
-
-    private sealed record RecordedGatewayCall(string Route, string Body);
-
-    private sealed class RecordingGatewayClient : IAutoCADGatewayClient
-    {
-        public List<RecordedGatewayCall> Calls { get; } = [];
-
-        public Task<string> GetContextAsync(string endpoint, CancellationToken cancellationToken = default)
-        {
-            Calls.Add(new($"GET:{endpoint}", string.Empty));
-            return Task.FromResult(JsonSerializer.Serialize(new { status = "success", ok = true, route = endpoint }));
-        }
-
-        public Task<string> ExecuteCommandAsync(string command, CancellationToken cancellationToken = default)
-        {
-            Calls.Add(new("POST:execute", command));
-            return Task.FromResult(JsonSerializer.Serialize(new { status = "success", ok = true }));
-        }
-
-        public Task<string> PingGatewayAsync(CancellationToken cancellationToken = default)
-        {
-            Calls.Add(new("GET:_ping", string.Empty));
-            return Task.FromResult(JsonSerializer.Serialize(new { status = "success", ok = true }));
-        }
-
-        public Task<string> PostJsonAsync(string endpoint, string json, int? timeoutMs = null, CancellationToken cancellationToken = default)
-        {
-            Calls.Add(new($"POST:{endpoint}", json));
-            return Task.FromResult(JsonSerializer.Serialize(new { status = "success", ok = true, route = endpoint }));
         }
     }
 }

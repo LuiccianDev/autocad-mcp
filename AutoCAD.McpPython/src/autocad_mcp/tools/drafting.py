@@ -13,6 +13,7 @@ from autocad_mcp.policy import (
     all_optional_finite,
     error_json,
     is_valid_entity_handle,
+    normalize_space,
     parse_json_value,
     parse_valid_handles,
 )
@@ -41,6 +42,7 @@ async def create_dimension(
     text_height: float | None = None,
     arrow_size: float | None = None,
     dim_scale: float | None = None,
+    space: str = "model",
     layer: str = "0",
     expected_revision: int | None = None,
     document: str | None = None,
@@ -48,6 +50,9 @@ async def create_dimension(
     """Create a native dimension (aligned, rotated, radial, diametric, angular) inside one atomic transaction."""
     if not type or type.strip().lower() not in _VALID_DIM_TYPES:
         return error_json("'type' must be one of: aligned, rotated, radial, diametric, angular.")
+    norm_space, space_err = normalize_space(space)
+    if space_err or not norm_space:
+        return error_json(space_err or "'space' must be 'model' or 'paper'.")
     norm_type = type.strip().lower()
     if dim_style is not None and dim_style.strip() and not is_valid_symbol_name(dim_style):
         return error_json(f"Invalid dimension style name '{dim_style}'.")
@@ -86,6 +91,7 @@ async def create_dimension(
         "text_height": text_height,
         "arrow_size": arrow_size,
         "dim_scale": dim_scale,
+        "space": norm_space,
         "layer": layer.strip(),
         "expected_revision": expected_revision,
         "document": document,

@@ -32,6 +32,7 @@ internal static class Program
         Run("Security audit regressions: Fetch Metadata, loopback URLs, device names, sysvar prefixes, oversized discovery files", TestSecurityAuditRegressions);
         await RunAsync("HttpWireCodec reads buffered heads, catches truncated/invalid UTF-8, detects 431, and drains refusals", TestHttpWireCodecAsync);
         await ToolModeTests.RunAllAsync(Run, RunAsync);
+        await OutputProtocolTests.RunAllAsync(Run, RunAsync);
 
         Console.WriteLine($"Summary: {_passed} passed, {_failed} failed.");
         return _failed == 0 ? 0 : 1;
@@ -432,7 +433,7 @@ internal static class Program
     private static void TestGatewayToolCatalog()
     {
         var all = GatewayToolCatalog.All;
-        AssertEqual(55, all.Count, "Catalog contains all 55 Phase 5 Gateway routes");
+        AssertEqual(62, all.Count, "Catalog contains all 62 Gateway routes");
 
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -584,6 +585,28 @@ internal static class Program
         AssertTrue(SecurityPolicy.IsSafeLayoutName("SHEET-01"), "Valid layout symbol accepted");
         AssertTrue(!SecurityPolicy.IsSafeLayoutName("SHEET 01", allowSpaces: false), "Space-containing CLI layout rejected");
         AssertTrue(!SecurityPolicy.IsSafeLayoutName("?"), "Prompt '?' layout rejected");
+
+        AssertTrue(LineWeightPolicy.TryParseLineWeight("default", out int lwDef, out string lwDefDisp, out _), "LineWeight 'default' accepted");
+        AssertEqual(LineWeightPolicy.DefaultValue, lwDef, "LineWeight default maps to -3");
+        AssertEqual("default", lwDefDisp, "LineWeight default display");
+        AssertTrue(LineWeightPolicy.TryParseLineWeight("0.25mm", out int lw25, out string lw25Disp, out _), "LineWeight '0.25mm' accepted");
+        AssertEqual(25, lw25, "LineWeight 0.25mm maps to 25");
+        AssertEqual("0.25", lw25Disp, "LineWeight 0.25mm display");
+        AssertTrue(LineWeightPolicy.TryFromNumeric(0.5, out int lw50, out _, out _), "LineWeight numeric 0.5 accepted");
+        AssertEqual(50, lw50, "LineWeight 0.5 maps to 50");
+        AssertTrue(!LineWeightPolicy.TryParseLineWeight("ByLayer", out _, out _, out _), "LineWeight ByLayer rejected for layers");
+        AssertTrue(!LineWeightPolicy.TryParseLineWeight("ByBlock", out _, out _, out _), "LineWeight ByBlock rejected for layers");
+        AssertTrue(!LineWeightPolicy.TryFromNumeric(0.17, out _, out _, out _), "Non-ISO LineWeight 0.17 rejected");
+
+        AssertTrue(DwgVersionPolicy.TryParseDwgVersion("current", out string dvCurName, out _), "DWG current accepted");
+        AssertEqual("current", dvCurName, "DWG current canonical");
+        AssertTrue(DwgVersionPolicy.TryParseDwgVersion("2018", out string dv18Name, out _), "DWG 2018 accepted");
+        AssertEqual("AC1032", dv18Name, "DWG 2018 canonical");
+        AssertTrue(!DwgVersionPolicy.TryParseDwgVersion("1995", out _, out _), "Unsupported DWG version rejected");
+        AssertTrue(PlottingPolicy.TryParseViewDirectionInput("sw_iso", out _, out _), "PlottingPolicy accepts sw_iso preset");
+        AssertTrue(!PlottingPolicy.TryParseViewDirectionInput("diagonal", out _, out _), "PlottingPolicy rejects invalid preset");
+        AssertTrue(SecurityPolicy.TryNormalizeSpace(null, "A3_SHEET", out string inferredPaper, out _) && inferredPaper == "paper", "TryNormalizeSpace infers paper when layout_name provided");
+        AssertTrue(!SecurityPolicy.IsValidLayerLinetypeName("ByLayer", out _), "ByLayer rejected as layer linetype");
 
         byte[] boundaryHead = Encoding.ASCII.GetBytes("GET /_ping HTTP/1.1\r\nHost: 127.0.0.1:5055\r\n\r\nBODY_TAIL");
         using (var msBoundary = new MemoryStream(boundaryHead))

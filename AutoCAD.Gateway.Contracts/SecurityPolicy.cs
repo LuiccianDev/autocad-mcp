@@ -38,6 +38,82 @@ public static class SecurityPolicy
     /// <summary>Maximum geometry vertices or cumulative handle operations permitted per transaction.</summary>
     public const int MaxGeometryVertices = 10_000;
 
+    /// <summary>Supported raster image file extensions for PaperSpace/ModelSpace attachment.</summary>
+    public static readonly string[] RasterImageExtensions =
+    [
+        ".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".gif",
+    ];
+
+    /// <summary>Returns true when <paramref name="value"/> contains C0 or C1 control characters.</summary>
+    public static bool HasControlChars(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return false;
+        }
+
+        foreach (char c in value)
+        {
+            if (c < 0x20 || (c >= 0x7F && c <= 0x9F))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Validates that a layer linetype name is a legal symbol name and not 'ByLayer'/'ByBlock'.</summary>
+    public static bool IsValidLayerLinetypeName(string? linetype, out string? error)
+    {
+        if (!IsValidSymbolName(linetype))
+        {
+            error = $"Invalid linetype name: '{linetype}'.";
+            return false;
+        }
+
+        string trimmed = linetype!.Trim();
+        if (string.Equals(trimmed, "ByLayer", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmed, "ByBlock", StringComparison.OrdinalIgnoreCase))
+        {
+            error = $"Layer linetype cannot be '{trimmed}'; specify 'Continuous' or an explicit linetype such as 'DASHED'.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    /// <summary>Normalizes space tokens (<c>model</c>, <c>modelspace</c>, <c>paper</c>, <c>paperspace</c>).</summary>
+    public static bool TryNormalizeSpace(
+        string? rawSpace,
+        string? layoutName,
+        out string canonicalSpace,
+        out string? error)
+    {
+        string token = string.IsNullOrWhiteSpace(rawSpace)
+            ? (!string.IsNullOrWhiteSpace(layoutName) ? "paper" : "model")
+            : rawSpace.Trim().ToLowerInvariant();
+
+        switch (token)
+        {
+            case "model":
+            case "modelspace":
+                canonicalSpace = "model";
+                error = null;
+                return true;
+            case "paper":
+            case "paperspace":
+                canonicalSpace = "paper";
+                error = null;
+                return true;
+            default:
+                canonicalSpace = "model";
+                error = "'space' must be 'model' or 'paper'.";
+                return false;
+        }
+    }
+
     private static readonly string[] BlockedSystemVariables =
     [
         "TRUSTEDPATHS",

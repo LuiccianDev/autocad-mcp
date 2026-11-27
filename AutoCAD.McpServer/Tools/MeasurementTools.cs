@@ -11,13 +11,13 @@ using static AutoCAD.McpServer.Tools.CadFormat;
 namespace AutoCAD.McpServer.Tools;
 
 /// <summary>
-/// MCP tools for geometric measurement (distances, areas, perimeters) and drawing maintenance (purge, audit, regen).
+/// MCP tools for geometric measurement (distances, areas, perimeters) and drawing maintenance (purge, audit).
 /// </summary>
 /// <remarks>
 /// Measurements are computed locally within the MCP server process: deterministic, zero latency, and requiring no active CAD instance.
 /// </remarks>
 [McpServerToolType]
-[ToolDomain("measurement", "autocad_measurement", "Compute deterministic distances and polygon areas, purge/audit drawings, and regenerate viewports.")]
+[ToolDomain("measurement", "autocad_measurement", "Compute deterministic distances and polygon areas, and purge or audit drawing databases.")]
 public sealed class MeasurementTools
 {
     private readonly IAutoCADGatewayClient _gatewayClient;
@@ -66,6 +66,7 @@ public sealed class MeasurementTools
         return JsonSerializer.Serialize(new
         {
             status = "success",
+            ok = true,
             distance_2d = Math.Round(d2, 4),
             distance_3d = Math.Round(d3, 4),
             delta_x = Math.Round(dx, 4),
@@ -127,6 +128,7 @@ public sealed class MeasurementTools
         return JsonSerializer.Serialize(new
         {
             status = "success",
+            ok = true,
             area_m2 = Math.Round(Math.Abs(area), 4),
             area_hectares = Math.Round(Math.Abs(area) / 10000.0, 6),
             perimeter_m = Math.Round(perimeter, 4),
@@ -203,12 +205,4 @@ public sealed class MeasurementTools
     [Description("Alias for purge_and_audit_drawing: Purge unused definitions safely and audit errors.")]
     public Task<string> CleanAndPurgeDrawing(string target = "all", bool audit = true) =>
         PurgeAndAuditDrawing(target, audit);
-
-    /// <summary>
-    /// Regenerates all viewports in the current drawing (_.REGENALL).
-    /// </summary>
-    /// <returns>JSON response from Gateway.</returns>
-    [McpServerTool(Name = "regen_all")]
-    [Description("Regenerate all open viewports (_.REGENALL) to recalculate curve displays, text metrics, and layer state changes.")]
-    public async Task<string> RegenAll() => await _gatewayClient.ExecuteCommandAsync("_.REGENALL\n");
 }

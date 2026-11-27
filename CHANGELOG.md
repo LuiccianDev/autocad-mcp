@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.7.0] - Unreleased
+
+### Added
+- **Modernized MCP Output Protocol (`AUTOCAD_MCP_OUTPUT_FORMAT`):**
+  - Added `AUTOCAD_MCP_OUTPUT_FORMAT` across `AutoCAD.McpServer` (.NET 10) and `AutoCAD.McpPython` supporting `compact` (default) and `json`, with fail-fast startup validation writing strictly to `stderr`.
+  - Enabled native `CallToolResult` envelopes: `isError: true` (with `structuredContent: null`) on validation/Gateway/partial-batch errors, native `ImageContent` (`image/png`) in `capture_screenshot(inline=True)` without raw base64 in text or `structuredContent`, and token-saving compact tabular formatters alongside full JSON in `structuredContent`.
+  - Exposed deterministic MCP `ToolAnnotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) across all 90 tools and dynamically aggregated compound domain routers.
+- **Native CAD Drafting, Plotting, Layer, Document & AutoLISP Endpoints (62 Gateway Routes):**
+  - Added native `create_layout` (`POST /plotting/layout` with `clear_default_viewport`), `configure_layout_page` (`POST /plotting/page-setup` ISO A0-A4 landscape/portrait `PlotRotation`), `insert_title_block` (`POST /plotting/title-block` with `iso_standard`, `compact`, `detailed` and optional raster logo), `insert_raster_image` (`POST /drafting/raster-image`), `load_lisp_file` (`POST /lisp/load`), `save_drawing` (`POST /documents/save` safe `Database.SaveAs` with overwrite protection and `DwgVersion` mapping), and `regen_all` (`POST /session/regen`).
+  - Expanded `create_viewport` (`POST /plotting/viewport`) with 3D DCS camera controls (`center_model_z`, `view_direction`, `twist_angle`, `shade_plot`, `visual_style`, `lock_viewport`) and `create_layer` / `set_layer_state` with ACI color, on-demand `.lin` linetype loading, ISO `lineweight`, `is_plottable`, and `description`.
+  - Standardized Gateway JSON responses with `ok`, `status`, and `duration_ms` (`RequestRouter`) and added structured `error.hint` diagnostics.
+
+### Changed
+- **Decomposed Gateway & MCP Architecture:**
+  - Split `PlottingService.cs` into `LayoutService.cs`, `ViewportService.cs`, `TitleBlockBuilder.cs`, and `PlottingService.cs`; extracted `RasterImageService.cs` from `DraftingService.cs`; extracted `BatchElementNormalizer.cs` from `DrawingTools.cs`; and split contract policies into `LineWeightPolicy.cs`, `DwgVersionPolicy.cs`, `PlottingPolicy.cs`, `OutputFormat.cs`, and `ToolAnnotationPolicy.cs`.
+  - Fixed `create_dimension` metric scaling via `SetDimstyleData` across both `INSUNITS = 4` (mm) and `INSUNITS = 6` (m), stabilized silent synchronous `PlotEngine` PDF plotting (`BACKGROUNDPLOT=0`), and **moved `regen_all` in `compound` mode from `autocad_measurement` to `autocad_execution`** (breaking change for `autocad_measurement(action="regen_all")` callers; `granular` and `core` modes are unchanged).
+
+### Security
+- **Audit Hardening (`security-audit` + Thermos):**
+  - Enforced `LispBridge.LoadFileAsync` file size cap (`16 MiB`), deferred directory creation until after document/revision/Edit-Guard/layout validations in `PlotPdfAsync` and `SaveDrawingAsync`, upgraded `RasterImageDef` to `ForWrite` on reused logos, blocked `ByLayer`/`ByBlock` layer linetypes, and removed `AcceptScalarAsString` parameter-name hardcoding from `CompoundDispatcher`.
+
+---
+
 ## [2.5.0] - 2026-11-24
 
 ### Added

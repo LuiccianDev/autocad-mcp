@@ -21,6 +21,7 @@ internal static class McpToolRegistrationExtensions
     public static IMcpServerBuilder WithConfiguredAutoCADTools(
         this IMcpServerBuilder builder,
         ToolMode mode,
+        OutputFormat outputFormat = OutputFormat.Compact,
         IEnumerable<Type>? toolTypes = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -29,9 +30,9 @@ internal static class McpToolRegistrationExtensions
 
         IReadOnlyList<McpServerTool> tools = mode switch
         {
-            ToolMode.Granular => RegisterDirectServicesAndBuildTools(builder.Services, catalog.AllActions),
-            ToolMode.Core => RegisterDirectServicesAndBuildTools(builder.Services, catalog.CoreActions),
-            ToolMode.Compound => RegisterCompoundServicesAndBuildTools(builder.Services, catalog),
+            ToolMode.Granular => RegisterDirectServicesAndBuildTools(builder.Services, catalog.AllActions, outputFormat),
+            ToolMode.Core => RegisterDirectServicesAndBuildTools(builder.Services, catalog.CoreActions, outputFormat),
+            ToolMode.Compound => RegisterCompoundServicesAndBuildTools(builder.Services, catalog, outputFormat),
             _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown ToolMode value."),
         };
 
@@ -40,19 +41,21 @@ internal static class McpToolRegistrationExtensions
 
     private static IReadOnlyList<McpServerTool> RegisterDirectServicesAndBuildTools(
         IServiceCollection services,
-        IReadOnlyList<ToolActionDescriptor> actions)
+        IReadOnlyList<ToolActionDescriptor> actions,
+        OutputFormat outputFormat)
     {
         foreach (ToolActionDescriptor action in actions)
         {
             services.TryAddTransient(action.DeclaringType);
         }
 
-        return BuildDirectTools(actions);
+        return BuildDirectTools(actions, outputFormat);
     }
 
     private static IReadOnlyList<McpServerTool> RegisterCompoundServicesAndBuildTools(
         IServiceCollection services,
-        AutoCADToolCatalog catalog)
+        AutoCADToolCatalog catalog,
+        OutputFormat outputFormat)
     {
         services.TryAddSingleton(catalog);
 
@@ -64,37 +67,50 @@ internal static class McpToolRegistrationExtensions
         services.TryAddSingleton(sp =>
             new CompoundDispatcher(catalog, t => sp.GetRequiredService(t)));
 
-        return BuildCompoundTools(catalog.Domains);
+        return BuildCompoundTools(catalog.Domains, outputFormat);
     }
 
-    private static IReadOnlyList<McpServerTool> BuildDirectTools(IReadOnlyList<ToolActionDescriptor> actions)
+    private static IReadOnlyList<McpServerTool> BuildDirectTools(
+        IReadOnlyList<ToolActionDescriptor> actions,
+        OutputFormat outputFormat)
     {
         var tools = new List<McpServerTool>(actions.Count);
         foreach (ToolActionDescriptor action in actions)
         {
             Type declaringType = action.DeclaringType;
+            string canonicalName = action.AliasOf ?? action.Name;
+            ToolAnnotationSpec hints = ToolAnnotationPolicy.ResolveForTool(canonicalName);
             var options = new McpServerToolCreateOptions
             {
                 Name = action.Name,
                 Description = action.Description,
+                ReadOnly = hints.ReadOnly,
+                Destructive = hints.Destructive,
+                Idempotent = hints.Idempotent,
+                OpenWorld = hints.OpenWorld,
+                UseStructuredContent = false,
             };
 
-            tools.Add(McpServerTool.Create(
+            McpServerTool inner = McpServerTool.Create(
                 action.Method,
                 req => req.Services!.GetRequiredService(declaringType),
-                options));
+                options);
+            tools.Add(new AdaptingMcpServerTool(inner, outputFormat));
         }
 
         return tools;
     }
 
-    private static IReadOnlyList<McpServerTool> BuildCompoundTools(IReadOnlyList<ToolDomainDescriptor> domains)
+    private static IReadOnlyList<McpServerTool> BuildCompoundTools(
+        IReadOnlyList<ToolDomainDescriptor> domains,
+        OutputFormat outputFormat)
     {
         var tools = new List<McpServerTool>(domains.Count);
         foreach (ToolDomainDescriptor domain in domains)
         {
             string domainName = domain.Domain;
             string actionsCsv = string.Join(", ", domain.CanonicalActionsByName.Keys);
+            ToolAnnotationSpec hints = ToolAnnotationPolicy.ResolveForCompoundDomain(domain.CanonicalActionsByName.Keys);
             var options = new McpServerToolCreateOptions
             {
                 Name = domain.CompoundToolName,
@@ -102,12 +118,18 @@ internal static class McpToolRegistrationExtensions
                     $"{domain.Summary} " +
                     $"Available actions: {actionsCsv}. " +
                     "Call with action='help' (default, optional params={\"action\":\"<name>\"}) to inspect parameter schemas.",
+                ReadOnly = hints.ReadOnly,
+                Destructive = hints.Destructive,
+                Idempotent = hints.Idempotent,
+                OpenWorld = hints.OpenWorld,
+                UseStructuredContent = false,
             };
 
-            tools.Add(McpServerTool.Create(
+            McpServerTool inner = McpServerTool.Create(
                 CompoundInvokeMethod,
                 req => new CompoundDomainHandler(req.Services!.GetRequiredService<CompoundDispatcher>(), domainName),
-                options));
+                options);
+            tools.Add(new AdaptingMcpServerTool(inner, outputFormat));
         }
 
         return tools;

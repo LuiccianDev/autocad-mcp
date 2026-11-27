@@ -63,7 +63,7 @@ public sealed class AutoCADGatewayClient : IAutoCADGatewayClient
         }
 
         string ep = (endpoint ?? string.Empty).Trim('/').Split('?', 2)[0].ToLowerInvariant();
-        if (ep is "batch" or "plotting/pdf" or "documents/open" or "documents/new" or "documents/purge-audit")
+        if (ep is "batch" or "plotting/layout" or "plotting/page-setup" or "plotting/title-block" or "plotting/pdf" or "documents/open" or "documents/new" or "documents/save" or "documents/purge-audit" or "lisp/load")
         {
             return HeavyOperationTimeoutMs;
         }
@@ -131,17 +131,34 @@ public sealed class AutoCADGatewayClient : IAutoCADGatewayClient
 
         try
         {
-            using var doc = JsonDocument.Parse(raw);
-            if (doc.RootElement.TryGetProperty("status", out var status) && status.GetString() == "success")
+            if (System.Text.Json.Nodes.JsonNode.Parse(raw) is System.Text.Json.Nodes.JsonObject node)
             {
-                return "Success: Command enqueued in AutoCAD.";
+                bool isExplicitError =
+                    (node["ok"] is System.Text.Json.Nodes.JsonValue okVal &&
+                     okVal.TryGetValue(out bool okBool) &&
+                     !okBool) ||
+                    string.Equals(node["status"]?.ToString(), "error", StringComparison.OrdinalIgnoreCase);
+                if (isExplicitError)
+                {
+                    return raw;
+                }
+
+                if (string.Equals(node["status"]?.ToString(), "success", StringComparison.OrdinalIgnoreCase))
+                {
+                    node["status"] = "success";
+                    node["ok"] = true;
+                    node["message"] = "Success: Command enqueued in AutoCAD.";
+                    return node.ToJsonString();
+                }
+
+                return raw;
             }
         }
         catch (JsonException)
         {
         }
 
-        return raw;
+        return ErrorEnvelope("gateway_error", raw);
     }
 
     /// <inheritdoc/>
@@ -245,20 +262,22 @@ public sealed class AutoCADGatewayClient : IAutoCADGatewayClient
                 string body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
                 if (!string.IsNullOrWhiteSpace(body))
                 {
-                    if (!response.IsSuccessStatusCode && body.Length > 4096)
+                    if (!response.IsSuccessStatusCode && !IsValidJsonObject(body))
                     {
-                        return body[..4096] + "... [truncated]";
+                        string detail = body.Length <= 4096 ? body : body[..4096];
+                        return ErrorEnvelope(
+                            "http_error",
+                            $"Gateway returned HTTP {(int)response.StatusCode}.",
+                            detail: detail);
                     }
 
                     return body;
                 }
 
-                return JsonSerializer.Serialize(new
-                {
-                    status = "error",
-                    code = (int)response.StatusCode,
-                    message = $"Gateway returned HTTP {(int)response.StatusCode}."
-                });
+                return ErrorEnvelope(
+                    "http_error",
+                    $"Gateway returned HTTP {(int)response.StatusCode}.",
+                    detail: $"status={(int)response.StatusCode}");
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -267,11 +286,7 @@ public sealed class AutoCADGatewayClient : IAutoCADGatewayClient
                     InvalidateDiscoveryCache();
                 }
 
-                return JsonSerializer.Serialize(new
-                {
-                    status = "error",
-                    message = $"Request to AutoCAD Gateway timed out after {waitMs} ms."
-                });
+                return ErrorEnvelope("timeout", $"Request to AutoCAD Gateway timed out after {waitMs} ms.");
             }
             catch (HttpRequestException ex)
             {
@@ -281,26 +296,39 @@ public sealed class AutoCADGatewayClient : IAutoCADGatewayClient
                     continue;
                 }
 
-                return JsonSerializer.Serialize(new
-                {
-                    status = "error",
-                    message = $"Failed to connect to AutoCAD Gateway at {baseUri}: {ex.Message}"
-                });
+                return ErrorEnvelope(
+                    "gateway_unreachable",
+                    $"Failed to connect to AutoCAD Gateway at {baseUri}: {ex.Message}",
+                    hint: "Ensure AutoCAD is open and AI_START_SERVER has been started.");
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    status = "error",
-                    message = $"Failed to connect to AutoCAD Gateway at {lastUri}: {ex.Message}"
-                });
+                return ErrorEnvelope("gateway_error", $"Failed to connect to AutoCAD Gateway at {lastUri}: {ex.Message}");
             }
         }
 
-        return JsonSerializer.Serialize(new
+        return ErrorEnvelope("gateway_unreachable", $"Failed to connect to AutoCAD Gateway at {lastUri}.");
+    }
+
+    private static bool IsValidJsonObject(string raw)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return doc.RootElement.ValueKind == JsonValueKind.Object;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string ErrorEnvelope(string code, string message, string? detail = null, string? hint = null) =>
+        JsonSerializer.Serialize(new
         {
             status = "error",
-            message = $"Failed to connect to AutoCAD Gateway at {lastUri}."
-        });
-    }
+            ok = false,
+            message,
+            error = new ToolError(code, message, detail, hint),
+        }, GatewayProtocol.WireJsonOptions);
 }

@@ -97,7 +97,7 @@ public static class MainThread
         }
     }
 
-    private static void WakeMainWindowLoop()
+    internal static void WakeMainWindowLoop()
     {
         try
         {

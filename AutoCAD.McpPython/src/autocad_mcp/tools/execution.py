@@ -7,7 +7,9 @@ import json
 from autocad_mcp import runtime
 from autocad_mcp.cad_math import lisp_string
 from autocad_mcp.policy import (
+    DEFAULT_LISP_LOAD_TIMEOUT_MS,
     DEFAULT_LISP_TIMEOUT_MS,
+    DWG_VERSIONS,
     MAX_BATCH_OPERATIONS,
     MAX_LISP_TIMEOUT_MS,
     MIN_LISP_TIMEOUT_MS,
@@ -98,13 +100,21 @@ async def execute_lisp(code: str, timeout_ms: int = DEFAULT_LISP_TIMEOUT_MS) -> 
 
 
 @domain.tool(name="load_lisp_file")
-async def load_lisp_file(file_path: str) -> str:
-    """Load and execute an external AutoLISP script file (.lsp) from disk into AutoCAD via synchronous LISP evaluation."""
+async def load_lisp_file(
+    file_path: str,
+    timeout_ms: int = DEFAULT_LISP_LOAD_TIMEOUT_MS,
+) -> str:
+    """Validate and load an external AutoLISP script file (.lsp) from disk synchronously with duration metrics."""
     ok, norm_path, err = validate_local_file_path(file_path, (".lsp",))
     if not ok:
-        return error_json(err or "Invalid LISP file path.")
-    fwd = norm_path.replace("\\", "/")
-    return await evaluate_lisp(f"(load {lisp_string(fwd)})")
+        return error_json(err or "Invalid LISP file path.", code="invalid_path")
+    clamped_timeout = max(MIN_LISP_TIMEOUT_MS, min(MAX_LISP_TIMEOUT_MS, int(timeout_ms)))
+    http_timeout = max(30.0, clamped_timeout / 1000.0 + 15.0)
+    return await runtime.gateway.post_json(
+        "lisp/load",
+        {"file_path": norm_path, "timeout_ms": clamped_timeout},
+        timeout=http_timeout,
+    )
 
 
 @domain.tool(name="zoom_extents")
@@ -114,9 +124,44 @@ async def zoom_extents() -> str:
 
 
 @domain.tool(name="save_drawing", core=True)
-async def save_drawing() -> str:
-    """Save the active AutoCAD drawing file ('_.QSAVE')."""
-    return await runtime.gateway.execute_command("_.QSAVE\n")
+async def save_drawing(
+    file_path: str | None = None,
+    overwrite: bool = False,
+    dwg_version: str = "current",
+    bak_and_rename: bool = True,
+    create_directories: bool = False,
+    expected_revision: int | None = None,
+    document: str | None = None,
+) -> str:
+    """Save the active or target drawing in place or safely to a new .dwg file via Database.SaveAs."""
+    norm_path: str | None = None
+    if file_path is not None and file_path.strip():
+        ok, norm_path, err = validate_local_file_path(file_path, (".dwg",))
+        if not ok:
+            return error_json(err or "Invalid .dwg output path.", code="invalid_path")
+
+    clean_version = (dwg_version or "current").strip()
+    if clean_version.lower() not in DWG_VERSIONS:
+        return error_json(f"Unsupported dwg_version '{dwg_version}'. Expected: current, 2018 (AC1032), 2013 (AC1027), 2010 (AC1024), 2007 (AC1021), 2004 (AC1018), or 2000 (AC1015).")
+
+    return await runtime.gateway.post_json(
+        "documents/save",
+        {
+            "file_path": norm_path,
+            "overwrite": bool(overwrite),
+            "dwg_version": clean_version,
+            "bak_and_rename": bool(bak_and_rename),
+            "create_directories": bool(create_directories),
+            "expected_revision": expected_revision,
+            "document": document,
+        },
+    )
+
+
+@domain.tool(name="regen_all")
+async def regen_all(document: str | None = None) -> str:
+    """Regenerate all open viewports synchronously via native Gateway endpoint."""
+    return await runtime.gateway.post_json("session/regen", {"document": document})
 
 
 @domain.tool(name="configure_drawing_units")

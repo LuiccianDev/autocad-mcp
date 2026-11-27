@@ -1,12 +1,12 @@
 using System;
-using System.Diagnostics;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.Geometry;
+using Autodesk.AutoCAD.PlottingServices;
 using AutoCAD.Gateway.Contracts;
 using AutoCAD.Gateway.Core;
 using AcApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
@@ -14,94 +14,30 @@ using AcApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 namespace AutoCAD.Gateway.Services;
 
 /// <summary>
-/// Safe native PaperSpace viewport creation and headless PDF plotting service
-/// with synchronous <c>BACKGROUNDPLOT=0</c> restoration.
+/// Plots an existing PaperSpace layout synchronously to PDF via native <see cref="PlotEngine"/>.
 /// </summary>
 public static class PlottingService
 {
-    /// <summary>
-    /// Creates a native PaperSpace <see cref="Viewport"/> entity inside a target or active PaperSpace layout
-    /// with exact metric scale (<c>1000 / scale</c>).
-    /// </summary>
-    /// <param name="body">JSON payload containing viewport bounds/center, scale, model view center, and optional layout/document.</param>
-    /// <returns>Serialized JSON creation confirmation with handle and revision.</returns>
-    /// <exception cref="AcadGatewayException">Thrown when arguments are invalid, Edit Guard is locked, or the layout does not exist.</exception>
-    public static Task<string> CreateViewportAsync(string body)
-    {
-        JsonElement root = DatabaseHelpers.ParseJsonObject(body);
-        double width = DatabaseHelpers.GetRequiredFiniteDouble(root, "width");
-        double height = DatabaseHelpers.GetRequiredFiniteDouble(root, "height");
-        double scale = DatabaseHelpers.GetRequiredFiniteDouble(root, "scale");
-        double customScale = 1000.0 / scale;
-        if (width <= 0 || height <= 0 || scale <= 0 || !double.IsFinite(customScale))
-        {
-            throw new AcadGatewayException("bad_argument", "'width', 'height', and metric 'scale' must yield finite positive geometry.");
-        }
-
-        Point3d center = DatabaseHelpers.ReadPoint3dOpt(root, "center")
-            ?? ResolveCenterFromLowerCorner(root, width, height);
-        Point3d viewCenter3d = DatabaseHelpers.ReadRequiredPoint3d(root, "view_center", "center_model_x", "center_model_y");
-        bool locked = DatabaseHelpers.GetBoolOpt(root, "locked") ?? true;
-        string? layoutName = DatabaseHelpers.GetStringOpt(root, "layout_name");
-        string? documentName = DatabaseHelpers.GetStringOpt(root, "document");
-        long? expectedRevision = DatabaseHelpers.GetLongOpt(root, "expected_revision");
-
-        return Acad.Write(ctx =>
-        {
-            ObjectId spaceId = DatabaseHelpers.ResolvePaperSpaceId(ctx.Db, ctx.Tr, layoutName);
-            var paperSpace = (BlockTableRecord)ctx.Tr.GetObject(spaceId, OpenMode.ForWrite);
-
-            Viewport vp = DatabaseHelpers.CreateAndAppend(
-                paperSpace,
-                ctx.Tr,
-                ctx.Db,
-                static () => new Viewport(),
-                v =>
-                {
-                    v.CenterPoint = center;
-                    v.Width = width;
-                    v.Height = height;
-                    v.ViewCenter = new Point2d(viewCenter3d.X, viewCenter3d.Y);
-                    v.CustomScale = customScale;
-                    DatabaseHelpers.ValidateAndApplyEntityProperties(v, ctx.Db, ctx.Tr, root);
-                });
-
-            vp.On = true;
-            vp.Locked = locked;
-
-            return JsonSerializer.Serialize(new
-            {
-                status = "success",
-                ok = true,
-                handle = vp.ObjectId.Handle.ToString(),
-                scale,
-                custom_scale = vp.CustomScale,
-                locked = vp.Locked,
-                document = ctx.Doc.Name,
-                revision = ctx.Session.Revision,
-            }, GatewayProtocol.WireJsonOptions);
-        }, documentName: documentName, expectedRevision: expectedRevision);
-    }
+    private sealed record PlotExecutionInfo(
+        string DocumentName,
+        long Revision,
+        string? PaperSize,
+        LayoutService.PageSetupSummary Summary,
+        List<string> Warnings);
 
     /// <summary>
-    /// Plots an existing PaperSpace layout synchronously to a local PDF file while forcing and restoring
-    /// <c>BACKGROUNDPLOT = 0</c> inside <c>MainThread.InCommandContextAsync</c>.
+    /// Plots an existing PaperSpace layout synchronously to a local PDF file using native <see cref="PlotEngine"/>
+    /// with <c>BACKGROUNDPLOT=0</c>, direct output path, and validated layout/setup before touching disk.
     /// </summary>
-    /// <param name="body">JSON payload containing <c>layout_name</c>, <c>pdf_path</c>, and optional <c>plot_style</c>, <c>document</c>, <c>expected_revision</c>.</param>
-    /// <returns>Serialized JSON result confirming physical PDF output on disk.</returns>
-    /// <exception cref="AcadGatewayException">Thrown on invalid paths, blocked prompt tokens, inactive target document, revision mismatch, or missing output file.</exception>
-    public static Task<string> PlotPdfAsync(string body)
+    public static async Task<string> PlotPdfAsync(string body)
     {
         JsonElement root = DatabaseHelpers.ParseJsonObject(body);
-        string layoutName = DatabaseHelpers.GetRequiredString(root, "layout_name");
-        if (!SecurityPolicy.IsSafeLayoutName(layoutName, allowSpaces: true))
+        if (!PlottingPolicy.TryValidatePaperLayoutName(
+                DatabaseHelpers.GetRequiredString(root, "layout_name"),
+                out string cleanLayout,
+                out string? layoutErr))
         {
-            throw new AcadGatewayException("bad_argument", "'layout_name' must be a valid AutoCAD layout name free of prompt/control characters.");
-        }
-
-        if (string.Equals(layoutName.Trim(), "Model", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new AcadGatewayException("bad_argument", "Export PDF requires a PaperSpace layout name; 'Model' is not supported.");
+            throw new AcadGatewayException("bad_argument", layoutErr ?? "Export PDF requires a valid PaperSpace layout name; 'Model' is not supported.");
         }
 
         string rawPdf = DatabaseHelpers.GetRequiredString(root, "pdf_path");
@@ -112,77 +48,137 @@ public static class PlottingService
 
         DatabaseHelpers.EnsureNoReparsePoints(normPdf);
 
-        string plotStyle = (DatabaseHelpers.GetStringOpt(root, "plot_style") ?? "monochrome.ctb").Trim();
-        if (!SecurityPolicy.IsSafePlotStyleName(plotStyle, allowSpaces: true))
+        string? requestedPaper = DatabaseHelpers.GetStringOpt(root, "paper_size")?.Trim().ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(requestedPaper) && !PlottingPolicy.ValidPaperSizes.Contains(requestedPaper))
         {
-            throw new AcadGatewayException(
-                "bad_argument",
-                "Plot style must be a safe .ctb or .stb filename without path separators, UNC prefixes, or prompt characters.");
+            throw new AcadGatewayException("bad_argument", $"Unsupported paper_size '{requestedPaper}'. Expected: A0, A1, A2, A3, A4.");
+        }
+
+        string? requestedOrientation = DatabaseHelpers.GetStringOpt(root, "orientation")?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(requestedOrientation) && !PlottingPolicy.ValidOrientations.Contains(requestedOrientation))
+        {
+            throw new AcadGatewayException("bad_argument", "'orientation' must be 'landscape' or 'portrait'.");
+        }
+
+        string? requestedStyle = DatabaseHelpers.GetStringOpt(root, "plot_style")?.Trim();
+        if (!string.IsNullOrWhiteSpace(requestedStyle) && !SecurityPolicy.IsSafePlotStyleName(requestedStyle, allowSpaces: true))
+        {
+            throw new AcadGatewayException("bad_argument", "Plot style must be a safe .ctb or .stb filename.");
         }
 
         string? documentName = DatabaseHelpers.GetStringOpt(root, "document");
         long? expectedRevision = DatabaseHelpers.GetLongOpt(root, "expected_revision");
 
-        return MainThread.InCommandContextAsync(() =>
+        PlotExecutionInfo plotInfo = await MainThread.InCommandContextAsync(() =>
         {
             Document doc = Acad.ActiveDocument;
-            if (!string.IsNullOrWhiteSpace(documentName))
-            {
-                string target = documentName.Trim();
-                bool matches = string.Equals(doc.Name, target, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(Path.GetFileName(doc.Name), target, StringComparison.OrdinalIgnoreCase);
-                if (!matches)
-                {
-                    throw new AcadGatewayException(
-                        "bad_argument",
-                        $"PDF plotting requires document '{target}' to be active; call activate_document first.");
-                }
-            }
+            Acad.EnsureActiveDocument(doc, documentName, "PDF plotting");
 
             DocumentSession session = DocumentSessionManager.GetOrCreate(doc);
-            Acad.ValidateWritable(doc, session, requireIdle: false);
+            Acad.ValidateWritable(doc, session, requireIdle: false, expectedRevision: expectedRevision);
 
-            if (expectedRevision.HasValue && expectedRevision.Value != session.Revision)
+            if (PlotFactory.ProcessPlotState != ProcessPlotState.NotPlotting)
             {
-                throw new AcadGatewayException(
-                    "revision_conflict",
-                    $"Document revision mismatch: expected {expectedRevision.Value}, current is {session.Revision}.");
+                throw new AcadGatewayException("busy", "Another AutoCAD plot job is currently in progress.");
             }
+
+            var warnings = new List<string>();
+            LayoutService.PageSetupSummary summary;
+            ObjectId layoutId;
+            using var psOverride = new PlotSettings(false);
 
             using (var tr = doc.TransactionManager.StartOpenCloseTransaction())
             {
                 var layoutDict = (DBDictionary)tr.GetObject(doc.Database.LayoutDictionaryId, OpenMode.ForRead);
-                if (!layoutDict.Contains(layoutName))
+                if (!layoutDict.Contains(cleanLayout))
                 {
                     tr.Abort();
-                    throw new AcadGatewayException("not_found", $"Layout '{layoutName}' does not exist in active drawing.");
+                    throw new AcadGatewayException("not_found", $"Layout '{cleanLayout}' does not exist in active drawing.");
+                }
+
+                layoutId = layoutDict.GetAt(cleanLayout);
+                var layout = (Layout)tr.GetObject(layoutId, OpenMode.ForRead);
+                psOverride.CopyFrom(layout);
+
+                string device = string.IsNullOrWhiteSpace(layout.PlotConfigurationName) ||
+                    string.Equals(layout.PlotConfigurationName, "None", StringComparison.OrdinalIgnoreCase)
+                    ? "DWG To PDF.pc3"
+                    : layout.PlotConfigurationName;
+                string style = !string.IsNullOrWhiteSpace(requestedStyle)
+                    ? requestedStyle
+                    : (!string.IsNullOrWhiteSpace(layout.CurrentStyleSheet) ? layout.CurrentStyleSheet : "monochrome.ctb");
+
+                if (!string.IsNullOrWhiteSpace(requestedPaper) || !string.IsNullOrWhiteSpace(requestedOrientation))
+                {
+                    string paper = !string.IsNullOrWhiteSpace(requestedPaper)
+                        ? requestedPaper
+                        : LayoutService.InferPaperSize(layout.CanonicalMediaName) ?? "A3";
+                    bool wantLand = requestedOrientation is not null
+                        ? requestedOrientation == "landscape"
+                        : LayoutService.IsEffectiveLandscape(layout);
+                    summary = LayoutService.ApplyPageSetup(psOverride, device, paper, wantLand, style, warnings);
+                }
+                else
+                {
+                    PlotSettingsValidator psv = PlotSettingsValidator.Current;
+                    if (string.Equals(layout.PlotConfigurationName, "None", StringComparison.OrdinalIgnoreCase) ||
+                        string.IsNullOrWhiteSpace(layout.PlotConfigurationName))
+                    {
+                        psv.SetPlotConfigurationName(psOverride, device, null);
+                        psv.RefreshLists(psOverride);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(requestedStyle))
+                    {
+                        LayoutService.ApplyStyleSheetIfPresent(psv, psOverride, style, warnings);
+                    }
+
+                    summary = LayoutService.SummarizePlotSettings(psOverride);
                 }
 
                 tr.Abort();
             }
 
+            using var pi = new PlotInfo { Layout = layoutId, OverrideSettings = psOverride };
+            var piv = new PlotInfoValidator { MediaMatchingPolicy = MatchingPolicy.MatchEnabled };
+            piv.Validate(pi);
+
+            // Mutate disk only after all document, layout, and PlotInfo validations have passed.
             string? parentDir = Path.GetDirectoryName(normPdf);
             if (!string.IsNullOrEmpty(parentDir))
             {
                 Directory.CreateDirectory(parentDir);
+                DatabaseHelpers.EnsureNoReparsePoints(normPdf);
             }
 
-            string tmpPdf = Path.Combine(
-                parentDir ?? Path.GetTempPath(),
-                $"{Path.GetFileNameWithoutExtension(normPdf)}.{Guid.NewGuid():N}.tmp.pdf");
+            if (File.Exists(normPdf))
+            {
+                try
+                {
+                    using var lockProbe = new FileStream(normPdf, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                }
+                catch (IOException ex)
+                {
+                    throw new AcadGatewayException("busy", $"Cannot overwrite PDF '{normPdf}' because it is open in another application: {ex.Message}");
+                }
+            }
 
-            short prevBgPlot = Convert.ToInt16(AcApp.GetSystemVariable("BACKGROUNDPLOT"));
+            short prevBgPlot = Convert.ToInt16(AcApp.GetSystemVariable("BACKGROUNDPLOT"), CultureInfo.InvariantCulture);
             AcApp.SetSystemVariable("BACKGROUNDPLOT", (short)0);
             try
             {
-                LayoutManager.Current.CurrentLayout = layoutName;
-                string fwdTmpPdf = tmpPdf.Replace('\\', '/');
-                doc.Editor.Command(
-                    "_.-PLOT", "Y", layoutName, "DWG To PDF.pc3",
-                    string.Empty, string.Empty, string.Empty, string.Empty,
-                    string.Empty, string.Empty, string.Empty,
-                    "Y", plotStyle, "Y", "N", "N", "N",
-                    fwdTmpPdf, "N", "Y");
+                LayoutManager.Current.CurrentLayout = cleanLayout;
+                using PlotEngine engine = PlotFactory.CreatePublishEngine();
+                using var progress = new PlotProgressDialog(false, 1, false) { IsVisible = false };
+                engine.BeginPlot(progress, null);
+                engine.BeginDocument(pi, doc.Name, null, 1, true, normPdf);
+                using var pageInfo = new PlotPageInfo();
+                engine.BeginPage(pageInfo, pi, true, null);
+                engine.BeginGenerateGraphics(null);
+                engine.EndGenerateGraphics(null);
+                engine.EndPage(null);
+                engine.EndDocument(null);
+                engine.EndPlot(null);
             }
             finally
             {
@@ -196,56 +192,72 @@ public static class PlottingService
                 }
             }
 
-            try
-            {
-                if (!File.Exists(tmpPdf) || new FileInfo(tmpPdf).Length == 0)
-                {
-                    throw new AcadGatewayException(
-                        "autocad_error",
-                        $"AutoCAD did not generate a PDF file for layout '{layoutName}'. Verify plot style '{plotStyle}' and PC3 configuration.");
-                }
+            return new PlotExecutionInfo(
+                doc.Name,
+                session.Revision,
+                LayoutService.InferPaperSize(summary.CanonicalMedia) ?? requestedPaper,
+                summary,
+                warnings);
+        }, preflight: () => Acad.EnsureQuiescent(Acad.ActiveDocument), timeoutMs: 60_000).ConfigureAwait(false);
 
-                File.Move(tmpPdf, normPdf, overwrite: true);
-            }
-            finally
-            {
-                if (File.Exists(tmpPdf))
-                {
-                    try
-                    {
-                        File.Delete(tmpPdf);
-                    }
-                    catch (Exception cleanupEx)
-                    {
-                        System.Diagnostics.Trace.TraceWarning("Failed to clean up temporary PDF '{0}': {1}", tmpPdf, cleanupEx);
-                    }
-                }
-            }
-
-            return JsonSerializer.Serialize(new
-            {
-                status = "success",
-                ok = true,
-                layout = layoutName,
-                pdf_path = normPdf,
-                file_exists = File.Exists(normPdf),
-                document = doc.Name,
-                revision = session.Revision,
-            }, GatewayProtocol.WireJsonOptions);
-        }, preflight: () => Acad.EnsureQuiescent(Acad.ActiveDocument), timeoutMs: 60_000);
-    }
-
-    private static Point3d ResolveCenterFromLowerCorner(JsonElement root, double width, double height)
-    {
-        double lx = DatabaseHelpers.GetRequiredFiniteDouble(root, "lower_x");
-        double ly = DatabaseHelpers.GetRequiredFiniteDouble(root, "lower_y");
-        double cx = lx + width * 0.5;
-        double cy = ly + height * 0.5;
-        if (!double.IsFinite(cx) || !double.IsFinite(cy))
+        long fileBytes = await WaitForPdfReadyAsync(normPdf).ConfigureAwait(false);
+        if (fileBytes <= 0)
         {
-            throw new AcadGatewayException("bad_argument", "Viewport center coordinates overflowed.");
+            throw new AcadGatewayException(
+                "autocad_error",
+                $"AutoCAD did not produce a non-empty PDF file at '{normPdf}' for layout '{cleanLayout}'.");
         }
 
-        return new Point3d(cx, cy, 0.0);
+        return JsonSerializer.Serialize(new
+        {
+            status = "success",
+            ok = true,
+            layout = cleanLayout,
+            pdf_path = normPdf,
+            file_exists = true,
+            file_size_bytes = fileBytes,
+            paper_size = plotInfo.PaperSize,
+            canonical_media = plotInfo.Summary.CanonicalMedia,
+            paper_width_mm = plotInfo.Summary.WidthMm,
+            paper_height_mm = plotInfo.Summary.HeightMm,
+            orientation = plotInfo.Summary.Orientation,
+            plot_style = plotInfo.Summary.PlotStyle,
+            plot_device = plotInfo.Summary.PlotDevice,
+            warnings = plotInfo.Warnings.Count > 0 ? plotInfo.Warnings : null,
+            document = plotInfo.DocumentName,
+            revision = plotInfo.Revision,
+        }, GatewayProtocol.WireJsonOptions);
+    }
+
+    private static async Task<long> WaitForPdfReadyAsync(string pdfPath)
+    {
+        IOException? lastIo = null;
+        for (int attempt = 0; attempt < 60; attempt++)
+        {
+            if (File.Exists(pdfPath))
+            {
+                try
+                {
+                    using var stream = new FileStream(pdfPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    if (stream.Length > 0)
+                    {
+                        return stream.Length;
+                    }
+                }
+                catch (IOException ex)
+                {
+                    lastIo = ex;
+                }
+            }
+
+            await Task.Delay(50).ConfigureAwait(false);
+        }
+
+        if (lastIo is not null)
+        {
+            System.Diagnostics.Trace.TraceWarning("Timed out waiting for plot output stream lock on '{0}': {1}", pdfPath, lastIo.Message);
+        }
+
+        return File.Exists(pdfPath) ? new FileInfo(pdfPath).Length : 0L;
     }
 }

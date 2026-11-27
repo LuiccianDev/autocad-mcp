@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
 using AutoCAD.Gateway.Contracts;
 using AutoCAD.Gateway.Core;
+using AcApp = Autodesk.AutoCAD.ApplicationServices.Core.Application;
 
 namespace AutoCAD.Gateway.Services;
 
@@ -43,6 +45,14 @@ public static class DraftingService
         }
 
         bool hasExplicitStyle = !string.IsNullOrWhiteSpace(dimStyleName);
+        if (!SecurityPolicy.TryNormalizeSpace(
+                DatabaseHelpers.GetStringOpt(root, "space"),
+                null,
+                out string canonicalSpace,
+                out string? spaceErr))
+        {
+            throw new AcadGatewayException("bad_argument", spaceErr ?? "'space' must be 'model' or 'paper'.");
+        }
 
         return Acad.Write(ctx =>
         {
@@ -59,7 +69,9 @@ public static class DraftingService
                 dimStyleId = dst[trimmedStyle];
             }
 
-            BlockTableRecord space = DatabaseHelpers.OpenSpace(ctx.Db, ctx.Tr, DatabaseHelpers.GetStringOpt(root, "space"), OpenMode.ForWrite);
+            var styleRecord = (DimStyleTableRecord)ctx.Tr.GetObject(dimStyleId, OpenMode.ForRead);
+            BlockTableRecord space = DatabaseHelpers.OpenSpace(ctx.Db, ctx.Tr, canonicalSpace, OpenMode.ForWrite);
+            bool calibrated = false;
             Dimension dim = DatabaseHelpers.CreateAndAppend(
                 space,
                 ctx.Tr,
@@ -68,7 +80,17 @@ public static class DraftingService
                 d =>
                 {
                     DatabaseHelpers.ValidateAndApplyEntityProperties(d, ctx.Db, ctx.Tr, root);
-                    ApplyDimensionSizing(d, ctx.Db, hasExplicitStyle, dimStyleId, textHeight, arrowSize, dimScale);
+                    ApplyDimensionSizing(
+                        d,
+                        ctx.Db,
+                        styleRecord,
+                        canonicalSpace,
+                        hasExplicitStyle,
+                        dimStyleId,
+                        textHeight,
+                        arrowSize,
+                        dimScale,
+                        out calibrated);
                 });
 
             return JsonSerializer.Serialize(new
@@ -77,6 +99,12 @@ public static class DraftingService
                 ok = true,
                 handle = dim.ObjectId.Handle.ToString(),
                 type = dimType,
+                space = canonicalSpace,
+                dim_style = styleRecord.Name,
+                text_height = Math.Round(dim.Dimtxt, 4),
+                arrow_size = Math.Round(dim.Dimasz, 4),
+                dim_scale = Math.Round(dim.Dimscale, 4),
+                calibrated,
                 document = ctx.Doc.Name,
                 revision = ctx.Session.Revision,
             }, GatewayProtocol.WireJsonOptions);
@@ -86,37 +114,41 @@ public static class DraftingService
     private static void ApplyDimensionSizing(
         Dimension dim,
         Database db,
+        DimStyleTableRecord styleRecord,
+        string spaceName,
         bool hasExplicitStyle,
         ObjectId explicitStyleId,
         double? textHeight,
         double? arrowSize,
-        double? dimScale)
+        double? dimScale,
+        out bool calibrated)
     {
+        calibrated = false;
+
         if (hasExplicitStyle)
         {
             dim.DimensionStyle = explicitStyleId;
         }
         else
         {
-            if (db.Dimscale > 0) dim.Dimscale = db.Dimscale;
-            if (db.Dimtxt > 0) dim.Dimtxt = db.Dimtxt;
-            if (db.Dimasz > 0) dim.Dimasz = db.Dimasz;
-            if (db.Dimexe >= 0) dim.Dimexe = db.Dimexe;
-            if (db.Dimexo >= 0) dim.Dimexo = db.Dimexo;
-            if (db.Dimgap != 0) dim.Dimgap = db.Dimgap;
+            dim.SetDimstyleData(db.GetDimstyleData());
         }
 
-        if (dimScale.HasValue) dim.Dimscale = dimScale.Value;
-        if (textHeight.HasValue) dim.Dimtxt = textHeight.Value;
-        if (arrowSize.HasValue) dim.Dimasz = arrowSize.Value;
+        bool isAnnotative = styleRecord.Annotative == AnnotativeStates.True ||
+            dim.Annotative == AnnotativeStates.True;
+        bool isMetricUnits = db.Insunits is UnitsValue.Meters or UnitsValue.Millimeters;
 
-        if (db.Insunits == UnitsValue.Meters &&
+        // Auto-calibrate fallback metric dimensions only when caller did not supply explicit sizing.
+        if (spaceName == "model" &&
             !hasExplicitStyle &&
+            !isAnnotative &&
+            isMetricUnits &&
             !dimScale.HasValue &&
             !textHeight.HasValue &&
             !arrowSize.HasValue)
         {
-            double effectiveText = dim.Dimtxt * (dim.Dimscale > 0 ? dim.Dimscale : 1.0);
+            double baseScale = dim.Dimscale > 0 ? dim.Dimscale : 1.0;
+            double effectiveText = dim.Dimtxt * baseScale;
             if (effectiveText >= 1.0)
             {
                 dim.Dimscale = 1.0;
@@ -126,7 +158,30 @@ public static class DraftingService
                 dim.Dimexo = 0.06;
                 dim.Dimgap = 0.06;
                 dim.Dimdec = 2;
+                calibrated = true;
             }
+        }
+
+        if (dimScale.HasValue)
+        {
+            dim.Dimscale = dimScale.Value;
+        }
+
+        if (textHeight.HasValue)
+        {
+            dim.Dimtxt = textHeight.Value;
+            if (!arrowSize.HasValue)
+            {
+                dim.Dimasz = Math.Round(textHeight.Value * 0.72, 4);
+                dim.Dimexe = Math.Round(textHeight.Value * 0.48, 4);
+                dim.Dimexo = Math.Round(textHeight.Value * 0.24, 4);
+                dim.Dimgap = Math.Round(textHeight.Value * 0.24, 4);
+            }
+        }
+
+        if (arrowSize.HasValue)
+        {
+            dim.Dimasz = arrowSize.Value;
         }
     }
 

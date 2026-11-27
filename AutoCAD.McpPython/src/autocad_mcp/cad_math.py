@@ -66,12 +66,21 @@ def all_finite(*values: float) -> bool:
     return all(not (math.isnan(v) or math.isinf(v)) for v in values)
 
 
+def _math_error(message: str) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "ok": False,
+        "message": message,
+        "error": {"code": "bad_argument", "message": message},
+    }
+
+
 def calculate_distance(
     x1: float, y1: float, x2: float, y2: float, z1: float = 0.0, z2: float = 0.0
 ) -> dict[str, Any]:
     """Calculate 2D/3D Euclidean distance, coordinate deltas, azimuth, and slope without requiring AutoCAD."""
     if not all_finite(x1, y1, z1, x2, y2, z2):
-        return {"status": "error", "message": "Coordinates must be finite numbers."}
+        return _math_error("Coordinates must be finite numbers.")
 
     dx = x2 - x1
     dy = y2 - y1
@@ -87,6 +96,7 @@ def calculate_distance(
 
     return {
         "status": "success",
+        "ok": True,
         "distance_2d": round(d2, 4),
         "distance_3d": round(d3, 4),
         "delta_x": round(dx, 4),
@@ -107,10 +117,9 @@ def calculate_polygon_area(points_str: str) -> dict[str, Any]:
     """Calculate polygon area in m2, hectares, perimeter, centroid, and winding orientation using Gauss algorithm."""
     pts = parse_points(points_str, 2)
     if not pts or len(pts) < 3:
-        return {
-            "status": "error",
-            "message": "Invalid 'points' format. Use 'x1,y1;x2,y2;...' with at least 3 numeric vertices.",
-        }
+        return _math_error(
+            "Invalid 'points' format. Use 'x1,y1;x2,y2;...' with at least 3 numeric vertices."
+        )
 
     n = len(pts)
     if n > 3 and pts[0][0] == pts[n - 1][0] and pts[0][1] == pts[n - 1][1]:
@@ -135,7 +144,7 @@ def calculate_polygon_area(points_str: str) -> dict[str, Any]:
         perimeter += math.hypot(xj - xi, yj - yi)
 
     if abs(twice_area) < 1e-12:
-        return {"status": "error", "message": "Degenerate polygon (collinear vertices or zero area)."}
+        return _math_error("Degenerate polygon (collinear vertices or zero area).")
 
     area = twice_area / 2.0
     abs_area = abs(area)
@@ -143,6 +152,7 @@ def calculate_polygon_area(points_str: str) -> dict[str, Any]:
 
     return {
         "status": "success",
+        "ok": True,
         "area_m2": round(abs_area, 4),
         "area_hectares": round(abs_area / 10000.0, 6),
         "perimeter_m": round(perimeter, 4),

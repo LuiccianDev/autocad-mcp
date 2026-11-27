@@ -8,9 +8,13 @@ from autocad_mcp import runtime
 from autocad_mcp.cad_math import all_finite, is_valid_symbol_name, parse_points
 from autocad_mcp.policy import (
     MAX_BATCH_OPERATIONS,
+    RASTER_IMAGE_EXTENSIONS,
     error_json,
+    has_control_chars,
     normalize_batch_element,
+    normalize_space,
     parse_json_value,
+    validate_local_file_path,
 )
 from autocad_mcp.tool_mode import catalog
 
@@ -203,5 +207,63 @@ async def insert_block(
             "scale": scale,
             "rotation": rotation,
             "layer": layer.strip(),
+        },
+    )
+
+
+@domain.tool(name="insert_raster_image")
+async def insert_raster_image(
+    file_path: str,
+    x: float,
+    y: float,
+    z: float = 0.0,
+    width: float | None = None,
+    height: float | None = None,
+    scale: float = 1.0,
+    rotation: float = 0.0,
+    image_frame: int = 0,
+    space: str | None = None,
+    layout_name: str | None = None,
+    layer: str = "0",
+    expected_revision: int | None = None,
+    document: str | None = None,
+) -> str:
+    """Attach and place a raster image (PNG/JPG/BMP/TIF/GIF) in ModelSpace or PaperSpace with IMAGEFRAME control."""
+    ok, norm_path, err = validate_local_file_path(file_path, RASTER_IMAGE_EXTENSIONS)
+    if not ok:
+        return error_json(err or "Invalid raster image path.", code="invalid_path")
+    if not all_finite(x, y, z, scale, rotation) or scale <= 0:
+        return error_json("Coordinates, rotation must be finite and scale > 0.")
+    if width is not None and (not all_finite(width) or width <= 0):
+        return error_json("'width' must be a finite number greater than zero.")
+    if height is not None and (not all_finite(height) or height <= 0):
+        return error_json("'height' must be a finite number greater than zero.")
+    if image_frame not in (0, 1, 2):
+        return error_json("'image_frame' must be 0 (off), 1 (above), or 2 (visible, no plot).")
+    norm_space, space_err = normalize_space(space, layout_name)
+    if space_err or not norm_space:
+        return error_json(space_err or "'space' must be 'model' or 'paper'.")
+    if has_control_chars(layout_name):
+        return error_json("Layout name cannot contain control characters.")
+    if not is_valid_symbol_name(layer):
+        return error_json(f"Invalid layer name: '{layer}'.")
+
+    return await runtime.gateway.post_json(
+        "drafting/raster-image",
+        {
+            "file_path": norm_path,
+            "x": x,
+            "y": y,
+            "z": z,
+            "width": width,
+            "height": height,
+            "scale": scale,
+            "rotation": rotation,
+            "image_frame": image_frame,
+            "space": norm_space,
+            "layout_name": layout_name.strip() if layout_name and layout_name.strip() else None,
+            "layer": layer.strip(),
+            "expected_revision": expected_revision,
+            "document": document,
         },
     )

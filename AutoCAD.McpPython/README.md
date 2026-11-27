@@ -7,7 +7,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/luiccian-autocad-mcp.svg?logo=python&logoColor=white)](https://pypi.org/project/luiccian-autocad-mcp/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://github.com/LuiccianDev/autocad-mcp/blob/master/LICENSE)
 
-Exposes **89 tools across 10 domains** (75 canonical actions and 14 legacy aliases) covering parametric batch drafting, layer control, entity inspection, layouts/PDF plotting, AutoLISP execution, and native Civil 3D surfaces and alignments.
+Exposes **90 tools across 10 domains** (76 canonical actions and 14 legacy aliases) covering parametric batch drafting, layer control, entity inspection, layouts/PDF plotting, AutoLISP execution, and native Civil 3D surfaces and alignments.
 
 ## Quick Start (`uvx`)
 
@@ -30,13 +30,16 @@ Exposes **89 tools across 10 domains** (75 canonical actions and 14 legacy alias
 
 > **Note:** Leave `AUTOCAD_GATEWAY_TOKEN` and `AUTOCAD_GATEWAY_PORT` unset for zero-config auto-discovery via the Gateway `{pid}.json` session file. Only set `AUTOCAD_GATEWAY_TOKEN` if you pinned a custom token in AutoCAD using `AI_SET_TOKEN`.
 
-## Tool Loading Modes (`AUTOCAD_MCP_TOOL_MODE`)
+## Tool Loading & Output Format (`AUTOCAD_MCP_TOOL_MODE`, `AUTOCAD_MCP_OUTPUT_FORMAT`)
 
 | Mode | Tools Exposed | Behavior |
 | :--- | :--- | :--- |
-| `granular` (default) | 89 tools | Exposes all 75 canonical tools and 14 legacy aliases directly. |
+| `granular` (default) | 90 tools | Exposes all 76 canonical tools and 14 legacy aliases directly. |
 | `compound` | 10 domain routers | Exposes `autocad_context` through `autocad_execution` with `action="help"` schema introspection. |
 | `core` | 28 tools | Exposes high-leverage standalone tools with zero aliases. |
+
+- **`AUTOCAD_MCP_OUTPUT_FORMAT`:** `compact` (default) emits concise tabular/key-value summaries in `content[0].text` paired with full typed JSON in `structuredContent`. Set `json` for legacy raw JSON text. Invalid values fail fast to `stderr` (`exit code 1`).
+- **Native Protocol Semantics:** Tool failures set `CallToolResult.isError = true`; `capture_screenshot(inline=true)` emits native `image/png` `ImageContent` without duplicating base64 in text or `structuredContent`; all tools advertise MCP `ToolAnnotations` (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`).
 
 <details>
 <summary>Local Development and Testing (`uv`)</summary>
